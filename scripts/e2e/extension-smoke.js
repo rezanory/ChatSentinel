@@ -39,7 +39,7 @@ let EXTENSION_WORKER;
 try {
   await waitUrl('http://127.0.0.1:4320/idle');
   const health = await waitJson(`${WATCHDOG}/health`);
-  assert.equal(health.version, '1.1.0', 'v1.0 watchdog must be running');
+  assert.equal(health.version, '1.1.1', 'v1.1.1 watchdog must be running');
 
   chrome = spawn(CHROME, [
     `--user-data-dir=${profile}`,
@@ -62,6 +62,7 @@ try {
   await detectorSuite();
   await actuatorSuite();
   await projectConsoleSuite();
+  await commandManagerSuite();
   console.log('ChatSentinel browser E2E: PASS');
 } finally {
   chrome?.kill();
@@ -123,7 +124,7 @@ async function actuatorSuite() {
   const deadTarget = await openPage(fixtureUrl('dead', { auto: '1', cid: deadId }));
   await waitEval(deadTarget, "location.pathname === '/newchat' && Boolean(document.body.dataset.sent)");
   const handoff = await evalValue(deadTarget, 'document.body.dataset.sent');
-  assert.match(handoff, /checkpoint|source-of-truth|ادامه پروژه/i);
+  assert.match(handoff, /checkpoint|source-of-truth|Ø§Ø¯Ø§Ù…Ù‡ Ù¾Ø±ÙˆÚ˜Ù‡/i);
   console.log('CONTINUE_NEW_CHAT + handoff actuator: PASS');
 }
 
@@ -175,6 +176,71 @@ async function projectConsoleSuite() {
   const active = await workerValue("chrome.tabs.query({active:true,currentWindow:true})");
   assert.equal(active[0]?.id, tabB.id);
   console.log('project chat focus/open: PASS');
+}
+
+async function commandManagerSuite() {
+  const projectId = `project:${RUN}:command`;
+  await postJson('/projects/upsert', {
+    projectId,
+    name: 'Command Project',
+    projectPath: cleanProject,
+    operationClass: 'write',
+    autoRecovery: true,
+    groupTabs: true,
+    color: 'green'
+  });
+
+  const seed = `COMMAND-SEED-${RUN}`;
+  const queued = await postJson('/commands/enqueue', {
+    type: 'CREATE_LANE_CHAT',
+    idempotencyKey: `lane:${RUN}:C1`,
+    payload: {
+      projectId,
+      prompt: seed,
+      laneId: 'C1',
+      laneName: 'Command Lane C1',
+      branch: 'feat/e2e-command-c1',
+      role: 'coding'
+    }
+  });
+  assert.equal(queued.command.status, 'pending');
+  await workerValue('(globalThis.ChatSentinelCommandManager.kick(), true)');
+  const completed = await waitCommand(queued.command.commandId, 'succeeded');
+  assert.ok(completed.result?.tabId, 'command did not create a tab');
+  assert.equal(completed.result?.promptSent, true);
+
+  const projects = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
+  const project = projects.projects.find(row => row.projectId === projectId);
+  const lane = project?.chats?.find(chat => chat.tabId === completed.result.tabId);
+  assert.equal(lane?.laneId, 'C1');
+  assert.equal(lane?.branch, 'feat/e2e-command-c1');
+
+  const target = await waitTarget(row => row.type === 'page' && row.url.includes('command=lane'));
+  await waitEval(target, `document.body.dataset.sent === ${JSON.stringify(seed)}`);
+  const groups = await workerValue("chrome.tabGroups.query({title:'Command Project'})");
+  assert.ok(groups.some(group => group.color === 'green'));
+  console.log('durable supervisor CREATE_LANE_CHAT: PASS');
+
+  const duplicate = await postJson('/commands/enqueue', {
+    type: 'CREATE_LANE_CHAT',
+    idempotencyKey: `lane:${RUN}:C1`,
+    payload: { projectId, prompt: seed, laneId: 'C1' }
+  });
+  assert.equal(duplicate.deduplicated, true);
+  assert.equal(duplicate.command.commandId, queued.command.commandId);
+  console.log('supervisor command idempotency: PASS');
+}
+
+async function waitCommand(commandId, expectedStatus) {
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    const data = await fetch(`${WATCHDOG}/commands?limit=200`).then(r => r.json());
+    const command = data.commands?.find(row => row.commandId === commandId);
+    if (command?.status === expectedStatus) return command;
+    if (command?.status === 'failed') throw new Error(`command failed: ${command.lastError}`);
+    await sleep(200);
+  }
+  throw new Error(`command ${commandId} did not reach ${expectedStatus}`);
 }
 
 async function waitProjectChatCount(projectId, count) {
@@ -370,6 +436,11 @@ async function prepareTestExtension(source, destination) {
   manifest.content_scripts[0].matches = ['<all_urls>'];
   manifest.host_permissions = ['<all_urls>'];
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+  const executorPath = path.join(destination, 'command-executor.js');
+  let executor = await fs.readFile(executorPath, 'utf8');
+  executor = executor.replaceAll('http://127.0.0.1:4317', `http://127.0.0.1:${TEST_PORT}`);
+  executor = executor.replaceAll('https://chatgpt.com/', `http://127.0.0.1:4320/noidentity?watchdog=${TEST_PORT}&command=lane`);
+  await fs.writeFile(executorPath, executor, 'utf8');
 }
 
 async function prepareCleanProject(base) {

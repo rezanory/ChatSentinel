@@ -179,3 +179,71 @@ test('multi-project registry isolates parallel chat groups and persists them', a
   assert.equal(context.config.tabId, 12);
   await app.close();
 });
+
+test('durable command API supports enqueue claim progress and completion', async t => {
+  const { dir, config } = await testConfig();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const app = await createWatchdogServer(config);
+  const base = await listen(app);
+
+  let response = await fetch(`${base}/commands/enqueue`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      type: 'CREATE_LANE_CHAT',
+      idempotencyKey: 'lane:c1',
+      payload: { projectId: 'project:test', prompt: 'seed lane', laneId: 'C1' }
+    })
+  });
+  assert.equal(response.status, 200);
+  const queued = await response.json();
+  assert.equal(queued.command.status, 'pending');
+
+  response = await fetch(`${base}/commands/claim`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ workerId: 'extension:test', leaseMs: 10000 })
+  });
+  const claimed = await response.json();
+  assert.equal(claimed.command.commandId, queued.command.commandId);
+  assert.equal(claimed.command.status, 'running');
+
+  response = await fetch(`${base}/commands/progress`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commandId: claimed.command.commandId, workerId: 'extension:test', progress: { tabId: 99 } })
+  });
+  assert.equal(response.status, 200);
+
+  response = await fetch(`${base}/commands/complete`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commandId: claimed.command.commandId, outcome: 'succeeded', result: { tabId: 99 } })
+  });
+  assert.equal(response.status, 200);
+  const completed = await response.json();
+  assert.equal(completed.command.status, 'succeeded');
+
+  const list = await fetch(`${base}/commands`).then(r => r.json());
+  assert.equal(list.count, 1);
+  assert.equal(list.commands[0].result.tabId, 99);
+  await app.close();
+});
+
+test('browser extension cannot enqueue privileged supervisor commands directly', async t => {
+  const { dir, config } = await testConfig();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const app = await createWatchdogServer(config);
+  const base = await listen(app);
+  const response = await fetch(`${base}/commands/enqueue`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      origin: 'chrome-extension://test',
+      'x-chatsentinel-client': 'extension'
+    },
+    body: JSON.stringify({ type: 'GROUP_PROJECT_TABS', payload: { projectId: 'project:test' } })
+  });
+  assert.equal(response.status, 403);
+  await app.close();
+});

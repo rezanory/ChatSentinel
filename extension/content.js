@@ -13,6 +13,21 @@
       sendResponse({ ok: true, identity: currentIdentity() });
       return;
     }
+    if (message?.type === 'CHATSENTINEL_SEND_PROMPT') {
+      const commandId = String(message.commandId || '').trim();
+      const marker = commandId ? `chatsentinel:command:${commandId}` : '';
+      if (marker && sessionStorage.getItem(marker) === 'sent') {
+        sendResponse({ ok: true, action: 'send-prompt', executed: false, deduplicated: true });
+        return;
+      }
+      Promise.resolve(window.ChatSentinelActuator?.sendPendingPrompt?.(String(message.prompt || '')))
+        .then(result => {
+          if (result?.ok && marker) sessionStorage.setItem(marker, 'sent');
+          sendResponse(result || { ok: false, reason: 'actuator-missing' });
+        })
+        .catch(error => sendResponse({ ok: false, error: String(error) }));
+      return true;
+    }
     if (message?.type !== 'CHATSENTINEL_EXECUTE') return;
     Promise.resolve(window.ChatSentinelActuator?.executeDecision(message.decision, message.context))
       .then(result => sendResponse(result || { ok: false, reason: 'actuator-missing' }))

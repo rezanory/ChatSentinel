@@ -3,6 +3,7 @@ const OPERATION_CLASSES = new Set([
   'write', 'mutate', 'deploy', 'commit', 'push', 'delete', ''
 ]);
 const TAB_COLORS = new Set(['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange']);
+const COMMAND_TYPES = new Set(['CREATE_LANE_CHAT', 'SEND_PROMPT', 'GROUP_PROJECT_TABS', 'FOCUS_CHAT', 'RELOAD_CHAT', 'CLOSE_CHAT', 'REPLACE_CHAT']);
 
 export function validateConversationConfig(body) {
   if (!isRecord(body)) return invalid('json-object-required');
@@ -84,7 +85,87 @@ export function validateProjectAttach(body) {
     conversationId,
     tabId: body.tabId === undefined ? undefined : finiteNumber(body.tabId, 0, 2 ** 31 - 1),
     title: body.title === undefined ? undefined : cleanString(body.title, 300),
-    url: body.url === undefined ? undefined : cleanString(body.url, 4096)
+    url: body.url === undefined ? undefined : cleanString(body.url, 4096),
+    laneId: body.laneId === undefined ? undefined : cleanString(body.laneId, 100),
+    laneName: body.laneName === undefined ? undefined : cleanString(body.laneName, 160),
+    branch: body.branch === undefined ? undefined : cleanString(body.branch, 240),
+    role: body.role === undefined ? undefined : cleanString(body.role, 120)
+  } };
+}
+
+export function validateCommandEnqueue(body) {
+  if (!isRecord(body)) return invalid('json-object-required');
+  const type = cleanString(body.type, 80).toUpperCase();
+  if (!COMMAND_TYPES.has(type)) return invalid('command-type-invalid');
+  const payload = isRecord(body.payload) ? body.payload : {};
+  const checked = validateCommandPayload(type, payload);
+  if (!checked.ok) return checked;
+  return { ok: true, value: {
+    commandId: body.commandId === undefined ? undefined : cleanString(body.commandId, 160),
+    type,
+    payload: checked.value,
+    idempotencyKey: body.idempotencyKey === undefined ? undefined : cleanString(body.idempotencyKey, 200),
+    maxAttempts: body.maxAttempts === undefined ? 5 : finiteNumber(body.maxAttempts, 1, 10)
+  } };
+}
+
+export function validateCommandClaim(body) {
+  if (!isRecord(body)) return invalid('json-object-required');
+  const workerId = cleanString(body.workerId, 160);
+  if (!workerId) return invalid('workerId-required');
+  return { ok: true, value: { workerId, leaseMs: finiteNumber(body.leaseMs ?? 60000, 5000, 120000) } };
+}
+
+export function validateCommandProgress(body) {
+  if (!isRecord(body)) return invalid('json-object-required');
+  const commandId = cleanString(body.commandId, 160);
+  if (!commandId) return invalid('commandId-required');
+  if (body.progress !== undefined && !isRecord(body.progress)) return invalid('command-progress-invalid');
+  return { ok: true, value: {
+    commandId,
+    progress: body.progress || {},
+    workerId: body.workerId === undefined ? undefined : cleanString(body.workerId, 160),
+    leaseMs: finiteNumber(body.leaseMs ?? 60000, 5000, 120000)
+  } };
+}
+
+export function validateCommandComplete(body) {
+  if (!isRecord(body)) return invalid('json-object-required');
+  const commandId = cleanString(body.commandId, 160);
+  const outcome = cleanString(body.outcome, 20).toLowerCase();
+  if (!commandId) return invalid('commandId-required');
+  if (!['succeeded', 'retry', 'failed'].includes(outcome)) return invalid('command-outcome-invalid');
+  return { ok: true, value: {
+    commandId,
+    outcome,
+    result: isRecord(body.result) ? body.result : {},
+    error: body.error === undefined ? undefined : cleanString(body.error, 1200),
+    retryAfterMs: finiteNumber(body.retryAfterMs ?? 1000, 250, 60000)
+  } };
+}
+
+function validateCommandPayload(type, payload) {
+  const projectId = cleanString(payload.projectId, 120);
+  const prompt = cleanString(payload.prompt, 30000);
+  const conversationId = cleanString(payload.conversationId, 200);
+  const tabId = payload.tabId === undefined ? undefined : finiteNumber(payload.tabId, 0, 2 ** 31 - 1);
+  const targetRequired = ['SEND_PROMPT', 'FOCUS_CHAT', 'RELOAD_CHAT', 'CLOSE_CHAT', 'REPLACE_CHAT'].includes(type);
+  if (targetRequired && !conversationId && tabId === undefined) return invalid('command-target-required');
+  if (['CREATE_LANE_CHAT', 'GROUP_PROJECT_TABS', 'REPLACE_CHAT'].includes(type) && !projectId) return invalid('projectId-required');
+  if (['CREATE_LANE_CHAT', 'SEND_PROMPT', 'REPLACE_CHAT'].includes(type) && !prompt) return invalid('command-prompt-required');
+  const url = payload.url === undefined ? undefined : cleanString(payload.url, 4096);
+  if (url && !/^https:\/\/chatgpt\.com\//i.test(url)) return invalid('command-url-invalid');
+  return { ok: true, value: {
+    projectId: projectId || undefined,
+    prompt: prompt || undefined,
+    conversationId: conversationId || undefined,
+    tabId,
+    url,
+    laneId: payload.laneId === undefined ? undefined : cleanString(payload.laneId, 100),
+    laneName: payload.laneName === undefined ? undefined : cleanString(payload.laneName, 160),
+    branch: payload.branch === undefined ? undefined : cleanString(payload.branch, 240),
+    role: payload.role === undefined ? undefined : cleanString(payload.role, 120),
+    closeOld: Boolean(payload.closeOld)
   } };
 }
 

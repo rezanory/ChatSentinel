@@ -1,0 +1,64 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { StateStore } from '../src/state-store.js';
+import { claimCommand, completeCommand, enqueueCommand, listCommands, updateCommandProgress } from '../src/command-queue.js';
+
+async function makeStore() {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'chatsentinel-command-'));
+  const file = path.join(dir, 'state.json');
+  const store = new StateStore({ file });
+  await store.load();
+  return { dir, file, store };
+}
+
+test('command queue persists and deduplicates by idempotency key', async t => {
+  const { dir, file, store } = await makeStore();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const input = { type: 'GROUP_PROJECT_TABS', payload: { projectId: 'p1' }, idempotencyKey: 'group:p1' };
+  const first = await enqueueCommand(store, input);
+  const second = await enqueueCommand(store, input);
+  assert.equal(first.command.commandId, second.command.commandId);
+  assert.equal(second.deduplicated, true);
+  const restored = new StateStore({ file });
+  await restored.load();
+  assert.equal(Object.keys(restored.commands).length, 1);
+});
+
+test('command lease/progress/retry lifecycle is resumable', async t => {
+  const { dir, store } = await makeStore();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const queued = await enqueueCommand(store, {
+    type: 'CREATE_LANE_CHAT',
+    payload: { projectId: 'p1', prompt: 'seed' },
+    maxAttempts: 3
+  });
+  let claimed = await claimCommand(store, { workerId: 'worker-a', leaseMs: 5000 });
+  assert.equal(claimed.commandId, queued.command.commandId);
+  assert.equal(claimed.status, 'running');
+  assert.equal(claimed.attempts, 1);
+
+  await updateCommandProgress(store, {
+    commandId: claimed.commandId,
+    workerId: 'worker-a',
+    leaseMs: 5000,
+    progress: { tabId: 42, attached: true }
+  });
+  await completeCommand(store, {
+    commandId: claimed.commandId,
+    outcome: 'retry',
+    error: 'composer-not-ready',
+    retryAfterMs: 1
+  });
+  await new Promise(resolve => setTimeout(resolve, 5));
+  claimed = await claimCommand(store, { workerId: 'worker-b', leaseMs: 5000 });
+  assert.equal(claimed.attempts, 2);
+  assert.equal(claimed.progress.tabId, 42);
+  assert.equal(claimed.progress.attached, true);
+  await completeCommand(store, { commandId: claimed.commandId, outcome: 'succeeded', result: { tabId: 42 } });
+  const rows = listCommands(store);
+  assert.equal(rows[0].status, 'succeeded');
+  assert.equal(rows[0].result.tabId, 42);
+});

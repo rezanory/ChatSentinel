@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateConversationConfig, validateProject, validateProjectAttach, validateReconcileRequest, validateSignal } from '../src/validation.js';
+import { validateCommandClaim, validateCommandComplete, validateCommandEnqueue, validateConversationConfig, validateProject, validateProjectAttach, validateReconcileRequest, validateSignal } from '../src/validation.js';
 
 test('conversation config rejects unknown operation classes', () => {
   const result = validateConversationConfig({ conversationId: 'x', operationClass: 'dangerous_magic' });
@@ -42,4 +42,25 @@ test('project attach requires both project and conversation identities', () => {
   assert.equal(validateProjectAttach({ projectId: 'project:a', conversationId: 'chat:a', tabId: 10 }).ok, true);
   assert.equal(validateProjectAttach({ projectId: 'project:a' }).ok, false);
   assert.equal(validateProjectAttach({ conversationId: 'chat:a' }).ok, false);
+});
+
+test('supervisor command validation accepts safe lane creation and rejects unsafe URLs', () => {
+  const good = validateCommandEnqueue({
+    type: 'CREATE_LANE_CHAT',
+    payload: { projectId: 'p1', prompt: 'seed', laneId: 'C1', branch: 'feat/c1' }
+  });
+  assert.equal(good.ok, true);
+  const bad = validateCommandEnqueue({
+    type: 'CREATE_LANE_CHAT',
+    payload: { projectId: 'p1', prompt: 'seed', url: 'https://example.com/' }
+  });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.error, 'command-url-invalid');
+});
+
+test('command claim and completion schemas are bounded', () => {
+  assert.equal(validateCommandClaim({ workerId: 'extension:test', leaseMs: 60000 }).ok, true);
+  assert.equal(validateCommandClaim({}).ok, false);
+  assert.equal(validateCommandComplete({ commandId: 'cmd:1', outcome: 'succeeded' }).ok, true);
+  assert.equal(validateCommandComplete({ commandId: 'cmd:1', outcome: 'unknown' }).ok, false);
 });

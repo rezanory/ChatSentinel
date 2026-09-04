@@ -3,10 +3,11 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 
 const EMPTY_STATE = Object.freeze({
-  schemaVersion: 2,
+  schemaVersion: 3,
   projects: {},
   configs: {},
   sessions: {},
+  commands: {},
   meta: {}
 });
 
@@ -42,6 +43,7 @@ export class StateStore {
   get projects() { return this.state.projects; }
   get configs() { return this.state.configs; }
   get sessions() { return this.state.sessions; }
+  get commands() { return this.state.commands; }
   get meta() { return this.state.meta; }
 
   getProject(id) { return this.state.projects[id] || null; }
@@ -146,10 +148,11 @@ export class StateStore {
 function normalizeState(value) {
   if (!value || typeof value !== 'object') return structuredClone(EMPTY_STATE);
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     projects: isRecord(value.projects) ? value.projects : {},
     configs: isRecord(value.configs) ? value.configs : {},
     sessions: isRecord(value.sessions) ? value.sessions : {},
+    commands: isRecord(value.commands) ? value.commands : {},
     meta: isRecord(value.meta) ? value.meta : {}
   };
 }

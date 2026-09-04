@@ -69,7 +69,7 @@ test('v1 single-project configs migrate into v1.1 project registry', async t => 
   }), 'utf8');
   const store = new StateStore({ file });
   await store.load();
-  assert.equal(store.state.schemaVersion, 2);
+  assert.equal(store.state.schemaVersion, 3);
   assert.equal(Object.keys(store.projects).length, 1);
   const project = Object.values(store.projects)[0];
   assert.equal(project.name, 'LegacyProject');

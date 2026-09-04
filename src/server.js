@@ -7,7 +7,8 @@ import { classifySideEffectRisk, isFreshCheckpoint } from './side-effect-classif
 import { StateStore } from './state-store.js';
 import { createLogger } from './logger.js';
 import { authorizeRequest, createRateLimiter, requestId, setCors } from './http-security.js';
-import { validateConversationConfig, validateProject, validateProjectAttach, validateReconcileRequest, validateSignal } from './validation.js';
+import { validateCommandClaim, validateCommandComplete, validateCommandEnqueue, validateCommandProgress, validateConversationConfig, validateProject, validateProjectAttach, validateReconcileRequest, validateSignal } from './validation.js';
+import { cancelCommand, claimCommand, completeCommand, enqueueCommand, listCommands, updateCommandProgress } from './command-queue.js';
 
 export async function createWatchdogServer(config) {
   const logger = createLogger({ dir: config.logDir });
@@ -97,6 +98,65 @@ async function route(req, res, ctx) {
 
   if (req.method === 'GET' && url.pathname === '/ready') {
     return json(res, 200, { ok: true, ready: true, version: config.version });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/commands') {
+    const status = String(url.searchParams.get('status') || '').trim().toLowerCase() || undefined;
+    const limit = Number(url.searchParams.get('limit') || 100);
+    const commands = listCommands(store, { status, limit });
+    return json(res, 200, { ok: true, count: commands.length, commands });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/commands/enqueue') {
+    if (ctx.auth?.client !== 'local-process') {
+      return json(res, 403, { ok: false, error: 'local-process-required', requestId: id });
+    }
+    const body = await readJson(req, config.maxBodyBytes);
+    const parsed = validateCommandEnqueue(body);
+    if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
+    const queued = await enqueueCommand(store, parsed.value);
+    logger.info('command-enqueued', { commandId: queued.command.commandId, type: queued.command.type, deduplicated: queued.deduplicated });
+    return json(res, 200, { ok: true, ...queued });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/commands/claim') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const parsed = validateCommandClaim(body);
+    if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
+    const command = await claimCommand(store, parsed.value);
+    if (command) logger.info('command-claimed', { commandId: command.commandId, type: command.type, workerId: parsed.value.workerId, attempt: command.attempts });
+    return json(res, 200, { ok: true, command });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/commands/progress') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const parsed = validateCommandProgress(body);
+    if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
+    const command = await updateCommandProgress(store, parsed.value);
+    if (!command) return json(res, 404, { ok: false, error: 'command-not-found', requestId: id });
+    return json(res, 200, { ok: true, command });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/commands/complete') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const parsed = validateCommandComplete(body);
+    if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
+    const command = await completeCommand(store, parsed.value);
+    if (!command) return json(res, 404, { ok: false, error: 'command-not-found', requestId: id });
+    logger.info('command-completed', { commandId: command.commandId, type: command.type, status: command.status, attempts: command.attempts });
+    return json(res, 200, { ok: true, command });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/commands/cancel') {
+    if (ctx.auth?.client !== 'local-process') {
+      return json(res, 403, { ok: false, error: 'local-process-required', requestId: id });
+    }
+    const body = await readJson(req, config.maxBodyBytes);
+    const commandId = String(body?.commandId || '').trim();
+    if (!commandId) return json(res, 400, { ok: false, error: 'commandId-required', requestId: id });
+    const command = await cancelCommand(store, commandId);
+    if (!command) return json(res, 404, { ok: false, error: 'command-not-found', requestId: id });
+    return json(res, 200, { ok: true, command });
   }
 
   if (req.method === 'POST' && url.pathname === '/admin/reset-pairing') {
@@ -332,6 +392,10 @@ function projectRows(store) {
             title: config.title,
             url: config.url,
             operationClass: config.operationClass,
+            laneId: config.laneId,
+            laneName: config.laneName,
+            branch: config.branch,
+            role: config.role,
             state: session.state,
             decision: session.decision,
             updatedAt: session.updatedAt,

@@ -62,16 +62,16 @@ async function forwardSignal(signal, tab) {
   if (!response.ok) return { ...response, execution: { executed: false, reason: 'watchdog-rejected' } };
   await recordDecision(conversationId, response);
   const execution = await maybeAct(response, tabId, normalized);
+  globalThis.ChatSentinelCommandManager?.kick?.();
   return { ...response, execution };
 }
 
 async function maybeAct(result, tabId, payload) {
   if (!result?.decision || !tabId) return { executed: false, reason: 'decision-or-tab-missing' };
-  const settings = await chrome.storage.local.get(['autoRecoveryEnabled']);
   const fixtureAuto = isFixtureAuto(payload.url);
   const projectEnabled = Boolean(result.project?.autoRecovery);
-  if (!fixtureAuto && !(settings.autoRecoveryEnabled && projectEnabled)) {
-    return { executed: false, reason: projectEnabled ? 'global-auto-recovery-disabled' : 'project-auto-recovery-disabled' };
+  if (!fixtureAuto && !projectEnabled) {
+    return { executed: false, reason: 'project-auto-recovery-disabled' };
   }
 
   if (result.decision.action === 'SAFE_RETRY') await incrementRetryCount(payload.conversationId);
@@ -273,3 +273,5 @@ function fixtureNewChatUrl(url, conversationId) {
 function isChatGptUrl(url) {
   return /^https:\/\/chatgpt\.com\//i.test(url || '');
 }
+
+importScripts('command-executor.js');
