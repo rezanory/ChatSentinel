@@ -57,3 +57,11 @@ This handoff update is documentation-only relative to the accepted implementatio
 ## Exact next action
 
 Commit/push this evidence binding → validate the docs-bound clean SHA → fast-forward `main` → validate exact main → run upgrade-aware Windows installer → deliberate self-restart test → reload unpacked extension once in Default Chrome profile → live in-page/multi-project acceptance → tag/release `v1.1.0`.
+
+## v1.2 Reuse Completion — O1 Orchestrator checkpoint
+
+O1 authoritative lane is green on `feat/project-orchestrator-v1` from baseline `080909f8fd691b8e043b6b3083e131a159749a98`.
+
+Implementation candidate: `fdcfb5ae2a09809052c20f26c311d1b655582309` (tree `63ceb6428119f527c214d9e2111258d63c23960e`). It adds a Component-First Autonomous Project Orchestrator that detects lane completion, decides `NEXT/FIX/REPLACE/INTEGRATE`, and materializes actions through the existing Durable Command Queue/extension executor. Full O1 evidence and exact next action: `control/reuse_completion/orchestrator/O1_HANDOFF.md`.
+
+Issue #3 remains OPEN. This checkpoint does **not** authorize Production tagging, main merge, or self-certification of independent gates.
