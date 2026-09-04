@@ -6,9 +6,7 @@ $taskName = 'ChatSentinelWatchdog'
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw 'Node.js is required but was not found in PATH.'
 }
-if (-not (Test-Path $runner)) {
-  throw "Runner not found: $runner"
-}
+if (-not (Test-Path $runner)) { throw "Runner not found: $runner" }
 
 Set-Location $root
 Write-Host '[ChatSentinel] validating installation...'
@@ -19,9 +17,28 @@ if ($LASTEXITCODE -ne 0) { throw 'Syntax checks failed.' }
 
 $quotedRunner = '"' + $runner + '"'
 $taskCommand = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $quotedRunner"
+$scheduled = $false
 
-schtasks.exe /Create /F /SC ONLOGON /RL LIMITED /TN $taskName /TR $taskCommand | Out-Host
-if ($LASTEXITCODE -ne 0) { throw 'Could not create the ChatSentinel scheduled task.' }
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+& schtasks.exe /Create /F /SC ONLOGON /RL LIMITED /TN $taskName /TR $taskCommand *> $null
+$taskExit = $LASTEXITCODE
+$ErrorActionPreference = $previousPreference
 
-Write-Host "[ChatSentinel] autostart installed as $taskName"
-Write-Host '[ChatSentinel] the supervisor will adopt the existing healthy instance or start a new one.'
+if ($taskExit -eq 0) {
+  $scheduled = $true
+  Write-Host "[ChatSentinel] autostart installed as Scheduled Task: $taskName"
+}
+
+if (-not $scheduled) {
+  $startup = [Environment]::GetFolderPath('Startup')
+  $launcher = Join-Path $startup 'ChatSentinelWatchdog.vbs'
+  $escaped = $runner.Replace('"','""')
+  $vbs = 'Set sh = CreateObject("WScript.Shell")' + "`r`n" +
+    'sh.Run "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""' + $escaped + '""", 0, False'
+  Set-Content -Path $launcher -Value $vbs -Encoding ASCII
+  Write-Host "[ChatSentinel] Scheduled Task unavailable; Startup launcher installed: $launcher"
+}
+
+Start-Process -WindowStyle Hidden powershell.exe -ArgumentList '-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',"`"$runner`""
+Write-Host '[ChatSentinel] supervisor started. Named mutex prevents duplicate supervisors.'

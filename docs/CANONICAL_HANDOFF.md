@@ -1,34 +1,56 @@
-# Canonical Handoff — ChatSentinel
+# Canonical Handoff — ChatSentinel v0.3.0
 
-Status: ACTIVE
+Status: **MVP_ACCEPTED / OPERATIONAL_BASELINE**
 
 Repository: `rezanory/ChatSentinel`
-Local target: `C:\ChatSentinel`
+Local canonical checkout: `C:\ChatSentinel`
+Branch: `main`
 
-## Implemented
+## Purpose
 
-- zero-dependency Node.js core
-- deterministic recovery engine
-- local watchdog HTTP service
-- Chrome Manifest V3 extension
-- ChatGPT DOM signal detector
-- extension-to-watchdog bridge
-- fail-safe recovery tests
+ChatSentinel is an external conversation watchdog for long-running ChatGPT project work. It detects interruption/stall/dead-chat conditions, reconciles project evidence and chooses or executes the safest recovery action so a ChatGPT UI failure does not stop the project.
 
-## Safety policy
+## Implemented capability
 
-`Retry` is never auto-executed solely because a Retry button exists. Side-effect risk and checkpoint state must be known first.
+- ChatGPT DOM detector for running, Retry, interruption, dead conversation and frozen UI states.
+- deterministic recovery engine: `WAIT`, `SAFE_RETRY`, `CONTINUE_SAME_CHAT`, `RELOAD_AND_RECHECK`, `CONTINUE_NEW_CHAT`, `ESCALATE`.
+- Git local/remote reconciler.
+- project-aware side-effect/idempotency classifier.
+- strict fresh-checkpoint invariant: clean tree and local HEAD equals remote HEAD.
+- guarded browser actuator for Retry, Continue, reload and New Chat + handoff.
+- durable conversation→project/policy mapping in Chrome storage.
+- multi-chat supervisor endpoint and extension popup.
+- localhost watchdog service with optional external heartbeat.
+- Windows self-restarting supervisor and user-level Startup autostart fallback.
+- isolated Chromium fault-injection harness using the real unpacked extension.
+## Acceptance evidence
 
-## Current automatic action surface
+- Unit tests: 13/13 PASS.
+- JavaScript and PowerShell syntax validation: PASS.
+- Detector/recovery browser E2E: 5/5 PASS.
+- `SAFE_RETRY` actuator: PASS.
+- `CONTINUE_SAME_CHAT` actuator: PASS.
+- `CONTINUE_NEW_CHAT` + handoff actuator: PASS.
+- watchdog deliberate-kill/self-restart: PASS.
+- autostart fallback installed in the current Windows user's Startup folder.
 
-Only `RELOAD_AND_RECHECK` is allowed to execute automatically in browser v0.1. Retry/continue/new-chat decisions are advisory until reconciliation and idempotency adapters are complete.
+See `docs/VALIDATION.md` for the detailed receipt.
 
-## Next critical path
+## Safety invariants
 
-1. GitHub reconciler / project registry.
-2. Controlled continuation and new-chat handoff actuator.
-3. Watchgoose heartbeat.
-4. Local process supervision / restart integration.
-5. Fault injection against a live ChatGPT tab.
+1. Never blind-Retry because the UI exposes Retry.
+2. Never interrupt a conversation while generation/external activity is still evidenced.
+3. Never claim a Git checkpoint is fresh unless the tree is clean and `HEAD == remoteHead`.
+4. Unknown side effects fail conservative (`ESCALATE` / recheck), not optimistic.
+5. Browser write-like recovery is guarded and auto-recovery is opt-in.
+6. GitHub/source-of-truth supersedes stale chat state.
 
-Older handoffs are superseded by the latest non-superseded version of this file.
+## External integrations
+
+GitHub is canonical evidence. Remote Desktop Commander can inspect/recover the host. Watchgoose check `chatsentinel` exists as the external dead-man monitor; its private Ping URL must be injected via `CHATSENTINEL_HEARTBEAT_URL` to arm it. Make/aictrl.dev/Brainbase/WebMCP are optional extensions, not critical-path dependencies.
+
+## Operational activation
+
+The local watchdog is operational and supervised. One browser-security step remains for the user's normal Chrome profile: load `C:\ChatSentinel\extension` once as an unpacked extension. After that, use the popup to bind a ChatGPT conversation to its local project path and optionally enable guarded auto recovery.
+
+This file is the latest non-superseded handoff. Older ChatSentinel handoffs are superseded by this v0.3.0 baseline.

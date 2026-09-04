@@ -1,9 +1,11 @@
 $ErrorActionPreference = 'Continue'
 $taskName = 'ChatSentinelWatchdog'
+$startup = [Environment]::GetFolderPath('Startup')
+$launcher = Join-Path $startup 'ChatSentinelWatchdog.vbs'
 
-schtasks.exe /Delete /F /TN $taskName | Out-Host
-if ($LASTEXITCODE -eq 0) {
-  Write-Host "[ChatSentinel] removed scheduled task $taskName"
-} else {
-  Write-Warning "[ChatSentinel] scheduled task $taskName was not removed (it may not exist)."
+schtasks.exe /Delete /F /TN $taskName 2>$null | Out-Null
+if (Test-Path $launcher) {
+  Remove-Item -Force $launcher
+  Write-Host "[ChatSentinel] removed Startup launcher: $launcher"
 }
+Write-Host '[ChatSentinel] autostart entries removed. A currently running watchdog is left untouched.'
