@@ -59,3 +59,12 @@ Shipping manifest is copied to a temporary test extension and only that temporar
 6. Reload the unpacked Chrome extension once in the user's Default profile.
 7. Live verify: toolbar click opens in-page console, create/attach a real project, project appears with current chat, and parallel project tabs group correctly.
 8. Only then tag/release `v1.1.0` and mark Production-ready.
+
+## Exact pushed implementation candidate
+
+- SHA: `638cb036a0df80df8f290a99d45cd163dd16b8b3`
+- Tree: `4207d61d3ea156b4d502f8a157dc72c98da743ca`
+- local=remote: PASS
+- clean tree: PASS
+- full release validation: PASS
+- PowerShell parser suite: PASS

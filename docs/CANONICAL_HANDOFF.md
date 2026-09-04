@@ -43,10 +43,17 @@ Full notices: `THIRD_PARTY_NOTICES.md`, `LICENSES/`, `docs/SOURCE_INVENTORY.md`.
 
 Pre-commit release gate passes 32/32 tests, all browser recovery/identity E2E, in-page project-console acceptance, native Chrome Tab Group acceptance, production restart/persistence smoke, security policy, JS/PowerShell parsing, and npm audit with 0 vulnerabilities. Details: `docs/VALIDATION.md`.
 
-## Exact source-of-truth status
+## Exact validated implementation candidate
 
-The exact candidate SHA/tree is intentionally not claimed before the feature commit exists. After the next commit/push, this handoff receives a documentation-only update binding the validated SHA/tree, then all release gates run again on that exact pushed commit.
+- SHA: `638cb036a0df80df8f290a99d45cd163dd16b8b3`
+- Tree: `4207d61d3ea156b4d502f8a157dc72c98da743ca`
+- local candidate HEAD = remote candidate HEAD: PASS
+- clean working tree: PASS
+- `npm run release-validate` on exact candidate: PASS
+- PowerShell parser suite on exact candidate: PASS
+
+This handoff update is documentation-only relative to the accepted implementation candidate.
 
 ## Exact next action
 
-Commit/push `feature/v1.1.0-project-console` → validate exact local=remote clean SHA → bind SHA/tree in this handoff → validate docs-bound SHA → fast-forward `main` → validate exact main → run upgrade-aware Windows installer → self-restart test → user reloads the unpacked extension once → live Default-profile in-page/multi-project acceptance → tag/release `v1.1.0`.
+Commit/push this evidence binding → validate the docs-bound clean SHA → fast-forward `main` → validate exact main → run upgrade-aware Windows installer → deliberate self-restart test → reload unpacked extension once in Default Chrome profile → live in-page/multi-project acceptance → tag/release `v1.1.0`.
