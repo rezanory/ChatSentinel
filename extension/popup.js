@@ -1,4 +1,5 @@
 const WATCHDOG = 'http://127.0.0.1:4317';
+const CLIENT_HEADERS = Object.freeze({ 'x-chatsentinel-client': 'extension' });
 const auto = document.querySelector('#auto');
 const health = document.querySelector('#health');
 const sessions = document.querySelector('#sessions');
@@ -41,6 +42,7 @@ async function loadCurrentConversation() {
   projectPath.value = values[projectKey] || '';
   operationClass.value = values[operationKey] || '';
 }
+
 async function saveCurrentProject() {
   if (!currentConversationId) return;
   saveStatus.textContent = 'Saving…';
@@ -52,17 +54,15 @@ async function saveCurrentProject() {
   });
 
   try {
-    const response = await fetch(`${WATCHDOG}/conversation/register`, {
+    const result = await apiJson('/conversation/register', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         conversationId: currentConversationId,
         projectPath: projectPath.value.trim() || undefined,
         operationClass: operationClass.value || undefined
-      })
+      }
     });
-    const result = await response.json();
-    if (!response.ok || !result.ok) throw new Error(result.error || result.reconciliation?.reason || 'registration-failed');
+    if (!result.ok) throw new Error(result.error || result.reconciliation?.reason || 'registration-failed');
     saveStatus.textContent = result.reconciliation
       ? `Registered · ${shortSha(result.reconciliation.head)}`
       : 'Registered';
@@ -77,11 +77,12 @@ async function saveCurrentProject() {
 async function load() {
   try {
     const [h, s] = await Promise.all([
-      fetch(`${WATCHDOG}/health`).then(r => r.json()),
-      fetch(`${WATCHDOG}/supervisor`).then(r => r.json())
+      apiJson('/health'),
+      apiJson('/supervisor')
     ]);
     health.dataset.ok = h.ok ? '1' : '0';
     health.dataset.count = String(s.count || 0);
+    health.dataset.version = h.version || '';
     renderHealth();
     renderSessions(s.sessions || []);
   } catch (error) {
@@ -90,11 +91,13 @@ async function load() {
     sessions.replaceChildren();
   }
 }
+
 function renderHealth() {
   const online = health.dataset.ok === '1';
   const count = Number(health.dataset.count || 0);
+  const version = health.dataset.version ? ` v${health.dataset.version}` : '';
   health.textContent = online
-    ? `Watchdog online · ${count} session(s) · auto recovery ${auto.checked ? 'ON' : 'OFF'}`
+    ? `Watchdog${version} online · ${count} session(s) · auto recovery ${auto.checked ? 'ON' : 'OFF'}`
     : 'Local watchdog status unknown';
   health.className = online ? 'ok' : 'muted';
 }
@@ -123,6 +126,23 @@ function renderSessions(rows) {
       `<div class="muted">${escapeHtml(row.branch || '')} ${escapeHtml(shortSha(row.head))}</div>`;
     sessions.append(item);
   }
+}
+
+async function apiJson(route, options = {}) {
+  const headers = { ...CLIENT_HEADERS };
+  let body;
+  if (options.body !== undefined) {
+    headers['content-type'] = 'application/json';
+    body = JSON.stringify(options.body);
+  }
+  const response = await fetch(`${WATCHDOG}${route}`, {
+    method: options.method || 'GET',
+    headers,
+    body
+  });
+  const result = await response.json().catch(() => ({ ok: false, error: `http-${response.status}` }));
+  if (!response.ok) throw new Error(result.error || `http-${response.status}`);
+  return result;
 }
 
 function shortSha(value) { return value ? value.slice(0, 8) : ''; }

@@ -1,177 +1,54 @@
-import http from 'node:http';
-import { decideRecovery } from './recovery-engine.js';
-import { reconcileProject } from './project-reconciler.js';
-import { startHeartbeat } from './heartbeat.js';
-import { classifySideEffectRisk, isFreshCheckpoint } from './side-effect-classifier.js';
+import { createWatchdogServer } from './server.js';
+import { runtimeConfig } from './runtime-config.js';
 
-const PORT = Number(process.env.CHATSENTINEL_PORT || 4317);
-const HOST = process.env.CHATSENTINEL_HOST || '127.0.0.1';
-const sessions = new Map();
-const configs = new Map();
-const heartbeat = startHeartbeat();
+const app = await createWatchdogServer(runtimeConfig);
 
-const server = http.createServer(async (req, res) => {
-  try {
-    setCors(res);
-    if (req.method === 'OPTIONS') return end(res, 204);
-
-    if (req.method === 'GET' && req.url === '/health') {
-      return json(res, 200, {
-        ok: true,
-        service: 'ChatSentinel',
-        version: '0.3.0',
-        sessions: sessions.size,
-        conversations: configs.size,
-        heartbeat: heartbeat.enabled
-      });
-    }
-
-    if (req.method === 'GET' && req.url === '/sessions') {
-      return json(res, 200, { sessions: [...sessions.values()] });
-    }
-    if (req.method === 'GET' && req.url === '/supervisor') {
-      const rows = [...sessions.entries()].map(([id, row]) => ({
-        id,
-        state: row.state,
-        decision: row.decision,
-        updatedAt: row.updatedAt,
-        progressAgeMs: row.progressAgeMs,
-        sideEffectRisk: row.sideEffectRisk,
-        checkpointFresh: row.checkpointFresh,
-        projectPath: row.projectPath,
-        branch: row.reconciliation?.branch,
-        head: row.reconciliation?.head,
-        remoteHead: row.reconciliation?.remoteHead
-      }));
-      return json(res, 200, { count: rows.length, sessions: rows });
-    }
-
-    if (req.method === 'POST' && (req.url === '/conversation/register' || req.url === '/project/register')) {
-      const body = await readJson(req);
-      if (!body.conversationId) {
-        return json(res, 400, { ok: false, error: 'conversationId-required' });
-      }
-      const existing = configs.get(body.conversationId) || {};
-      const next = {
-        ...existing,
-        ...(body.projectPath ? { projectPath: body.projectPath } : {}),
-        ...(body.operationClass ? { operationClass: body.operationClass } : {})
-      };
-      configs.set(body.conversationId, next);
-      const reconciliation = next.projectPath ? await reconcileProject(next.projectPath) : null;
-      return json(res, reconciliation && !reconciliation.ok ? 422 : 200, {
-        ok: !reconciliation || reconciliation.ok,
-        config: next,
-        reconciliation
-      });
-    }
-    if (req.method === 'POST' && req.url === '/project/reconcile') {
-      const body = await readJson(req);
-      const config = configs.get(body.conversationId) || {};
-      const projectPath = body.projectPath || config.projectPath;
-      const reconciliation = await reconcileProject(projectPath);
-      return json(res, reconciliation.ok ? 200 : 422, { ok: reconciliation.ok, reconciliation });
-    }
-
-    if (req.method === 'POST' && req.url === '/signal') {
-      const signal = await readJson(req);
-      const id = signal.conversationId || signal.tabId || 'unknown';
-      const previous = sessions.get(id) || {};
-      let config = configs.get(id) || {};
-      if (signal.projectPath || signal.operationClass) {
-        config = {
-          ...config,
-          ...(signal.projectPath ? { projectPath: signal.projectPath } : {}),
-          ...(signal.operationClass ? { operationClass: signal.operationClass } : {})
-        };
-        configs.set(id, config);
-      }
-      const projectPath = config.projectPath;
-      const reconciliation = projectPath ? await reconcileProject(projectPath) : null;
-
-      const checkpointFresh = projectPath
-        ? isFreshCheckpoint(reconciliation)
-        : Boolean(signal.checkpointFresh);
-      const sideEffectRisk = classifySideEffectRisk({
-        signal,
-        reconciliation,
-        previous,
-        policy: config
-      });
-
-      const merged = {
-        ...previous,
-        ...signal,
-        projectPath,
-        operationClass: config.operationClass,
-        reconciliation,
-        checkpointFresh,
-        sideEffectRisk,
-        updatedAt: new Date().toISOString()
-      };
-
-      const decision = decideRecovery(merged);
-      const record = { ...merged, decision };
-      sessions.set(id, record);
-      process.stdout.write(JSON.stringify({ type: 'decision', id, decision, sideEffectRisk }) + '\n');
-      return json(res, 200, {
-        ok: true,
-        decision,
-        reconciliation,
-        projectPath,
-        sideEffectRisk,
-        checkpointFresh
-      });
-    }
-    return json(res, 404, { ok: false, error: 'not-found' });
-  } catch (error) {
-    process.stderr.write(JSON.stringify({ type: 'request-error', error: error.message }) + '\n');
-    return json(res, 500, { ok: false, error: 'internal-error' });
-  }
+app.server.on('clientError', (error, socket) => {
+  app.logger.warn('client-error', { error });
+  if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`ChatSentinel watchdog listening on http://${HOST}:${PORT}`);
+app.server.on('error', error => {
+  app.logger.error('server-error', { error });
+  process.stderr.write(`${JSON.stringify({ type: 'server-error', error: error.message })}\n`);
 });
+
+app.server.listen(runtimeConfig.port, runtimeConfig.host, () => {
+  const event = {
+    type: 'watchdog-listening',
+    host: runtimeConfig.host,
+    port: runtimeConfig.port,
+    version: runtimeConfig.version,
+    pid: process.pid
+  };
+  app.logger.info('watchdog-started', event);
+  process.stdout.write(`${JSON.stringify(event)}\n`);
+});
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.logger.info('watchdog-stopping', { signal });
+  const forced = setTimeout(() => process.exit(1), 5000);
+  forced.unref?.();
+  await app.close();
+  clearTimeout(forced);
+  process.exit(0);
+}
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => {
-    heartbeat.stop();
-    server.close(() => process.exit(0));
-  });
+  process.on(signal, () => shutdown(signal).catch(() => process.exit(1)));
 }
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-}
+process.on('uncaughtException', error => {
+  app.logger.error('uncaught-exception', { error });
+  process.stderr.write(`${JSON.stringify({ type: 'uncaught-exception', error: error.message })}\n`);
+  shutdown('uncaughtException').catch(() => process.exit(1));
+});
 
-function end(res, status) {
-  res.statusCode = status;
-  res.end();
-}
-function json(res, status, body) {
-  res.statusCode = status;
-  res.setHeader('content-type', 'application/json; charset=utf-8');
-  res.end(JSON.stringify(body));
-}
-
-function readJson(req) {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.setEncoding('utf8');
-    req.on('data', chunk => {
-      body += chunk;
-      if (body.length > 100_000) req.destroy(new Error('request-too-large'));
-    });
-    req.on('end', () => {
-      try {
-        resolve(body ? JSON.parse(body) : {});
-      } catch (error) {
-        reject(error);
-      }
-    });
-    req.on('error', reject);
-  });
-}
+process.on('unhandledRejection', reason => {
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  app.logger.error('unhandled-rejection', { error });
+  process.stderr.write(`${JSON.stringify({ type: 'unhandled-rejection', error: error.message })}\n`);
+});

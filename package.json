@@ -1,15 +1,19 @@
 {
   "name": "chatsentinel",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Local-first watchdog and recovery controller for ChatGPT project work",
+  "description": "Production watchdog and recovery controller for long-running ChatGPT project work",
   "scripts": {
     "start": "node src/local-watchdog.js",
     "test": "node --test",
-    "check": "node --check src/recovery-engine.js && node --check src/project-reconciler.js && node --check src/side-effect-classifier.js && node --check src/heartbeat.js && node --check src/local-watchdog.js && node --check extension/actuator.js && node --check extension/content.js && node --check extension/background.js && node --check extension/popup.js && node --check scripts/e2e/extension-smoke.js && node --check scripts/e2e/fault-fixture-server.js",
+    "check": "node --check src/runtime-config.js && node --check src/state-store.js && node --check src/logger.js && node --check src/http-security.js && node --check src/validation.js && node --check src/server.js && node --check src/recovery-engine.js && node --check src/project-reconciler.js && node --check src/side-effect-classifier.js && node --check src/heartbeat.js && node --check src/local-watchdog.js && node --check extension/actuator.js && node --check extension/content.js && node --check extension/background.js && node --check extension/popup.js && node --check scripts/security-check.mjs && node --check scripts/e2e/extension-smoke.js && node --check scripts/e2e/fault-fixture-server.js && node --check scripts/production-smoke.mjs",
+    "policy-check": "node scripts/security-check.mjs",
     "e2e": "node scripts/e2e/extension-smoke.js",
-    "validate": "npm test && npm run check && npm run e2e"
+    "prod-smoke": "node scripts/production-smoke.mjs",
+    "security-audit": "npm audit --omit=dev",
+    "validate": "npm test && npm run check && npm run policy-check && npm run e2e && npm run prod-smoke",
+    "release-validate": "npm run validate && npm run security-audit"
   },
   "engines": {
     "node": ">=20"

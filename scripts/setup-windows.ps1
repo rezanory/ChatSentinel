@@ -25,6 +25,7 @@ if (-not (Test-Path (Join-Path $Root '.git'))) {
 
 Set-Location $Root
 node --version
-npm test
-npm run check
-Write-Host 'ChatSentinel local baseline is ready.'
+npm run validate
+if ($LASTEXITCODE -ne 0) { throw 'ChatSentinel validation failed.' }
+& (Join-Path $Root 'scripts\install-autostart.ps1')
+Write-Host 'ChatSentinel production installation is ready.'

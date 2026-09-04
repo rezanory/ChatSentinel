@@ -1,18 +1,20 @@
-# Source / Reference Inventory
+# Third-Party Source / Reference Inventory
 
-ChatSentinel core is original implementation. External projects are used only according to their licenses and the policy below.
+ChatSentinel v1.0.0 production core is a clean-room original implementation. **No source code from the GitHub projects below is copied, vendored, imported or required at runtime.**
 
-| Project | Role | License / status | ChatSentinel use |
-|---|---|---|---|
-| xcanwin/KeepChatGPT | interruption, keep-alive and recovery behavior reference | GPL-2.0 | behavioral reference only; no GPL source copied into the core |
-| 11me/light-session | long-chat DOM/performance ideas | MIT | permissive reference; no source copied in v0.3 |
-| dizzpy/ChatGPT-Auto-Continue | Continue/Retry UX reference | no clear license identified during baseline review | behavior reference only |
-| boringresearch/plugin-chatgpt-automation | prompt queue / browser automation reference | no clear license identified during baseline review | behavior reference only |
+| GitHub project | Why it was reviewed | License/status observed | Source code copied into ChatSentinel? | Actual use |
+|---|---|---|---|---|
+| `xcanwin/KeepChatGPT` | ChatGPT interruption, keep-alive, refresh/recovery behavior | GPL-2.0 | **No** | Behavioral reference only; GPL source deliberately excluded from the core. |
+| `11me/light-session` | Long-conversation DOM/performance mitigation ideas | MIT | **No** | Architectural/performance reference only in v1.0. |
+| `dizzpy/ChatGPT-Auto-Continue` | Continue/Retry interaction pattern | No clear license identified during review | **No** | UX behavior reference only. |
+| `boringresearch/plugin-chatgpt-automation` | Prompt queue and browser-automation pattern | No clear license identified during review | **No** | Workflow behavior reference only. |
 
-## Rule
+## What was implemented independently
 
-No third-party code is vendored merely because it is public on GitHub. Reuse requires an explicit compatible license, attribution where required, and a deliberate dependency decision.
+ChatSentinel's recovery state machine, DOM signal detector, Git reconciler, side-effect classifier, safe Retry policy, Continue/New-Chat actuators, local HTTP watchdog, persistent state store, Windows supervisor, extension popup, security controls and test harness are project-owned implementations written specifically for ChatSentinel.
 
-## Why clean-room for recovery logic
+## License boundary
 
-A watchdog handling project side effects needs stronger guarantees than an auto-clicker. ChatSentinel therefore implements its own state model, Git reconciliation, side-effect classifier, recovery policy and actuator gates instead of copying retry logic from browser scripts.
+Public GitHub availability is not permission to copy. Source reuse requires a deliberate dependency decision, compatible license and attribution. v1.0 avoids that dependency entirely: reviewed projects remain documentary references, not code inputs.
+
+`npm` runtime dependencies: **0**. `npm` development dependencies: **0**.

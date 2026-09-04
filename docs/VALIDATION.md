@@ -1,52 +1,55 @@
-# Validation — ChatSentinel v0.3.0 MVP
+# Validation — ChatSentinel v1.0.0 Production Candidate
 
-## Final acceptance summary
+## Release gate results
 
-Status: **MVP ACCEPTED**
+Executed on Windows with Node.js 22.16.0 against the production hardening branch.
 
-Validated on Windows using Node.js 22.16.0 and an isolated unpacked-extension Chromium profile.
-
-## Automated validation
-
-- Unit tests: **13/13 PASS**
-- JavaScript syntax checks: **PASS** across core, extension and E2E harness
-- PowerShell syntax checks: **PASS** for supervisor/install/uninstall scripts
+- Unit/integration tests: **28/28 PASS**
+- JavaScript syntax checks: **PASS**
+- PowerShell parser checks: **PASS**
+- Production policy/security check: **PASS**
+- npm runtime dependencies: **0**
+- npm development dependencies: **0**
+- `npm audit --omit=dev`: **0 vulnerabilities**
 - Browser detector/recovery E2E: **5/5 PASS**
-- Guarded actuator E2E: **3/3 PASS**
+- `SAFE_RETRY` actuator: **PASS**
+- Retry incident counter reset: **PASS**
+- `CONTINUE_SAME_CHAT` actuator: **PASS**
+- `CONTINUE_NEW_CHAT + handoff` actuator: **PASS**
+- Production process kill/restart + state restore smoke: **PASS**
 
-## Detector/recovery scenarios
+## Browser E2E scenarios
 
-- active generation -> `WAIT`
-- Retry with unknown side effects -> `ESCALATE`
-- interrupted stream without fresh checkpoint -> `RELOAD_AND_RECHECK`
-- dead conversation -> `CONTINUE_NEW_CHAT`
-- frozen UI -> `RELOAD_AND_RECHECK`
+The harness creates a temporary copy of the production extension, grants fixture access only to that copy, launches an isolated Chromium profile with a dynamically allocated DevTools port, and uses a dedicated watchdog instance/data directory.
 
-## Actuator scenarios
+Validated states:
 
-- explicitly read-only Retry -> `SAFE_RETRY` and button click: PASS
-- interrupted project with clean synchronized checkpoint -> `CONTINUE_SAME_CHAT` and checkpoint-aware prompt: PASS
-- dead conversation -> new chat navigation + `sessionStorage` handoff + automatic prompt delivery: PASS
-## Git / side-effect safety
+1. active generation -> `WAIT`
+2. Retry with unknown side-effect state -> `ESCALATE`
+3. interrupted stream with uncertain checkpoint -> `RELOAD_AND_RECHECK`
+4. dead conversation -> `CONTINUE_NEW_CHAT`
+5. frozen UI -> `RELOAD_AND_RECHECK`
 
-- Fresh checkpoint requires: valid Git repo + clean working tree + `HEAD == remoteHead`.
-- Dirty or diverged trees are treated as possible side effects.
-- Observed local/remote SHA movement is classified as confirmed side effect evidence.
-- Explicit `read_only` policy allows safe Retry classification even when no project repository is attached.
-- Unknown states remain conservative and never trigger blind Retry.
+## Security/durability evidence
 
-## Runtime smoke validation
+- Loopback-only client enforcement tested.
+- Ordinary web origins rejected.
+- Stable extension origin TOFU pairing tested; mismatched extension rejected.
+- Local-process-only pairing reset tested.
+- JSON content-type/body validation tested.
+- Rate limiting tested.
+- Persistent config/session restore across server restart tested.
+- Corrupt state quarantine tested.
+- Session TTL/max-record pruning tested.
+- Production manifest injects only on `https://chatgpt.com/*`.
+- Stable extension ID asserted by E2E/policy checks: `pcidbmcahljjpbmaecjmfmpbpfnpoepc`.
+- Private extension key verified outside repository only.
+- Structured log generation and recovery-decision audit record tested.
 
-A real local repository registration was validated against `C:\ChatSentinel` and its GitHub remote. A Retry scenario with possible side effects and a known clean checkpoint selected `CONTINUE_SAME_CHAT` rather than Retry.
+## Declared durability
 
-## Supervisor / restart validation
+Conversation/project policy writes are immediate. Recent session telemetry is debounced; crash RPO is **<=300 ms**. Windows supervisor restarts a crashed watchdog; production smoke verifies disk state restores after restart.
 
-Windows Scheduled Task creation was denied by host permissions, so the installer successfully used the per-user Startup-folder fallback:
+## Final acceptance procedure
 
-`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ChatSentinelWatchdog.vbs`
-
-The running watchdog listener was deliberately killed. The supervisor detected the failure and restored service with a new process ID; `/health` returned v0.3.0 after recovery. **Self-restart PASS.**
-
-## Remaining operational note
-
-The Chrome extension must be loaded once into the user's normal Chrome profile as an unpacked extension. This is a Chrome security/UI activation step, not an unimplemented ChatSentinel capability. Watchgoose heartbeat is optional until its private Ping URL is supplied through `CHATSENTINEL_HEARTBEAT_URL`.
+After this candidate is committed/pushed, `npm run release-validate` is executed again against the exact candidate SHA. Then main is fast-forwarded, the installed watchdog is upgraded/restarted, deliberate kill/self-restart is revalidated, and only that exact accepted commit is tagged `v1.0.0`.

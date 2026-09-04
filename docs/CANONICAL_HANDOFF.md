@@ -1,56 +1,52 @@
-# Canonical Handoff — ChatSentinel v0.3.0
+# Canonical Handoff — ChatSentinel v1.0.0
 
-Status: **MVP_ACCEPTED / OPERATIONAL_BASELINE**
+Status: **PRODUCTION CANDIDATE**
 
 Repository: `rezanory/ChatSentinel`
-Local canonical checkout: `C:\ChatSentinel`
-Branch: `main`
+Local path: `C:\ChatSentinel`
+Production candidate branch: `release/v1.0.0-production`
+Target branch: `main`
+Previous release: `v0.3.0` at `c6df780b0aa120d618574d8ee061b099e5ecaec1`
 
-## Purpose
+## Product mission
 
-ChatSentinel is an external conversation watchdog for long-running ChatGPT project work. It detects interruption/stall/dead-chat conditions, reconciles project evidence and chooses or executes the safest recovery action so a ChatGPT UI failure does not stop the project.
+ChatSentinel prevents long-running ChatGPT project work from sleeping when a conversation encounters connection interruption, Retry-only recovery, UI freeze, unknown execution state or an unrecoverable/dead conversation.
 
-## Implemented capability
+## Production invariants
 
-- ChatGPT DOM detector for running, Retry, interruption, dead conversation and frozen UI states.
-- deterministic recovery engine: `WAIT`, `SAFE_RETRY`, `CONTINUE_SAME_CHAT`, `RELOAD_AND_RECHECK`, `CONTINUE_NEW_CHAT`, `ESCALATE`.
-- Git local/remote reconciler.
-- project-aware side-effect/idempotency classifier.
-- strict fresh-checkpoint invariant: clean tree and local HEAD equals remote HEAD.
-- guarded browser actuator for Retry, Continue, reload and New Chat + handoff.
-- durable conversation→project/policy mapping in Chrome storage.
-- multi-chat supervisor endpoint and extension popup.
-- localhost watchdog service with optional external heartbeat.
-- Windows self-restarting supervisor and user-level Startup autostart fallback.
-- isolated Chromium fault-injection harness using the real unpacked extension.
-## Acceptance evidence
+- Never blind-Retry from UI evidence alone.
+- Active execution wins over timeout heuristics.
+- Git/source-of-truth is reconciled before repeating write-capable project work.
+- Fresh checkpoint requires clean tree + local HEAD == remote HEAD.
+- Auto-recovery is opt-in and fails closed on missing controls/evidence.
+- Watchdog lives outside the affected ChatGPT conversation.
+- Production HTTP surface is loopback-only and extension-origin guarded.
+- Durable runtime state/logs/private extension key live outside the Git repository.
 
-- Unit tests: 13/13 PASS.
-- JavaScript and PowerShell syntax validation: PASS.
-- Detector/recovery browser E2E: 5/5 PASS.
-- `SAFE_RETRY` actuator: PASS.
-- `CONTINUE_SAME_CHAT` actuator: PASS.
-- `CONTINUE_NEW_CHAT` + handoff actuator: PASS.
-- watchdog deliberate-kill/self-restart: PASS.
-- autostart fallback installed in the current Windows user's Startup folder.
+## Production capabilities
 
-See `docs/VALIDATION.md` for the detailed receipt.
+Browser signal detector, deterministic recovery engine, project-aware side-effect classifier, Git reconciler, guarded Retry/Continue/New-Chat actuators, durable state store, JSONL audit logging, secured localhost API, supervisor popup, Windows self-restart/autostart, stable extension identity and isolated production E2E harness.
 
-## Safety invariants
+## Validation evidence
 
-1. Never blind-Retry because the UI exposes Retry.
-2. Never interrupt a conversation while generation/external activity is still evidenced.
-3. Never claim a Git checkpoint is fresh unless the tree is clean and `HEAD == remoteHead`.
-4. Unknown side effects fail conservative (`ESCALATE` / recheck), not optimistic.
-5. Browser write-like recovery is guarded and auto-recovery is opt-in.
-6. GitHub/source-of-truth supersedes stale chat state.
+The production candidate currently passes 28/28 unit/integration tests, syntax checks, PowerShell parser checks, production security policy, isolated extension E2E, production restart/persistence smoke and npm audit with zero vulnerabilities. Exact evidence is maintained in `docs/VALIDATION.md`.
 
-## External integrations
+## Third-party provenance
 
-GitHub is canonical evidence. Remote Desktop Commander can inspect/recover the host. Watchgoose check `chatsentinel` exists as the external dead-man monitor; its private Ping URL must be injected via `CHATSENTINEL_HEARTBEAT_URL` to arm it. Make/aictrl.dev/Brainbase/WebMCP are optional extensions, not critical-path dependencies.
+No source code from the reviewed GitHub projects (`xcanwin/KeepChatGPT`, `11me/light-session`, `dizzpy/ChatGPT-Auto-Continue`, `boringresearch/plugin-chatgpt-automation`) is present in production code. They are behavior/design references only. See `docs/SOURCE_INVENTORY.md`.
 
-## Operational activation
+No plugin/MCP source code is vendored. GitHub and Remote Desktop Commander were actively used as external development/operations tools; Watchgoose check infrastructure was created but external pinging is optional and unarmed until a real private Ping URL is supplied. Other plugin candidates are non-critical optional integrations. See `docs/PLUGIN_INTEGRATIONS.md`.
 
-The local watchdog is operational and supervised. One browser-security step remains for the user's normal Chrome profile: load `C:\ChatSentinel\extension` once as an unpacked extension. After that, use the popup to bind a ChatGPT conversation to its local project path and optionally enable guarded auto recovery.
+## Operational paths
 
-This file is the latest non-superseded handoff. Older ChatSentinel handoffs are superseded by this v0.3.0 baseline.
+- service: `127.0.0.1:4317`
+- extension: `C:\ChatSentinel\extension`
+- data: `%LOCALAPPDATA%\ChatSentinel\data\state.json`
+- structured logs: `%LOCALAPPDATA%\ChatSentinel\logs\watchdog.jsonl`
+- supervisor log: `%LOCALAPPDATA%\ChatSentinel\logs\supervisor.log`
+- extension private key (local only): `%LOCALAPPDATA%\ChatSentinel\keys\extension-private.pem`
+- stable extension ID: `pcidbmcahljjpbmaecjmfmpbpfnpoepc`
+
+## Release next action
+
+Commit and push this production candidate, record its exact SHA/tree below in the final release handoff update, re-run all release gates on the exact pushed commit, fast-forward `main`, upgrade the installed service, verify deliberate kill/self-restart, then tag/release `v1.0.0`. No Production-ready claim is valid before those exact steps pass.

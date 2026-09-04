@@ -1,7 +1,8 @@
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
-$logDir = Join-Path $root 'logs'
-$logFile = Join-Path $logDir 'watchdog.log'
+$dataRoot = if ($env:CHATSENTINEL_DATA_DIR) { $env:CHATSENTINEL_DATA_DIR } else { Join-Path $env:LOCALAPPDATA 'ChatSentinel' }
+$logDir = Join-Path $dataRoot 'logs'
+$logFile = Join-Path $logDir 'supervisor.log'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 Set-Location $root
 
@@ -28,6 +29,11 @@ try {
     }
 
     if ((Test-Path $logFile) -and (Get-Item $logFile).Length -gt 5MB) {
+      for ($i = 2; $i -ge 1; $i--) {
+        $src = "$logFile.$i"
+        $dst = "$logFile.$($i + 1)"
+        if (Test-Path $src) { Move-Item -Force $src $dst }
+      }
       Move-Item -Force $logFile "$logFile.1"
     }
 
