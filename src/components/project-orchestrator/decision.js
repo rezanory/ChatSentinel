@@ -43,6 +43,7 @@ export function decideLaneAction({ lane = {}, session = {}, completion = {}, act
     const commandAtMs = Date.parse(lastCommand.completedAt || lastCommand.updatedAt || '');
     const idleKickAfterMs = Number(lane.idleKickAfterMs || 120000);
     if (Number.isFinite(commandAtMs) && Date.now() - commandAtMs >= idleKickAfterMs) {
+      if (Number(lane.fixAttempts || 0) >= Number(lane.maxFixAttempts || 2)) return { action: OrchestratorAction.REPLACE, reason: 'fix-budget-exhausted' };
       return { action: OrchestratorAction.FIX, reason: 'idle-no-branch-progress' };
     }
   }

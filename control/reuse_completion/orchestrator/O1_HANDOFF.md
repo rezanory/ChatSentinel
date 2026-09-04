@@ -50,3 +50,9 @@ Anti-Stall was strengthened after live activation: stale RUNNING sessions age fr
 Live proof: O1 autonomously emitted `NEXT` for R/C1/C3/C4, then emitted `FIX` for C1/C3/ICTL without a user continuation message. C4 advanced remotely to `22a1a4a2f5c8c65eadf361d41971076bbd59ba8b`; Research began modifying source inventory/license evidence. CCTL's stale-chat send loop was stopped after its green handoff was independently verified.
 
 Superseding validation for O1 decision/controller changes: focused orchestrator tests 6/6 PASS, full `npm test` 47/47 PASS, and `npm run check` PASS. Earlier 44/44 evidence remains historical for the initial candidate.
+
+### Fix-budget escalation addendum
+
+Live command history exposed that repeated successful/failed FIX commands were not being counted toward `maxFixAttempts`. O1 now derives per-lane FIX attempt count from durable command history. For idle/no-branch-progress lanes, reaching the configured budget deterministically changes the next action from `FIX` to `REPLACE`, preventing infinite prompt loops.
+
+Validation after this change: focused orchestrator tests 7/7 PASS, full `npm test` 48/48 PASS, `npm run check` PASS.
