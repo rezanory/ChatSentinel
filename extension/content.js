@@ -16,17 +16,13 @@
     return true;
   });
 
-  const pending = window.ChatSentinelActuator?.consumePendingPrompt?.();
-  if (pending) {
-    setTimeout(() => {
-      window.ChatSentinelActuator?.sendPendingPrompt?.(pending);
-    }, 1500);
-  }
+  deliverPendingPrompt();
 
   const observer = new MutationObserver(() => {
     lastMutationAt = Date.now();
     emit();
   });
+
   observer.observe(document.documentElement, {
     subtree: true,
     childList: true,
@@ -36,7 +32,6 @@
 
   setInterval(emit, 5000);
   emit();
-
   function emit() {
     const text = document.body?.innerText || '';
     const buttons = [...document.querySelectorAll('button')]
@@ -48,7 +43,7 @@
     const stopVisible = buttons.some(value => /stop generating|stop/i.test(value));
     const connectionInterrupted = ERROR_TEXTS.some(error => text.includes(error));
     const conversationDead = /conversation not found|unable to load conversation/i.test(text);
-    const progressAgeMs = Date.now() - lastMutationAt;
+    const progressAgeMs = testProgressAge() ?? (Date.now() - lastMutationAt);
     const uiFrozen = progressAgeMs >= 180000 && !stopVisible;
 
     const signal = {
@@ -72,9 +67,35 @@
     lastSignal = fingerprint;
     chrome.runtime.sendMessage(signal).catch(() => {});
   }
-
   function conversationId() {
+    const explicit = document.documentElement.dataset.chatsentinelConversationId;
+    if (isFixture() && explicit) return explicit;
     const match = location.pathname.match(/\/c\/([^/?#]+)/);
     return match?.[1] || `page:${location.pathname}`;
+  }
+
+  function testProgressAge() {
+    if (!isFixture()) return null;
+    const raw = Number(document.documentElement.dataset.chatsentinelTestProgressAge);
+    return Number.isFinite(raw) && raw >= 0 ? raw : null;
+  }
+
+  function isFixture() {
+    return location.hostname === '127.0.0.1' && location.port === '4320';
+  }
+
+  function deliverPendingPrompt() {
+    const pending = window.ChatSentinelActuator?.consumePendingPrompt?.();
+    if (!pending) return;
+    let attempts = 0;
+    const trySend = () => {
+      attempts += 1;
+      const result = window.ChatSentinelActuator?.sendPendingPrompt?.(pending);
+      if (result?.ok) return;
+      if (attempts < 60) return setTimeout(trySend, 500);
+      sessionStorage.setItem('chatsentinel:pendingPrompt', pending);
+      console.warn('ChatSentinel: pending recovery prompt could not be delivered');
+    };
+    setTimeout(trySend, 500);
   }
 })();

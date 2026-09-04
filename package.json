@@ -1,13 +1,14 @@
 {
   "name": "chatsentinel",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Local-first watchdog and recovery controller for ChatGPT project work",
   "scripts": {
     "start": "node src/local-watchdog.js",
     "test": "node --test",
-    "check": "node --check src/recovery-engine.js && node --check src/project-reconciler.js && node --check src/heartbeat.js && node --check src/local-watchdog.js && node --check extension/actuator.js && node --check extension/content.js && node --check extension/background.js && node --check extension/popup.js"
+    "check": "node --check src/recovery-engine.js && node --check src/project-reconciler.js && node --check src/side-effect-classifier.js && node --check src/heartbeat.js && node --check src/local-watchdog.js && node --check extension/actuator.js && node --check extension/content.js && node --check extension/background.js && node --check extension/popup.js",
+    "validate": "npm test && npm run check"
   },
   "engines": {
     "node": ">=20"
