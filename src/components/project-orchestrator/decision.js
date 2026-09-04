@@ -1,0 +1,55 @@
+export const OrchestratorAction = Object.freeze({
+  WAIT: 'WAIT',
+  NEXT: 'NEXT',
+  FIX: 'FIX',
+  REPLACE: 'REPLACE',
+  INTEGRATE: 'INTEGRATE'
+});
+
+export function detectLaneCompletion({ lane = {}, session = {}, git = {} } = {}) {
+  if (lane.required === false) return { complete: true, reason: 'optional-lane' };
+  if (!lane.branch || !lane.baselineSha) return { complete: false, reason: 'lane-contract-incomplete' };
+  if (!git.remoteHead) return { complete: false, reason: 'remote-head-missing' };
+  if (git.remoteHead === lane.baselineSha) return { complete: false, reason: 'branch-not-advanced' };
+  if (git.clean === false) return { complete: false, reason: 'worktree-dirty' };
+  if (git.localHead && git.localHead !== git.remoteHead) return { complete: false, reason: 'local-remote-mismatch' };
+  if (session.state && session.state !== 'IDLE') return { complete: false, reason: 'chat-not-idle' };
+  if (session.decision?.action === 'ESCALATE') return { complete: false, reason: 'chat-escalated' };
+  return { complete: true, reason: 'remote-advanced-clean-idle', head: git.remoteHead };
+}
+export function decideLaneAction({ lane = {}, session = {}, completion = {}, activeCommand = null } = {}) {
+  if (completion.complete) return { action: OrchestratorAction.WAIT, reason: 'lane-complete' };
+  if (activeCommand && ['pending', 'running'].includes(activeCommand.status)) {
+    return { action: OrchestratorAction.WAIT, reason: 'command-in-flight' };
+  }
+  if (!session || Object.keys(session).length === 0) {
+    return { action: OrchestratorAction.NEXT, reason: 'lane-chat-missing' };
+  }
+  if (session.conversationDead) {
+    return { action: OrchestratorAction.REPLACE, reason: 'conversation-dead' };
+  }
+  const recovery = session.decision?.action;
+  if (recovery === 'CONTINUE_NEW_CHAT' || recovery === 'ESCALATE') {
+    return { action: OrchestratorAction.REPLACE, reason: `recovery-${String(recovery).toLowerCase()}` };
+  }
+  if (['SAFE_RETRY', 'CONTINUE_SAME_CHAT', 'RELOAD_AND_RECHECK'].includes(recovery)) {
+    const fixes = Number(lane.fixAttempts || 0);
+    if (fixes >= Number(lane.maxFixAttempts || 2)) {
+      return { action: OrchestratorAction.REPLACE, reason: 'fix-budget-exhausted' };
+    }
+    return { action: OrchestratorAction.FIX, reason: `recovery-${recovery.toLowerCase()}` };
+  }
+  if (Number(session.progressAgeMs || 0) >= Number(lane.stallAfterMs || 300000)) {
+    return { action: OrchestratorAction.FIX, reason: 'lane-stalled' };
+  }
+  return { action: OrchestratorAction.WAIT, reason: completion.reason || 'lane-active' };
+}
+
+export function decideProjectAction(lanes = []) {
+  const required = lanes.filter(row => row.lane?.required !== false);
+  if (required.length && required.every(row => row.completion?.complete)) {
+    return { action: OrchestratorAction.INTEGRATE, reason: 'all-required-lanes-complete' };
+  }
+  const actionable = lanes.find(row => row.decision?.action && row.decision.action !== OrchestratorAction.WAIT);
+  return actionable?.decision || { action: OrchestratorAction.WAIT, reason: 'no-project-action' };
+}
