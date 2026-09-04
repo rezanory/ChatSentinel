@@ -17,6 +17,8 @@
     conversationId: null,
     context: null,
     projects: [],
+    projectTree: null,
+    history: [],
     selectedProjectId: null
   };
 
@@ -76,7 +78,11 @@
         input,select { width:100%; border:1px solid #4b5563; border-radius:7px; padding:7px 8px; background:#0f172a; color:#f9fafb; }
         .muted { color:#9ca3af; font-size:11px; }
         .ok { color:#86efac; }.warn { color:#fbbf24; }.bad { color:#fca5a5; }
-        .projects { display:flex; flex-wrap:wrap; gap:6px; }
+        .projects { display:flex; flex-direction:column; gap:5px; }
+        .folder { margin-left:10px; border-left:1px solid #334155; padding-left:8px; }
+        .folder-name { color:#93c5fd; font-size:11px; font-weight:700; margin:4px 0; }
+        .history-row { padding:7px 0; border-top:1px solid #263244; }
+        .history-row:first-child { border-top:0; }
         .project-chip.active { border-color:#60a5fa; background:#1e3a8a; }
         .chat { display:grid; grid-template-columns:1fr auto; gap:8px; padding:8px 0; border-top:1px solid #263244; }
         .chat:first-child { border-top:0; }
@@ -100,6 +106,7 @@
           </div>
           <div class="card" id="projectEditor"></div>
           <div class="card" id="chatGroup"></div>
+          <div class="card" id="historyCard"></div>
         </div>
         <div class="footer">v1.1 · local-first project watchdog</div>
       </div>`;
@@ -125,7 +132,11 @@
 
     const context = await api(`/project/context?conversationId=${encodeURIComponent(state.conversationId)}`);
     state.context = context;
-    state.projects = context.projects || [];
+    const treeResult = await api('/projects/tree');
+    state.projects = treeResult.projects || context.projects || [];
+    state.projectTree = treeResult.tree || null;
+    const historyResult = await api('/audit/history?limit=100');
+    state.history = historyResult.events || [];
     if (!state.selectedProjectId) state.selectedProjectId = context.project?.projectId || state.projects[0]?.projectId || null;
 
     const health = await api('/health');
@@ -137,6 +148,7 @@
     renderProjects();
     renderProjectEditor(selectedProject());
     renderChatGroup(selectedProject());
+    renderHistory(selectedProject());
   }
 
   function renderCurrent() {
@@ -172,30 +184,20 @@
       list.append(empty);
       return;
     }
-    for (const project of state.projects) {
-      const button = document.createElement('button');
-      button.className = `project-chip${project.projectId === state.selectedProjectId ? ' active' : ''}`;
-      button.textContent = `${project.name} · ${project.chatCount || 0}`;
-      button.addEventListener('click', () => {
-        state.selectedProjectId = project.projectId;
-        renderProjects();
-        renderProjectEditor(project);
-        renderChatGroup(project);
-      });
-      list.append(button);
-    }
+    renderTreeNode(list, state.projectTree || { folders: [], projects: state.projects });
   }
 
   function renderProjectEditor(project) {
     const editor = shadow.getElementById('projectEditor');
     const isNew = !project;
     const values = project || {
-      name: '', projectPath: '', operationClass: '', autoRecovery: false, groupTabs: true, color: 'blue'
+      name: '', projectPath: '', folderPath: '', operationClass: '', autoRecovery: false, groupTabs: true, color: 'blue'
     };
     editor.innerHTML = `
       <h3>${isNew ? 'Create Project' : 'Project Settings'}</h3>
       <div class="field"><label>Name</label><input id="pName" value="${escapeAttr(values.name || '')}"></div>
       <div class="field"><label>Local project path</label><input id="pPath" value="${escapeAttr(values.projectPath || '')}" placeholder="C:\\Project"></div>
+      <div class="field"><label>Folder path</label><input id="pFolder" value="${escapeAttr(values.folderPath || '')}" placeholder="Client / Product / Phase"></div>
       <div class="field"><label>Operation policy</label>
         <select id="pPolicy">
           <option value="" ${selected(values.operationClass,'')}>Conservative / auto</option>
@@ -229,6 +231,7 @@
       projectId: existing?.projectId,
       name: shadow.getElementById('pName').value.trim(),
       projectPath: shadow.getElementById('pPath').value.trim(),
+      folderPath: shadow.getElementById('pFolder').value.trim(),
       operationClass: shadow.getElementById('pPolicy').value,
       color: shadow.getElementById('pColor').value,
       autoRecovery: shadow.getElementById('pAuto').checked,
@@ -316,6 +319,49 @@
       row.querySelector('.focusChat').addEventListener('click', async () => {
         await runtime({ type: 'CHATSENTINEL_FOCUS_TAB', tabId: chat.tabId, url: chat.url });
       });
+      list.append(row);
+    }
+  }
+
+  function renderTreeNode(container, node) {
+    for (const folder of node.folders || []) {
+      const wrap = document.createElement('div');
+      wrap.className = 'folder';
+      const label = document.createElement('div');
+      label.className = 'folder-name';
+      label.textContent = `📁 ${folder.name}`;
+      wrap.append(label);
+      renderTreeNode(wrap, folder);
+      container.append(wrap);
+    }
+    for (const project of node.projects || []) {
+      const button = document.createElement('button');
+      button.className = `project-chip${project.projectId === state.selectedProjectId ? ' active' : ''}`;
+      button.textContent = `${project.name} · ${project.chatCount || 0}`;
+      button.addEventListener('click', () => {
+        state.selectedProjectId = project.projectId;
+        renderProjects();
+        renderProjectEditor(project);
+        renderChatGroup(project);
+        renderHistory(project);
+      });
+      container.append(button);
+    }
+  }
+
+  function renderHistory(project) {
+    const card = shadow.getElementById('historyCard');
+    const events = state.history.filter(event => !project || event.projectId === project.projectId).slice(0, 30);
+    card.innerHTML = `<h3>${project ? escapeHtml(project.name) + ' · ' : ''}Action / Recovery History</h3><div id="historyList"></div>`;
+    const list = card.querySelector('#historyList');
+    if (!events.length) {
+      list.innerHTML = '<div class="muted">No recorded actions or recovery decisions yet.</div>';
+      return;
+    }
+    for (const event of events) {
+      const row = document.createElement('div');
+      row.className = 'history-row';
+      row.innerHTML = `<div><strong>${escapeHtml(event.action)}</strong> <span class="muted">${escapeHtml(event.outcome)}</span></div><div class="muted">${escapeHtml(event.projectName || event.conversationId || 'global')} · ${escapeHtml(event.at || '')}</div>${event.reason ? `<div class="muted">${escapeHtml(event.reason)}</div>` : ''}`;
       list.append(row);
     }
   }

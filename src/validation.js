@@ -62,10 +62,13 @@ export function validateProject(body) {
   if (!OPERATION_CLASSES.has(operationClass)) return invalid('operationClass-invalid');
   const color = cleanString(body.color || 'blue', 20).toLowerCase();
   if (!TAB_COLORS.has(color)) return invalid('color-invalid');
+  const folderPath = body.folderPath === undefined ? '' : cleanString(body.folderPath, 600);
+  if (body.folderPath !== undefined && String(body.folderPath).trim() && !folderPath) return invalid('folderPath-invalid');
   return { ok: true, value: {
     projectId,
     name,
     projectPath,
+    folderPath,
     operationClass,
     autoRecovery: Boolean(body.autoRecovery),
     groupTabs: body.groupTabs !== false,

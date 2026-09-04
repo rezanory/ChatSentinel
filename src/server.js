@@ -8,6 +8,8 @@ import { StateStore } from './state-store.js';
 import { createLogger } from './logger.js';
 import { authorizeRequest, createRateLimiter, requestId, setCors } from './http-security.js';
 import { validateConversationConfig, validateProject, validateProjectAttach, validateReconcileRequest, validateSignal } from './validation.js';
+import { appendAuditEvent, listAuditEvents } from './audit-history.js';
+import { buildProjectTree } from './project-tree.js';
 
 export async function createWatchdogServer(config) {
   const logger = createLogger({ dir: config.logDir });
@@ -113,6 +115,17 @@ async function route(req, res, ctx) {
     return json(res, 200, { ok: true, projects: projectRows(store) });
   }
 
+  if (req.method === 'GET' && url.pathname === '/projects/tree') {
+    const projects = projectRows(store);
+    return json(res, 200, { ok: true, tree: buildProjectTree(projects), projects });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/audit/history') {
+    const projectId = String(url.searchParams.get('projectId') || '').trim() || undefined;
+    const limit = Number(url.searchParams.get('limit') || 200);
+    return json(res, 200, { ok: true, events: listAuditEvents(store, { projectId, limit }) });
+  }
+
   if (req.method === 'GET' && url.pathname === '/project/context') {
     const conversationId = String(url.searchParams.get('conversationId') || '').trim();
     if (!conversationId) return json(res, 400, { ok: false, error: 'conversationId-required' });
@@ -137,6 +150,7 @@ async function route(req, res, ctx) {
     const now = new Date().toISOString();
     const project = { ...existing, ...parsed.value, projectId, createdAt: existing.createdAt || now, updatedAt: now };
     await store.setProject(projectId, project);
+    appendAuditEvent(store, { type: 'action', action: existing.projectId ? 'PROJECT_UPDATED' : 'PROJECT_CREATED', outcome: 'success', projectId, projectName: project.name });
     logger.info('project-upserted', { projectId, name: project.name, projectPath: project.projectPath });
     return json(res, 200, { ok: true, project, projects: projectRows(store) });
   }
@@ -161,6 +175,7 @@ async function route(req, res, ctx) {
       operationClass: existing.operationClass || ''
     };
     await store.setConfig(parsed.value.conversationId, next);
+    appendAuditEvent(store, { type: 'action', action: 'CHAT_ATTACHED', outcome: 'success', projectId: project.projectId, projectName: project.name, conversationId: parsed.value.conversationId });
     logger.info('conversation-attached', { projectId: project.projectId, conversationId: parsed.value.conversationId, tabId: parsed.value.tabId });
     return json(res, 200, { ok: true, project, config: next, projects: projectRows(store) });
   }
@@ -179,6 +194,7 @@ async function route(req, res, ctx) {
     delete next.projectId;
     delete next.projectPath;
     await store.setConfig(conversationId, next);
+    appendAuditEvent(store, { type: 'action', action: 'CHAT_DETACHED', outcome: 'success', projectId: existing.projectId, conversationId });
     logger.info('conversation-detached', { conversationId });
     return json(res, 200, { ok: true, config: next, projects: projectRows(store) });
   }
@@ -188,7 +204,9 @@ async function route(req, res, ctx) {
     const projectId = String(body?.projectId || '').trim();
     if (!projectId) return json(res, 400, { ok: false, error: 'projectId-required', requestId: id });
     if (!store.getProject(projectId)) return json(res, 404, { ok: false, error: 'project-not-found', requestId: id });
+    const deletedProject = store.getProject(projectId);
     await store.deleteProject(projectId);
+    appendAuditEvent(store, { type: 'action', action: 'PROJECT_DELETED', outcome: 'success', projectId, projectName: deletedProject?.name });
     logger.warn('project-deleted', { projectId });
     return json(res, 200, { ok: true, projects: projectRows(store) });
   }
@@ -295,6 +313,7 @@ async function handleSignal(res, signal, ctx) {
   const decision = decideRecovery(merged);
   const record = { ...merged, decision };
   store.setSession(id, record);
+  appendAuditEvent(store, { type: 'recovery', action: decision.action, outcome: 'decided', projectId: config.projectId, projectName: project?.name, conversationId: id, reason: decision.reason });
   logger.info('recovery-decision', {
     conversationId: id,
     action: decision.action,

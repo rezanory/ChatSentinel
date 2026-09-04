@@ -22,3 +22,14 @@ Full redistribution notices for the two adapted permissive sources are stored in
 - `THIRD_PARTY_NOTICES.md`
 
 ChatSentinel still has **0 npm runtime dependencies** and **0 npm development dependencies**.
+
+## v1.2 C4 audit/folder UX provenance
+
+The C4 lane keeps the new audit/history and nested folder components clean-room and attribution-safe:
+
+| Project | License status | C4 use | Source copied? |
+|---|---|---|---:|
+| `hiuxia/chatgpt-conversation-archive` | No clear license identified during Issue #3 triage | Behavior-only reference for nested local folders and portable archive organization. `src/project-tree.js` is an independent implementation. | No |
+| `benedyktdryl/gpt-organizer` | No clear license identified during Issue #3 triage | Behavior-only reference for persistent audit-log / preview-oriented organization concepts. `src/audit-history.js` is an independent implementation. | No |
+
+No additional third-party runtime dependency or vendored source is introduced by C4.
