@@ -180,6 +180,33 @@ test('multi-project registry isolates parallel chat groups and persists them', a
   await app.close();
 });
 
+test('audit history and nested project tree are exposed without coupling queue/session internals', async t => {
+  const { dir, config } = await testConfig();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }).catch(() => {}));
+  const app = await createWatchdogServer(config);
+  const base = await listen(app);
+  const post = async (route, body) => fetch(`${base}${route}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+  }).then(async response => ({ status: response.status, body: await response.json() }));
+
+  const created = await post('/projects/upsert', {
+    name: 'Audit Lane', projectPath: dir, folderPath: 'ChatSentinel/Reuse/C4',
+    operationClass: 'read_only', autoRecovery: true, groupTabs: true, color: 'blue'
+  });
+  assert.equal(created.status, 200);
+  const projectId = created.body.project.projectId;
+  await post('/projects/attach', { projectId, conversationId: 'audit-chat', tabId: 44, title: 'Audit chat', url: 'https://chatgpt.com/' });
+  await post('/signal', { conversationId: 'audit-chat', retryVisible: true, state: 'IDLE', tabId: 44 });
+
+  const tree = await fetch(`${base}/projects/tree`).then(r => r.json());
+  assert.equal(tree.tree.folders[0].name, 'ChatSentinel');
+  assert.equal(tree.tree.folders[0].folders[0].folders[0].projects[0].projectId, projectId);
+
+  const history = await fetch(`${base}/audit/history?projectId=${encodeURIComponent(projectId)}`).then(r => r.json());
+  assert.deepEqual(history.events.slice(0, 3).map(row => row.action), ['SAFE_RETRY', 'CHAT_ATTACHED', 'PROJECT_CREATED']);
+  await app.close();
+});
+
 test('durable command API supports enqueue claim progress and completion', async t => {
   const { dir, config } = await testConfig();
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
