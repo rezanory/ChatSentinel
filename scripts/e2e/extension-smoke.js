@@ -5,7 +5,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 
 const ROOT = path.resolve('.');
-const CHROME = process.env.CHROME_BIN || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const CHROME = process.env.CHROME_BIN || await findTestChromium() || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const extension = path.join(ROOT, 'extension');
 const RUN = `e2e-${process.pid}-${Date.now()}`;
 const profile = path.join(os.tmpdir(), `chatsentinel-e2e-${process.pid}`);
@@ -189,4 +189,18 @@ async function waitUrl(url) {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function findTestChromium() {
+  const base = path.join(process.env.LOCALAPPDATA || '', 'ms-playwright');
+  try {
+    const entries = (await fs.readdir(base)).filter(x => x.startsWith('chromium-')).sort().reverse();
+    for (const entry of entries) {
+      for (const rel of ['chrome-win64/chrome.exe', 'chrome-win/chrome.exe']) {
+        const candidate = path.join(base, entry, rel);
+        try { await fs.access(candidate); return candidate; } catch {}
+      }
+    }
+  } catch {}
+  return null;
 }

@@ -3,6 +3,12 @@ const auto = document.querySelector('#auto');
 const health = document.querySelector('#health');
 const sessions = document.querySelector('#sessions');
 const refresh = document.querySelector('#refresh');
+const chatId = document.querySelector('#chatId');
+const projectPath = document.querySelector('#projectPath');
+const operationClass = document.querySelector('#operationClass');
+const saveProject = document.querySelector('#saveProject');
+const saveStatus = document.querySelector('#saveStatus');
+let currentConversationId = null;
 
 init();
 refresh.addEventListener('click', load);
@@ -10,11 +16,62 @@ auto.addEventListener('change', async () => {
   await chrome.storage.local.set({ autoRecoveryEnabled: auto.checked });
   renderHealth();
 });
+saveProject.addEventListener('click', saveCurrentProject);
 
 async function init() {
   const stored = await chrome.storage.local.get(['autoRecoveryEnabled']);
   auto.checked = Boolean(stored.autoRecoveryEnabled);
+  await loadCurrentConversation();
   await load();
+}
+
+async function loadCurrentConversation() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const match = tab?.url?.match(/chatgpt\.com\/c\/([^/?#]+)/);
+  currentConversationId = match?.[1] || null;
+  chatId.textContent = currentConversationId
+    ? `Conversation: ${currentConversationId}`
+    : 'Open a saved ChatGPT conversation to register a project.';
+  saveProject.disabled = !currentConversationId;
+  if (!currentConversationId) return;
+
+  const projectKey = `projectPath:${currentConversationId}`;
+  const operationKey = `operationClass:${currentConversationId}`;
+  const values = await chrome.storage.local.get([projectKey, operationKey]);
+  projectPath.value = values[projectKey] || '';
+  operationClass.value = values[operationKey] || '';
+}
+async function saveCurrentProject() {
+  if (!currentConversationId) return;
+  saveStatus.textContent = 'Saving…';
+  const projectKey = `projectPath:${currentConversationId}`;
+  const operationKey = `operationClass:${currentConversationId}`;
+  await chrome.storage.local.set({
+    [projectKey]: projectPath.value.trim(),
+    [operationKey]: operationClass.value
+  });
+
+  try {
+    const response = await fetch(`${WATCHDOG}/conversation/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        conversationId: currentConversationId,
+        projectPath: projectPath.value.trim() || undefined,
+        operationClass: operationClass.value || undefined
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || result.reconciliation?.reason || 'registration-failed');
+    saveStatus.textContent = result.reconciliation
+      ? `Registered · ${shortSha(result.reconciliation.head)}`
+      : 'Registered';
+    saveStatus.className = 'ok';
+    await load();
+  } catch (error) {
+    saveStatus.textContent = `Failed: ${error.message}`;
+    saveStatus.className = 'bad';
+  }
 }
 
 async function load() {
@@ -57,9 +114,12 @@ function renderSessions(rows) {
     item.className = 'row';
     const action = row.decision?.action || 'UNKNOWN';
     const reason = row.decision?.reason || '';
+    const risk = row.sideEffectRisk || 'unknown';
+    const fresh = row.checkpointFresh ? 'fresh checkpoint' : 'checkpoint uncertain';
     item.innerHTML = `<div><strong>${escapeHtml(row.id)}</strong></div>` +
       `<div>${escapeHtml(row.state || 'UNKNOWN')} · <span class="decision">${escapeHtml(action)}</span></div>` +
       `<div class="muted">${escapeHtml(reason)}</div>` +
+      `<div class="muted">risk=${escapeHtml(risk)} · ${escapeHtml(fresh)}</div>` +
       `<div class="muted">${escapeHtml(row.branch || '')} ${escapeHtml(shortSha(row.head))}</div>`;
     sessions.append(item);
   }

@@ -5,17 +5,35 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ChatSentinel</title>
   <style>
-    body{font:13px system-ui;margin:12px;width:360px;color:#161616;background:#fff}
+    body{font:13px system-ui;margin:12px;width:400px;color:#161616;background:#fff}
     header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
     h1{font-size:16px;margin:0}.muted{color:#666}.row{border-top:1px solid #ddd;padding:8px 0}
     .decision{font-weight:600}.ok{color:#176b2c}.warn{color:#9a5b00}.bad{color:#a61b1b}
-    button{padding:6px 10px}label{display:flex;gap:7px;align-items:center}
+    button{padding:6px 10px}label.toggle{display:flex;gap:7px;align-items:center}
+    fieldset{border:1px solid #ddd;border-radius:7px;margin:10px 0;padding:9px}
+    fieldset label{display:block;margin:7px 0 3px}input[type=text],select{box-sizing:border-box;width:100%;padding:6px}
+    .actions{display:flex;align-items:center;gap:8px;margin-top:8px}.small{font-size:11px;overflow-wrap:anywhere}
   </style>
 </head>
 <body>
   <header><h1>ChatSentinel</h1><button id="refresh">Refresh</button></header>
-  <label><input id="auto" type="checkbox"> Auto recovery (guarded)</label>
+  <label class="toggle"><input id="auto" type="checkbox"> Auto recovery (guarded)</label>
   <p id="health" class="muted">Loading local watchdog…</p>
+
+  <fieldset>
+    <legend>Current ChatGPT conversation</legend>
+    <div id="chatId" class="small muted">Detecting conversation…</div>
+    <label for="projectPath">Local project path</label>
+    <input id="projectPath" type="text" placeholder="C:\project">
+    <label for="operationClass">Operation policy</label>
+    <select id="operationClass">
+      <option value="">Conservative / auto</option>
+      <option value="read_only">Read-only (safe retry allowed)</option>
+      <option value="write">Write / side effects possible</option>
+    </select>
+    <div class="actions"><button id="saveProject">Register</button><span id="saveStatus" class="muted"></span></div>
+  </fieldset>
+
   <div id="sessions"></div>
   <script src="popup.js"></script>
 </body>

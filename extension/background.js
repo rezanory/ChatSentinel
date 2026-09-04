@@ -9,8 +9,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function forwardSignal(signal, tabId) {
+  const config = await conversationConfig(signal.conversationId);
   const payload = {
     ...signal,
+    ...config,
     tabId,
     sideEffectRisk: await sideEffectRisk(signal.conversationId),
     checkpointFresh: await checkpointFresh(signal.conversationId),
@@ -90,4 +92,14 @@ async function incrementRetryCount(conversationId) {
   const key = `retryCount:${conversationId}`;
   const current = await retryCount(conversationId);
   await chrome.storage.local.set({ [key]: current + 1 });
+}
+
+async function conversationConfig(conversationId) {
+  const projectKey = `projectPath:${conversationId}`;
+  const operationKey = `operationClass:${conversationId}`;
+  const stored = await chrome.storage.local.get([projectKey, operationKey]);
+  return {
+    projectPath: stored[projectKey] || undefined,
+    operationClass: stored[operationKey] || undefined
+  };
 }

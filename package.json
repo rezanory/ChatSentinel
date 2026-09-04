@@ -7,8 +7,9 @@
   "scripts": {
     "start": "node src/local-watchdog.js",
     "test": "node --test",
-    "check": "node --check src/recovery-engine.js && node --check src/project-reconciler.js && node --check src/side-effect-classifier.js && node --check src/heartbeat.js && node --check src/local-watchdog.js && node --check extension/actuator.js && node --check extension/content.js && node --check extension/background.js && node --check extension/popup.js",
-    "validate": "npm test && npm run check"
+    "check": "node --check src/recovery-engine.js && node --check src/project-reconciler.js && node --check src/side-effect-classifier.js && node --check src/heartbeat.js && node --check src/local-watchdog.js && node --check extension/actuator.js && node --check extension/content.js && node --check extension/background.js && node --check extension/popup.js && node --check scripts/e2e/extension-smoke.js && node --check scripts/e2e/fault-fixture-server.js",
+    "e2e": "node scripts/e2e/extension-smoke.js",
+    "validate": "npm test && npm run check && npm run e2e"
   },
   "engines": {
     "node": ">=20"

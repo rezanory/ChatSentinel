@@ -77,7 +77,15 @@ const server = http.createServer(async (req, res) => {
       const signal = await readJson(req);
       const id = signal.conversationId || signal.tabId || 'unknown';
       const previous = sessions.get(id) || {};
-      const config = configs.get(id) || {};
+      let config = configs.get(id) || {};
+      if (signal.projectPath || signal.operationClass) {
+        config = {
+          ...config,
+          ...(signal.projectPath ? { projectPath: signal.projectPath } : {}),
+          ...(signal.operationClass ? { operationClass: signal.operationClass } : {})
+        };
+        configs.set(id, config);
+      }
       const projectPath = config.projectPath;
       const reconciliation = projectPath ? await reconcileProject(projectPath) : null;
 
