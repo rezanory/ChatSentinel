@@ -28,6 +28,20 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { sessions: [...sessions.values()] });
     }
 
+    if (req.method === 'GET' && req.url === '/supervisor') {
+      const rows = [...sessions.entries()].map(([id, row]) => ({
+        id,
+        state: row.state,
+        decision: row.decision,
+        updatedAt: row.updatedAt,
+        progressAgeMs: row.progressAgeMs,
+        projectPath: row.projectPath,
+        branch: row.reconciliation?.branch,
+        head: row.reconciliation?.head
+      }));
+      return json(res, 200, { count: rows.length, sessions: rows });
+    }
+
     if (req.method === 'POST' && req.url === '/project/register') {
       const body = await readJson(req);
       if (!body.conversationId || !body.projectPath) {
@@ -66,7 +80,7 @@ const server = http.createServer(async (req, res) => {
       const record = { ...merged, decision };
       sessions.set(id, record);
       process.stdout.write(JSON.stringify({ type: 'decision', id, decision }) + '\n');
-      return json(res, 200, { ok: true, decision, reconciliation });
+      return json(res, 200, { ok: true, decision, reconciliation, projectPath });
     }
 
     return json(res, 404, { ok: false, error: 'not-found' });
@@ -100,20 +114,30 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Headers', 'content-type');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
 }
+function end(res, status) {
+  res.statusCode = status;
+  res.end();
+}
 
-function end(res, status) { res.statusCode = status; res.end(); }
 function json(res, status, body) {
   res.statusCode = status;
   res.setHeader('content-type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
 }
+
 function readJson(req) {
   return new Promise((resolve, reject) => {
     let body = '';
     req.setEncoding('utf8');
-    req.on('data', chunk => { if ((body += chunk).length > 100_000) req.destroy(); });
+    req.on('data', chunk => {
+      if ((body += chunk).length > 100_000) req.destroy();
+    });
     req.on('end', () => {
-      try { resolve(body ? JSON.parse(body) : {}); } catch (error) { reject(error); }
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch (error) {
+        reject(error);
+      }
     });
     req.on('error', reject);
   });

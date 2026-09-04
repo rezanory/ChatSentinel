@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ChatSentinel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Detects ChatGPT stalls, interruptions and recovery states for the local ChatSentinel watchdog.",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
@@ -14,7 +14,7 @@
   "content_scripts": [
     {
       "matches": ["https://chatgpt.com/*"],
-      "js": ["content.js"],
+      "js": ["actuator.js", "content.js"],
       "run_at": "document_idle"
     }
   ],

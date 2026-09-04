@@ -13,7 +13,8 @@ async function forwardSignal(signal, tabId) {
     ...signal,
     tabId,
     sideEffectRisk: await sideEffectRisk(signal.conversationId),
-    checkpointFresh: await checkpointFresh(signal.conversationId)
+    checkpointFresh: await checkpointFresh(signal.conversationId),
+    retryCount: await retryCount(signal.conversationId)
   };
 
   const response = await fetch(`${WATCHDOG}/signal`, {
@@ -23,26 +24,38 @@ async function forwardSignal(signal, tabId) {
   });
 
   const result = await response.json();
+  await recordDecision(signal.conversationId, result);
+  await maybeAct(result, tabId, payload);
+  return result;
+}
+async function maybeAct(result, tabId, payload) {
+  if (!result?.decision || !tabId) return;
+  const settings = await chrome.storage.local.get(['autoRecoveryEnabled']);
+  if (!settings.autoRecoveryEnabled) return;
+
+  if (result.decision.action === 'SAFE_RETRY') {
+    await incrementRetryCount(payload.conversationId);
+  }
+
+  await chrome.tabs.sendMessage(tabId, {
+    type: 'CHATSENTINEL_EXECUTE',
+    decision: result.decision,
+    context: {
+      reconciliation: result.reconciliation,
+      projectPath: result.projectPath,
+      decision: result.decision
+    }
+  }).catch(() => {});
+}
+
+async function recordDecision(conversationId, result) {
   await chrome.storage.local.set({
-    [`decision:${signal.conversationId}`]: {
+    [`decision:${conversationId}`]: {
       ...result,
       at: new Date().toISOString()
     }
   });
-
-  await maybeAct(result.decision, tabId);
-  return result;
 }
-
-async function maybeAct(decision, tabId) {
-  if (!decision || !tabId) return;
-  if (decision.action === 'RELOAD_AND_RECHECK') {
-    await chrome.tabs.reload(tabId);
-  }
-  // SAFE_RETRY / CONTINUE / NEW_CHAT remain advisory in v0.1.
-  // Automated write-like UI actions are enabled only after reconciliation adapters land.
-}
-
 async function sideEffectRisk(conversationId) {
   const key = `sideEffectRisk:${conversationId}`;
   const stored = await chrome.storage.local.get(key);
@@ -53,4 +66,16 @@ async function checkpointFresh(conversationId) {
   const key = `checkpointFresh:${conversationId}`;
   const stored = await chrome.storage.local.get(key);
   return Boolean(stored[key]);
+}
+
+async function retryCount(conversationId) {
+  const key = `retryCount:${conversationId}`;
+  const stored = await chrome.storage.local.get(key);
+  return Number(stored[key] || 0);
+}
+
+async function incrementRetryCount(conversationId) {
+  const key = `retryCount:${conversationId}`;
+  const current = await retryCount(conversationId);
+  await chrome.storage.local.set({ [key]: current + 1 });
 }

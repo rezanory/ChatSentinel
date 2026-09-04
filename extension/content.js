@@ -8,11 +8,25 @@
   let lastMutationAt = Date.now();
   let lastSignal = '';
 
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== 'CHATSENTINEL_EXECUTE') return;
+    Promise.resolve(window.ChatSentinelActuator?.executeDecision(message.decision, message.context))
+      .then(result => sendResponse(result || { ok: false, reason: 'actuator-missing' }))
+      .catch(error => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  });
+
+  const pending = window.ChatSentinelActuator?.consumePendingPrompt?.();
+  if (pending) {
+    setTimeout(() => {
+      window.ChatSentinelActuator?.sendPendingPrompt?.(pending);
+    }, 1500);
+  }
+
   const observer = new MutationObserver(() => {
     lastMutationAt = Date.now();
     emit();
   });
-
   observer.observe(document.documentElement, {
     subtree: true,
     childList: true,
