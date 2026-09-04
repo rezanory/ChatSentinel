@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.1.1';
 
 const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
 const dataDir = process.env.CHATSENTINEL_DATA_DIR || path.join(localAppData, 'ChatSentinel');
