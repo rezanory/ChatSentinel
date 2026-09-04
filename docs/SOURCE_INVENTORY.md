@@ -22,3 +22,21 @@ Full redistribution notices for the two adapted permissive sources are stored in
 - `THIRD_PARTY_NOTICES.md`
 
 ChatSentinel still has **0 npm runtime dependencies** and **0 npm development dependencies**.
+
+## v1.2 reuse-completion audit additions
+
+Pinned, permissive sources approved for selective direct adaptation:
+
+- `dyemane/tab-groups` @ `4e73f6328b4b4201edf0011d63bee578d7884b60` — MIT. Approved for C1/C3 capture/restore/switch, guarded auto-save, search/diff, versioned import/export patterns.
+- `BF-GO/session-backups` @ `5980a58102c95b56bdd31e8bbfee580f293a73e3` — MIT. Approved for C1/C3 snapshot dedupe/retention, selective restore planning, strict import validation and migration safety patterns.
+- `yurtools/gpt-conv-manager-chrome` @ `8b7e7c55f4e72f186e90eab6fd288e0ee7e6da51` — MIT. Approved selectively for C3 discovery/filter/sort and rate-limit-aware sequential bulk-operation UX/state patterns.
+
+Reference / clean-room only in v1.2 audit:
+
+- `kayuling/chat-organizer-extension` — no clear repository license confirmed; persisted queue/rerender-resume behavior only.
+- `hiuxia/chatgpt-conversation-archive` — no clear repository license confirmed; nested-folder/export behavior only.
+- `benedyktdryl/gpt-organizer` — no clear repository license confirmed; import-plan preview and audit-log behavior only.
+- `xcanwin/KeepChatGPT` — GPL-2.0; behavior/state-machine ideas only.
+- `dizzpy/ChatGPT-Auto-Continue` — README declares MIT, but no standalone LICENSE was confirmed by this audit; reference only because the behavior is trivial to reimplement independently.
+
+The audit does not add any runtime dependency. See `control/reuse_completion/research/REUSE_AUDIT_V1.md` and `PROVENANCE_MANIFEST_V1.json`.

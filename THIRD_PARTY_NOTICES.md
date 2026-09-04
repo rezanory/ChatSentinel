@@ -27,3 +27,28 @@ Licensed under the Apache License, Version 2.0. Modified for ChatSentinel projec
 - `nathabee/chatgpt-organizer` — MIT. Referenced for Projects/Settings information architecture. Its Chrome `sidePanel` surface is intentionally not used because ChatSentinel renders controls inside the active ChatGPT page.
 
 The earlier reference-only projects (`xcanwin/KeepChatGPT`, `11me/light-session`, `dizzpy/ChatGPT-Auto-Continue`, and `boringresearch/plugin-chatgpt-automation`) remain documented in `docs/SOURCE_INVENTORY.md`.
+
+## v1.2 reuse-completion sources approved for direct adaptation
+
+The following permissively licensed sources were audited and pinned for selective adaptation. Their license texts are stored under `LICENSES/`. This research-lane notice records approved provenance; implementation lanes must identify any actual adapted paths in their handoff.
+
+### dyemane/tab-groups — MIT
+
+Repository: `https://github.com/dyemane/tab-groups`
+Pinned revision: `4e73f6328b4b4201edf0011d63bee578d7884b60`
+Approved use: project tab-group capture/restore/switch, guarded auto-save, search/diff and versioned import/export patterns.
+License copy: `LICENSES/dyemane-tab-groups-MIT.txt`.
+
+### BF-GO/session-backups — MIT
+
+Repository: `https://github.com/BF-GO/session-backups`
+Pinned revision: `5980a58102c95b56bdd31e8bbfee580f293a73e3`
+Approved use: automatic/change snapshot, selective restore planning, retention, strict import validation and safe migration patterns.
+License copy: `LICENSES/BF-GO-session-backups-MIT.txt`.
+
+### yurtools/gpt-conv-manager-chrome — MIT
+
+Repository: `https://github.com/yurtools/gpt-conv-manager-chrome`
+Pinned revision: `8b7e7c55f4e72f186e90eab6fd288e0ee7e6da51`
+Approved use: project/conversation discovery, local filter/sort, sequential bulk-operation delay/stop/status patterns where they fit ChatSentinel component contracts.
+License copy: `LICENSES/yurtools-gpt-conv-manager-chrome-MIT.txt`.
