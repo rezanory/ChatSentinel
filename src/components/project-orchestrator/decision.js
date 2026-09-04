@@ -17,7 +17,7 @@ export function detectLaneCompletion({ lane = {}, session = {}, git = {} } = {})
   if (session.decision?.action === 'ESCALATE') return { complete: false, reason: 'chat-escalated' };
   return { complete: true, reason: 'remote-advanced-clean-idle', head: git.remoteHead };
 }
-export function decideLaneAction({ lane = {}, session = {}, completion = {}, activeCommand = null } = {}) {
+export function decideLaneAction({ lane = {}, session = {}, completion = {}, activeCommand = null, lastCommand = null } = {}) {
   if (completion.complete) return { action: OrchestratorAction.WAIT, reason: 'lane-complete' };
   if (activeCommand && ['pending', 'running'].includes(activeCommand.status)) {
     return { action: OrchestratorAction.WAIT, reason: 'command-in-flight' };
@@ -38,6 +38,13 @@ export function decideLaneAction({ lane = {}, session = {}, completion = {}, act
       return { action: OrchestratorAction.REPLACE, reason: 'fix-budget-exhausted' };
     }
     return { action: OrchestratorAction.FIX, reason: `recovery-${recovery.toLowerCase()}` };
+  }
+  if (session.state === 'IDLE' && completion.reason === 'branch-not-advanced' && lastCommand?.status === 'succeeded') {
+    const commandAtMs = Date.parse(lastCommand.completedAt || lastCommand.updatedAt || '');
+    const idleKickAfterMs = Number(lane.idleKickAfterMs || 120000);
+    if (Number.isFinite(commandAtMs) && Date.now() - commandAtMs >= idleKickAfterMs) {
+      return { action: OrchestratorAction.FIX, reason: 'idle-no-branch-progress' };
+    }
   }
   const updatedAtMs = Date.parse(session.updatedAt || '');
   const silenceAgeMs = Number.isFinite(updatedAtMs) ? Math.max(0, Date.now() - updatedAtMs) : 0;

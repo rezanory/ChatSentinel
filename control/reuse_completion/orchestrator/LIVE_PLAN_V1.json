@@ -1,0 +1,49 @@
+{
+  "projectId": "project:4a6bcc82-da0f-46bd-87da-05bdc5758d9a",
+  "enabled": true,
+  "repoPath": "C:\\ChatSentinel",
+  "lanes": [
+    {
+      "laneId": "R", "laneName": "Research / Reuse Audit", "role": "research", "required": true,
+      "worktreePath": "C:\\ChatSentinel-worktrees\\research", "branch": "research/reuse-audit-v1", "baselineSha": "da1ef1e037151fcb827df0d5c1af1fe6444bc2e7",
+      "prompt": "RESEARCH / REUSE AUDIT LANE. Repo rezanory/ChatSentinel. Worktree C:\\ChatSentinel-worktrees\\research. Branch research/reuse-audit-v1. Exact baseline da1ef1e037151fcb827df0d5c1af1fe6444bc2e7. Reconcile GitHub/local first. Read latest CANONICAL_HANDOFF, control/COMPONENT_FIRST_DEVELOPMENT_RULE.md, control/reuse_completion/PARALLEL_PLAN_V1.md and Issue #3. Audit reusable OSS/plugin capabilities, licenses, direct-adapt vs clean-room decisions, exact algorithms/components and test gaps. Write only docs/, control/reuse_completion/research/, license/provenance surfaces. Do not merge main. Push exact green candidate and handoff."
+    },
+    {
+      "laneId": "C1", "laneName": "Session / Tab Restore", "role": "implementation", "required": true,
+      "worktreePath": "C:\\ChatSentinel-worktrees\\session", "branch": "feat/session-restore-v1", "baselineSha": "da1ef1e037151fcb827df0d5c1af1fe6444bc2e7",
+      "prompt": "SESSION / TAB RESTORE LANE. Repo rezanory/ChatSentinel. Worktree C:\\ChatSentinel-worktrees\\session. Branch feat/session-restore-v1. Exact baseline da1ef1e037151fcb827df0d5c1af1fe6444bc2e7. Reconcile first; read latest canonical handoff, Component-First rule, parallel plan and Issue #3. Build standalone session/snapshot components for persistent project tab-group snapshots, browser-restart restore, selective restore, retention and project switching. Reuse existing state/browser substrate; avoid queue/search/audit UI. Focused failure-injection tests; full suites collect-all-failures; fix-forward; push exact green candidate and handoff. Do not merge main."
+    },
+    {
+      "laneId": "C2", "laneName": "Durable Operation Queue", "role": "reused-existing", "required": false,
+      "worktreePath": "C:\\ChatSentinel-worktrees\\queue", "branch": "feat/durable-queue-v1", "baselineSha": "da1ef1e037151fcb827df0d5c1af1fe6444bc2e7",
+      "prompt": "Capability is already supplied by the green Durable Command Queue and browser Command Executor on the integration spine. Do not duplicate it."
+    },
+    {
+      "laneId": "C3", "laneName": "Search / Export / Import", "role": "implementation", "required": true,
+      "worktreePath": "C:\\ChatSentinel-worktrees\\search", "branch": "feat/search-export-v1", "baselineSha": "da1ef1e037151fcb827df0d5c1af1fe6444bc2e7",
+      "prompt": "SEARCH / EXPORT / IMPORT LANE. Repo rezanory/ChatSentinel. Worktree C:\\ChatSentinel-worktrees\\search. Branch feat/search-export-v1. Exact baseline da1ef1e037151fcb827df0d5c1af1fe6444bc2e7. Reconcile first; read latest canonical handoff, Component-First rule, parallel plan and Issue #3. Build standalone project/chat search and filters plus portable project config and recovery snapshot export/import with validation and preview-before-apply. Reuse existing components; avoid session/queue/audit internals. Focused tests, full suites without fail-fast, fix-forward, push exact green candidate and handoff. Do not merge main."
+    },
+    {
+      "laneId": "C4", "laneName": "Audit / History / Folder UX", "role": "implementation", "required": true,
+      "worktreePath": "C:\\ChatSentinel-worktrees\\audit", "branch": "feat/audit-folders-v1", "baselineSha": "da1ef1e037151fcb827df0d5c1af1fe6444bc2e7",
+      "prompt": "AUDIT / HISTORY / FOLDER UX LANE. Repo rezanory/ChatSentinel. Worktree C:\\ChatSentinel-worktrees\\audit. Branch feat/audit-folders-v1. Exact baseline da1ef1e037151fcb827df0d5c1af1fe6444bc2e7. Reconcile first; read latest canonical handoff, Component-First rule, parallel plan and Issue #3. Build standalone action/recovery history UI and nested project/folder organization with attribution-safe UX adaptation. Avoid session/queue/search internals. Focused tests, full suites collect-all-failures, fix-forward, push exact green candidate and handoff. Do not merge main."
+    },
+    {
+      "laneId": "CCTL", "laneName": "Chat Control Component", "role": "implementation", "required": true,
+      "worktreePath": "C:\\ChatSentinel-worktrees\\chat-control", "branch": "feat/chat-control-v1", "baselineSha": "080909f8fd691b8e043b6b3083e131a159749a98", "stallAfterMs": 300000,
+      "prompt": "CHAT CONTROL LANE. Repo rezanory/ChatSentinel. Worktree C:\\ChatSentinel-worktrees\\chat-control. Branch feat/chat-control-v1. Exact baseline 080909f8fd691b8e043b6b3083e131a159749a98. Reconcile first. Read Component-First rule and parallel plan. Own only a standalone Chat Control component for Focus/Reload/Close/Replace with policy, retries, stale-tab handling, replacement handoff, idempotency and tests. Reuse existing durable command queue and browser executor; do not duplicate them. Full suite collect-all-failures; fix-forward in scope; push exact green candidate and handoff. Do not merge main.",
+      "fixPrompt": "Reconcile GitHub/local and latest handoff for Chat Control. If the implementation is already green, finalize the canonical lane handoff and leave the chat IDLE. Otherwise fix-forward all in-scope failures, run the complete suite without fail-fast, push the exact green candidate, and hand off."
+    },
+    {
+      "laneId": "ICTL", "laneName": "Integration Controller Component", "role": "implementation", "required": true,
+      "worktreePath": "C:\\ChatSentinel-worktrees\\integration-controller", "branch": "feat/integration-controller-v1", "baselineSha": "080909f8fd691b8e043b6b3083e131a159749a98", "stallAfterMs": 300000,
+      "prompt": "INTEGRATION CONTROLLER LANE. Repo rezanory/ChatSentinel. Worktree C:\\ChatSentinel-worktrees\\integration-controller. Branch feat/integration-controller-v1. Exact baseline 080909f8fd691b8e043b6b3083e131a159749a98. Reconcile first. Read Component-First rule, parallel plan and Issue #3. Build standalone Integration Controller component: evaluate green lane candidates, safe serialized union/cherry-pick onto integration spine, run full gates without fail-fast, collect all failures, fix-forward/revalidate policy, candidate freeze, and enqueue next lane when gates pass. Never merge main or tag production. Reuse existing Git/recovery substrate. Push exact green candidate and handoff.",
+      "fixPrompt": "Integration Controller appears stalled. Reconcile GitHub/local first and continue from the latest canonical handoff. Build only the standalone controller component, reuse existing substrates, fix-forward all in-scope failures, run all suites without fail-fast, push exact green candidate and handoff."
+    }
+  ],
+  "integrationLane": {
+    "laneId": "INT", "laneName": "Reuse Completion Integration", "role": "integration", "required": false,
+    "branch": "integration/reuse-completion-v1", "baselineSha": "9f8ecb5f6ab09430265eb4a1d7643fe94469701b",
+    "prompt": "REUSE COMPLETION INTEGRATION LANE. Repo rezanory/ChatSentinel. Worktree C:\\ChatSentinel. Branch integration/reuse-completion-v1. Reconcile GitHub/local and latest non-superseded handoffs first. Serially union only exact green lane candidates, preserve Component-First boundaries, run every gate without fail-fast and collect all failures, fix-forward only integration-scope issues, and maintain Canonical Handoff/Anti-Blocker evidence. Do not merge main, close Issue #3, or tag Production until every Issue #3 acceptance item and independent gate actually passes. Push exact green integration candidate and handoff."
+  }
+}
