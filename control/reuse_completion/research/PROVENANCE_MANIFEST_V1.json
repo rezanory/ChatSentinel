@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "auditLane": "R",
+  "baseline": "da1ef1e037151fcb827df0d5c1af1fe6444bc2e7",
+  "sources": [
+    {
+      "repository": "dyemane/tab-groups",
+      "revision": "4e73f6328b4b4201edf0011d63bee578d7884b60",
+      "license": "MIT",
+      "decision": "direct-adapt",
+      "licensePath": "LICENSES/dyemane-tab-groups-MIT.txt",
+      "targets": ["C1", "C3"]
+    },
+    {
+      "repository": "BF-GO/session-backups",
+      "revision": "5980a58102c95b56bdd31e8bbfee580f293a73e3",
+      "license": "MIT",
+      "decision": "direct-adapt",
+      "licensePath": "LICENSES/BF-GO-session-backups-MIT.txt",
+      "targets": ["C1", "C3"]
+    },
+    {
+      "repository": "yurtools/gpt-conv-manager-chrome",
+      "revision": "8b7e7c55f4e72f186e90eab6fd288e0ee7e6da51",
+      "license": "MIT",
+      "decision": "direct-adapt-selectively",
+      "licensePath": "LICENSES/yurtools-gpt-conv-manager-chrome-MIT.txt",
+      "targets": ["C3"]
+    }
+  ],  "referenceOnlySources": [
+    {"repository":"kayuling/chat-organizer-extension","license":"unclear","decision":"clean-room","targets":["C2"]},
+    {"repository":"hiuxia/chatgpt-conversation-archive","license":"unclear","decision":"clean-room","targets":["C4"]},
+    {"repository":"benedyktdryl/gpt-organizer","license":"unclear","decision":"clean-room","targets":["C3","C4"]},
+    {"repository":"xcanwin/KeepChatGPT","license":"GPL-2.0","decision":"behavior-only","targets":["recovery"]},
+    {"repository":"dizzpy/ChatGPT-Auto-Continue","license":"README-declared-MIT-not-standalone-confirmed","decision":"reference-only","targets":["recovery"]},
+    {"repository":"boringresearch/plugin-chatgpt-automation","license":"unclear","decision":"reference-only","targets":["C2"]}
+  ],
+  "runtimeDependencyPolicy": "none",
+  "componentFirstRequired": true,
+  "issueGate": 3
+}
