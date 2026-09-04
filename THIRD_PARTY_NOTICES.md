@@ -21,9 +21,20 @@ The minimal project-tab grouping pattern uses the official sample approach:
 
 Licensed under the Apache License, Version 2.0. Modified for ChatSentinel project groups.
 
+
+## 11me/light-session ? MIT
+
+Repository: `https://github.com/11me/light-session`
+
+ChatSentinel's Conversation Window component adapts the upstream idea and turn-aware conversation-tree trimming approach so old turns are removed before React renders them. ChatSentinel keeps this as an isolated component, uses a conservative default window, preserves the tree anchor and retained hidden/tool nodes, and fails open to the original response on any parsing/interception error.
+
+Copyright (c) 2025 LightSession Contributors
+
+Licensed under the MIT License. The complete upstream license is stored in `LICENSES/11me-light-session-MIT.txt`.
+
 ## Reference-only projects (no source copied)
 
 - `glyndavidson/chatgpt-folders` — MIT. Referenced for in-ChatGPT folder/tree UX, nested folder behavior and drag/drop organization. No source is currently vendored into ChatSentinel v1.1.
 - `nathabee/chatgpt-organizer` — MIT. Referenced for Projects/Settings information architecture. Its Chrome `sidePanel` surface is intentionally not used because ChatSentinel renders controls inside the active ChatGPT page.
 
-The earlier reference-only projects (`xcanwin/KeepChatGPT`, `11me/light-session`, `dizzpy/ChatGPT-Auto-Continue`, and `boringresearch/plugin-chatgpt-automation`) remain documented in `docs/SOURCE_INVENTORY.md`.
+The earlier reference-only projects (`xcanwin/KeepChatGPT`, `dizzpy/ChatGPT-Auto-Continue`, and `boringresearch/plugin-chatgpt-automation`) remain documented in `docs/SOURCE_INVENTORY.md`. `11me/light-session` moved from reference-only in v1.0 to an attributed MIT adaptation for the Conversation Window component.

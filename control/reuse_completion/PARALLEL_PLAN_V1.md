@@ -32,6 +32,7 @@ Integration branch: `integration/reuse-completion-v1`
 
 ## Integration protocol
 
+- `COMPONENT_FIRST_DEVELOPMENT_RULE` is mandatory: every lane delivers isolated components with explicit contracts, owned paths and focused tests; shared orchestrators only compose them.
 - One chat per lane; each chat works only on its branch.
 - Complete tests even after first failure and report all failures.
 - Fix-forward inside lane scope, then revalidate.
@@ -39,3 +40,9 @@ Integration branch: `integration/reuse-completion-v1`
 - Integration branch serially unions green lane candidates and runs the full release gate after each union.
 - GitHub + latest non-superseded handoff remain source of truth; prompts are not trusted without reconciliation.
 - Final Production tag is forbidden until Issue #3 reuse-completion acceptance is fully closed.
+
+## Shared control-plane components already green
+
+- `Durable Command Queue` + browser `Command Executor`: create/seed/attach/group/resume/replace lane chats from localhost supervisor commands.
+- `Conversation Window`: pre-render long-chat trimming for lower DOM/renderer pressure during parallel development; MIT-adapted from `11me/light-session`, fail-open.
+- Both components must stay reusable and independent of lane-specific business logic.

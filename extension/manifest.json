@@ -23,6 +23,26 @@
         "https://chatgpt.com/*"
       ],
       "js": [
+        "components/conversation-window/trimmer.js",
+        "components/conversation-window/page-proxy.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "components/conversation-window/controller.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
         "identity.js",
         "actuator.js",
         "content.js",

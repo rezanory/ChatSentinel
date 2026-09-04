@@ -61,6 +61,7 @@ try {
   await sleep(500);
   await detectorSuite();
   await actuatorSuite();
+  await conversationWindowSuite();
   await projectConsoleSuite();
   await commandManagerSuite();
   console.log('ChatSentinel browser E2E: PASS');
@@ -126,6 +127,30 @@ async function actuatorSuite() {
   const handoff = await evalValue(deadTarget, 'document.body.dataset.sent');
   assert.match(handoff, /checkpoint|source-of-truth|Ø§Ø¯Ø§Ù…Ù‡ Ù¾Ø±ÙˆÚ˜Ù‡/i);
   console.log('CONTINUE_NEW_CHAT + handoff actuator: PASS');
+}
+
+async function conversationWindowSuite() {
+  const page = await openPage(fixtureUrl('idle', { window: 'trim' }));
+  const result = await evalValue(page, `(async()=>{
+    const response=await fetch('/backend-api/conversation/window-test');
+    const json=await response.json();
+    const visible=Object.values(json.mapping||{}).filter(node=>['user','assistant'].includes(node?.message?.author?.role)).length;
+    return {nodes:Object.keys(json.mapping||{}).length,visible,current:json.current_node,root:json.root};
+  })()`);
+  assert.equal(result.visible, 40);
+  assert.equal(result.current, 'n100');
+  assert.equal(result.root, 'root');
+  assert.ok(result.nodes <= 41);
+  await waitEval(page, "Number(document.documentElement.dataset.chatsentinelWindowRemovedTurns) === 60");
+  console.log('conversation render-window compaction: PASS');
+
+  const tab = await workerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('window=trim'));return t?{id:t.id}:null})()");
+  assert.ok(tab?.id);
+  const configured = await workerValue(`chrome.tabs.sendMessage(${tab.id},{type:'CHATSENTINEL_CONVERSATION_WINDOW_SET',config:{enabled:true,keepTurns:12}}).catch(()=>null)`);
+  assert.equal(configured?.ok, true);
+  const second = await evalValue(page, `(async()=>{const r=await fetch('/backend-api/conversation/window-test-2');const j=await r.json();return Object.values(j.mapping||{}).filter(n=>['user','assistant'].includes(n?.message?.author?.role)).length})()`);
+  assert.equal(second, 12);
+  console.log('conversation render-window runtime configuration: PASS');
 }
 
 async function projectConsoleSuite() {
@@ -433,7 +458,7 @@ async function prepareTestExtension(source, destination) {
   await fs.cp(source, destination, { recursive: true });
   const manifestPath = path.join(destination, 'manifest.json');
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
-  manifest.content_scripts[0].matches = ['<all_urls>'];
+  for (const script of manifest.content_scripts || []) script.matches = ['<all_urls>'];
   manifest.host_permissions = ['<all_urls>'];
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   const executorPath = path.join(destination, 'command-executor.js');

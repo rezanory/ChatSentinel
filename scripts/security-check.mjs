@@ -8,8 +8,10 @@ const EXPECTED_EXTENSION_ID = 'pcidbmcahljjpbmaecjmfmpbpfnpoepc';
 const manifest = JSON.parse(await fs.readFile(path.join(ROOT, 'extension', 'manifest.json'), 'utf8'));
 const pkg = JSON.parse(await fs.readFile(path.join(ROOT, 'package.json'), 'utf8'));
 
-assert.deepEqual(manifest.content_scripts?.[0]?.matches, ['https://chatgpt.com/*'],
-  'production content script must inject only on chatgpt.com');
+for (const script of manifest.content_scripts || []) {
+  assert.deepEqual(script.matches, ['https://chatgpt.com/*'],
+    'every production content script must inject only on chatgpt.com');
+}
 assert.ok(manifest.host_permissions.includes('http://127.0.0.1/*'),
   'loopback watchdog host permission is required');
 assert.ok(typeof manifest.key === 'string' && manifest.key.length > 100,
@@ -24,6 +26,8 @@ assert.equal(await fs.stat(path.join(ROOT, 'LICENSES', 'Sami21234-Chatgpt-Sideba
   'MIT attribution file for adapted in-page sidebar pattern is required');
 assert.equal(await fs.stat(path.join(ROOT, 'LICENSES', 'GoogleChrome-chrome-extensions-samples-Apache-2.0.txt')).then(() => true).catch(() => false), true,
   'Apache-2.0 license for adapted Chrome Tab Group sample is required');
+assert.equal(await fs.stat(path.join(ROOT, 'LICENSES', '11me-light-session-MIT.txt')).then(() => true).catch(() => false), true,
+  'MIT attribution file for adapted conversation-window trimming is required');
 assert.equal(await fs.stat(path.join(ROOT, 'THIRD_PARTY_NOTICES.md')).then(() => true).catch(() => false), true,
   'THIRD_PARTY_NOTICES.md is required when adapted third-party patterns ship');
 

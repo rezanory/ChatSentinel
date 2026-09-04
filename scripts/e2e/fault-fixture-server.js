@@ -3,6 +3,12 @@ import http from 'node:http';
 const PORT = 4320;
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
+  if (/^\/backend-api\/(?:conversation|shared_conversation)\/[^/]+\/?$/.test(url.pathname)) {
+    res.statusCode = 200;
+    res.setHeader('content-type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify(conversationFixture(100)));
+    return;
+  }
   const kind = url.searchParams.get('kind') || url.pathname.slice(1) || 'idle';
   const id = url.searchParams.get('cid') || `fixture-${kind}`;
   const fixture = render(kind, id);
@@ -36,4 +42,21 @@ function render(kind, id) {
     <button aria-label="Send" onclick="document.body.dataset.sent=document.querySelector('#prompt-textarea').value">Send</button>`;
   return `<!doctype html><html${identityAttr}${progress}>
     <head><title>${kind}</title>${headScript}</head><body>${state}${composer}</body></html>`;
+}
+
+
+function conversationFixture(turns) {
+  const mapping = { root: { parent: null, children: ['n1'] } };
+  let previous = 'root';
+  for (let index = 1; index <= turns; index += 1) {
+    const id = `n${index}`;
+    const next = index < turns ? `n${index + 1}` : null;
+    mapping[id] = {
+      parent: previous,
+      children: next ? [next] : [],
+      message: { author: { role: index % 2 ? 'user' : 'assistant' }, content: { parts: [`turn-${index}`] } }
+    };
+    previous = id;
+  }
+  return { mapping, current_node: `n${turns}`, root: 'root', title: 'fixture conversation' };
 }
