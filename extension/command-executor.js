@@ -1,3 +1,4 @@
+importScripts('components/chat-control/controller.js');
 (() => {
   const ALARM = 'chatsentinel-command-poll';
   const LEASE_MS = 60000;
@@ -60,13 +61,10 @@
       case 'GROUP_PROJECT_TABS':
         return groupTabs(command);
       case 'FOCUS_CHAT':
-        return focusCommand(command);
       case 'RELOAD_CHAT':
-        return reloadCommand(command);
       case 'CLOSE_CHAT':
-        return closeCommand(command);
       case 'REPLACE_CHAT':
-        return replaceCommand(command, workerId);
+        return chatControlCommand(command, workerId);
       default:
         throw new Error(`unsupported-command:${command.type}`);
     }
@@ -268,37 +266,22 @@
     return grouped;
   }
 
-  async function focusCommand(command) {
-    const tab = await resolveTargetTab(command.payload || {});
-    if (!tab) throw new Error('target-tab-not-found');
-    return focusTab(tab.id, tab.url);
-  }
-
-  async function reloadCommand(command) {
-    const tab = await resolveTargetTab(command.payload || {});
-    if (!tab) throw new Error('target-tab-not-found');
-    await chrome.tabs.reload(tab.id);
-    return { tabId: tab.id, reloaded: true };
-  }
-
-  async function closeCommand(command) {
-    const tab = await resolveTargetTab(command.payload || {});
-    if (!tab) return { closed: false, reason: 'already-closed' };
-    await chrome.tabs.remove(tab.id);
-    return { tabId: tab.id, closed: true };
-  }
-
-  async function replaceCommand(command, workerId) {
-    const oldTab = await resolveTargetTab(command.payload || {});
-    const result = await createLaneChat(command, workerId, { replaceFromTabId: oldTab?.id });
-    if (result?.deduplicated) {
-      return { ...result, replacedTabId: oldTab?.id, oldClosed: false };
-    }
-    if (command.payload?.closeOld && oldTab?.id && oldTab.id !== result.tabId) {
-      await chrome.tabs.remove(oldTab.id).catch(() => {});
-      return { ...result, replacedTabId: oldTab.id, oldClosed: true };
-    }
-    return { ...result, replacedTabId: oldTab?.id, oldClosed: false };
+  async function chatControlCommand(command, workerId) {
+    const control = globalThis.ChatSentinelChatControl;
+    if (!control?.execute) throw new Error('chat-control-component-unavailable');
+    const adapter = {
+      resolveTarget: payload => resolveTargetTab(payload),
+      focusTab: (tabId, url) => focusTab(tabId, url),
+      reloadTab: tabId => chrome.tabs.reload(tabId),
+      closeTab: tabId => chrome.tabs.remove(tabId),
+      createReplacement: async replacement => {
+        const oldTab = await resolveTargetTab(command.payload || {});
+        return createLaneChat(replacement, workerId, { replaceFromTabId: oldTab?.id });
+      },
+      replaceStale: payload => createLaneChat({ ...command, payload }, workerId),
+      progress: progress => progressCommand(command, workerId, progress)
+    };
+    return control.execute(command, adapter, command.payload?.policy);
   }
 
   async function handleLaunchFailure(command, workerId, tab, detail = {}) {
