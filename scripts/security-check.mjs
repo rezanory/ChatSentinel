@@ -20,6 +20,12 @@ assert.equal(Object.keys(pkg.dependencies || {}).length, 0,
   'runtime dependencies must remain zero unless explicitly reviewed');
 assert.equal(Object.keys(pkg.devDependencies || {}).length, 0,
   'dev dependencies must remain zero unless explicitly reviewed');
+assert.equal(await fs.stat(path.join(ROOT, 'LICENSES', 'Sami21234-Chatgpt-Sidebar-MIT.txt')).then(() => true).catch(() => false), true,
+  'MIT attribution file for adapted in-page sidebar pattern is required');
+assert.equal(await fs.stat(path.join(ROOT, 'LICENSES', 'GoogleChrome-chrome-extensions-samples-Apache-2.0.txt')).then(() => true).catch(() => false), true,
+  'Apache-2.0 license for adapted Chrome Tab Group sample is required');
+assert.equal(await fs.stat(path.join(ROOT, 'THIRD_PARTY_NOTICES.md')).then(() => true).catch(() => false), true,
+  'THIRD_PARTY_NOTICES.md is required when adapted third-party patterns ship');
 
 const productionFiles = await collectFiles(['src', 'extension']);
 const externalNames = /KeepChatGPT|light-session|ChatGPT-Auto-Continue|plugin-chatgpt-automation|xcanwin|11me\/light-session|dizzpy|boringresearch/i;

@@ -1,34 +1,37 @@
 {
-  "manifest_version": 3,
-  "name": "ChatSentinel",
-  "version": "1.0.0",
-  "description": "Production watchdog and recovery controller for long-running ChatGPT project work.",
-  "permissions": [
-    "storage",
-    "tabs"
-  ],
-  "host_permissions": [
-    "https://chatgpt.com/*",
-    "http://127.0.0.1/*"
-  ],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://chatgpt.com/*"
-      ],
-      "js": [
-        "actuator.js",
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
-  "action": {
-    "default_title": "ChatSentinel",
-    "default_popup": "popup.html"
-  },
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwdT6+dPaDXCBkilGJWw/CQor5PS6NWSkDAJGRY3pMkqHHHf1PMSZsa3e6dCQTd/jHI/ZpnJaAMmuqSsFAWQY4IvLohceogau9ePp2W1Aqv+tOwvSrXKoH8CfpNyf2l9SaSajTDsapPWloEErS3YViePGf70jaYmSTpfka4G/yX6hrkOCNXeVn4G+UC/9ejVYArC7Y3oAE1AqLc8WkHqASqN77khHZJ28N9P/AgKDfGEX68Jeh9TlNhKq9KhEvsx29wSpGrE/Is/H5VtXRNENHPMr9IdIPxKHmMe5uN8s+DbBziMlqtISWHgmW2WSLlJ8/YXorFSbC260+QytzXbbWQIDAQAB"
+    "manifest_version":  3,
+    "name":  "ChatSentinel",
+    "version":  "1.1.0",
+    "description":  "Production watchdog, multi-project console and recovery controller for long-running ChatGPT project work.",
+    "permissions":  [
+                        "storage",
+                        "tabs",
+                        "tabGroups",
+                        "scripting"
+                    ],
+    "host_permissions":  [
+                             "https://chatgpt.com/*",
+                             "http://127.0.0.1/*"
+                         ],
+    "background":  {
+                       "service_worker":  "background.js"
+                   },
+    "content_scripts":  [
+                            {
+                                "matches":  [
+                                                "https://chatgpt.com/*"
+                                            ],
+                                "js":  [
+                                           "identity.js",
+                                           "actuator.js",
+                                           "content.js",
+                                           "project-console.js"
+                                       ],
+                                "run_at":  "document_idle"
+                            }
+                        ],
+    "action":  {
+                   "default_title":  "Open ChatSentinel in this ChatGPT tab"
+               },
+    "key":  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwdT6+dPaDXCBkilGJWw/CQor5PS6NWSkDAJGRY3pMkqHHHf1PMSZsa3e6dCQTd/jHI/ZpnJaAMmuqSsFAWQY4IvLohceogau9ePp2W1Aqv+tOwvSrXKoH8CfpNyf2l9SaSajTDsapPWloEErS3YViePGf70jaYmSTpfka4G/yX6hrkOCNXeVn4G+UC/9ejVYArC7Y3oAE1AqLc8WkHqASqN77khHZJ28N9P/AgKDfGEX68Jeh9TlNhKq9KhEvsx29wSpGrE/Is/H5VtXRNENHPMr9IdIPxKHmMe5uN8s+DbBziMlqtISWHgmW2WSLlJ8/YXorFSbC260+QytzXbbWQIDAQAB"
 }

@@ -2,6 +2,7 @@ const OPERATION_CLASSES = new Set([
   'read', 'read_only', 'readonly', 'inspect', 'search', 'query',
   'write', 'mutate', 'deploy', 'commit', 'push', 'delete', ''
 ]);
+const TAB_COLORS = new Set(['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange']);
 
 export function validateConversationConfig(body) {
   if (!isRecord(body)) return invalid('json-object-required');
@@ -15,7 +16,11 @@ export function validateConversationConfig(body) {
   if (operationClass !== undefined && !OPERATION_CLASSES.has(operationClass)) {
     return invalid('operationClass-invalid');
   }
-  return { ok: true, value: { conversationId, projectPath, operationClass } };
+  const projectId = body.projectId === undefined ? undefined : cleanString(body.projectId, 120);
+  const tabId = body.tabId === undefined ? undefined : finiteNumber(body.tabId, 0, 2 ** 31 - 1);
+  const title = body.title === undefined ? undefined : cleanString(body.title, 300);
+  const url = body.url === undefined ? undefined : cleanString(body.url, 4096);
+  return { ok: true, value: { conversationId, projectId, projectPath, operationClass, tabId, title, url } };
 }
 
 export function validateSignal(body) {
@@ -34,12 +39,53 @@ export function validateSignal(body) {
     uiFrozen: Boolean(body.uiFrozen),
     externalActivity: Boolean(body.externalActivity)
   };
+  if (body.projectId !== undefined) value.projectId = cleanString(body.projectId, 120);
   if (body.projectPath !== undefined) value.projectPath = cleanString(body.projectPath, 2048);
+  if (body.tabId !== undefined) value.tabId = finiteNumber(body.tabId, 0, 2 ** 31 - 1);
+  if (body.title !== undefined) value.title = cleanString(body.title, 300);
+  if (body.url !== undefined) value.url = cleanString(body.url, 4096);
   if (body.operationClass !== undefined) {
     value.operationClass = cleanString(body.operationClass, 40).toLowerCase();
     if (!OPERATION_CLASSES.has(value.operationClass)) return invalid('operationClass-invalid');
   }
   return { ok: true, value };
+}
+
+export function validateProject(body) {
+  if (!isRecord(body)) return invalid('json-object-required');
+  const projectId = body.projectId === undefined ? undefined : cleanString(body.projectId, 120);
+  const name = cleanString(body.name, 120);
+  const projectPath = cleanString(body.projectPath, 2048);
+  if (!name) return invalid('project-name-required');
+  if (!projectPath) return invalid('projectPath-required');
+  const operationClass = cleanString(body.operationClass || '', 40).toLowerCase();
+  if (!OPERATION_CLASSES.has(operationClass)) return invalid('operationClass-invalid');
+  const color = cleanString(body.color || 'blue', 20).toLowerCase();
+  if (!TAB_COLORS.has(color)) return invalid('color-invalid');
+  return { ok: true, value: {
+    projectId,
+    name,
+    projectPath,
+    operationClass,
+    autoRecovery: Boolean(body.autoRecovery),
+    groupTabs: body.groupTabs !== false,
+    color
+  } };
+}
+
+export function validateProjectAttach(body) {
+  if (!isRecord(body)) return invalid('json-object-required');
+  const projectId = cleanString(body.projectId, 120);
+  const conversationId = cleanString(body.conversationId, 200);
+  if (!projectId) return invalid('projectId-required');
+  if (!conversationId) return invalid('conversationId-required');
+  return { ok: true, value: {
+    projectId,
+    conversationId,
+    tabId: body.tabId === undefined ? undefined : finiteNumber(body.tabId, 0, 2 ** 31 - 1),
+    title: body.title === undefined ? undefined : cleanString(body.title, 300),
+    url: body.url === undefined ? undefined : cleanString(body.url, 4096)
+  } };
 }
 
 export function validateReconcileRequest(body) {

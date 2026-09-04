@@ -1,20 +1,24 @@
-# Third-Party Source / Reference Inventory
+# Third-Party Source / Reference Inventory — ChatSentinel v1.1
 
-ChatSentinel v1.0.0 production core is a clean-room original implementation. **No source code from the GitHub projects below is copied, vendored, imported or required at runtime.**
+ChatSentinel's recovery engine, watchdog, Git reconciliation, side-effect policy, state persistence, project registry, recovery actuators and orchestration are project-owned implementations. v1.1 additionally uses two small permissively licensed browser-extension patterns with attribution.
 
-| GitHub project | Why it was reviewed | License/status observed | Source code copied into ChatSentinel? | Actual use |
-|---|---|---|---|---|
-| `xcanwin/KeepChatGPT` | ChatGPT interruption, keep-alive, refresh/recovery behavior | GPL-2.0 | **No** | Behavioral reference only; GPL source deliberately excluded from the core. |
-| `11me/light-session` | Long-conversation DOM/performance mitigation ideas | MIT | **No** | Architectural/performance reference only in v1.0. |
-| `dizzpy/ChatGPT-Auto-Continue` | Continue/Retry interaction pattern | No clear license identified during review | **No** | UX behavior reference only. |
-| `boringresearch/plugin-chatgpt-automation` | Prompt queue and browser-automation pattern | No clear license identified during review | **No** | Workflow behavior reference only. |
+| Project | License | v1.1 use | Runtime dependency? |
+|---|---|---|---:|
+| `Sami21234/Chatgpt-Sidebar` | MIT | The fixed in-page, collapsible/resizable panel interaction was used as a design/code pattern. ChatSentinel reimplements it as an isolated Shadow DOM project console rather than the upstream global-CSS sidebar. | No |
+| `GoogleChrome/chrome-extensions-samples` | Apache-2.0 | The official `chrome.tabs.group(...)` + `chrome.tabGroups.update(...)` grouping pattern is adapted for per-project parallel ChatGPT tab groups. | No |
+| `glyndavidson/chatgpt-folders` | MIT | Reference for in-ChatGPT folder/project tree, drag/drop and grouped-conversation UX. No source vendored in v1.1. | No |
+| `nathabee/chatgpt-organizer` | MIT | Reference for Projects/Settings information architecture. Its separate Chrome Side Panel surface is intentionally not used. | No |
+| `xcanwin/KeepChatGPT` | GPL-2.0 | Behavioral reference for interruption/recovery only; GPL source excluded. | No |
+| `11me/light-session` | MIT | Long-chat DOM/performance reference only. | No |
+| `dizzpy/ChatGPT-Auto-Continue` | No clear license identified | Continue/Retry UX reference only. | No |
+| `boringresearch/plugin-chatgpt-automation` | No clear license identified | Prompt-queue/workflow reference only. | No |
 
-## What was implemented independently
+## Notices
 
-ChatSentinel's recovery state machine, DOM signal detector, Git reconciler, side-effect classifier, safe Retry policy, Continue/New-Chat actuators, local HTTP watchdog, persistent state store, Windows supervisor, extension popup, security controls and test harness are project-owned implementations written specifically for ChatSentinel.
+Full redistribution notices for the two adapted permissive sources are stored in:
 
-## License boundary
+- `LICENSES/Sami21234-Chatgpt-Sidebar-MIT.txt`
+- `LICENSES/GoogleChrome-chrome-extensions-samples-Apache-2.0.txt`
+- `THIRD_PARTY_NOTICES.md`
 
-Public GitHub availability is not permission to copy. Source reuse requires a deliberate dependency decision, compatible license and attribution. v1.0 avoids that dependency entirely: reviewed projects remain documentary references, not code inputs.
-
-`npm` runtime dependencies: **0**. `npm` development dependencies: **0**.
+ChatSentinel still has **0 npm runtime dependencies** and **0 npm development dependencies**.

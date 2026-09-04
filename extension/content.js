@@ -9,6 +9,10 @@
   let lastSignal = '';
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type === 'CHATSENTINEL_GET_IDENTITY') {
+      sendResponse({ ok: true, identity: currentIdentity() });
+      return;
+    }
     if (message?.type !== 'CHATSENTINEL_EXECUTE') return;
     Promise.resolve(window.ChatSentinelActuator?.executeDecision(message.decision, message.context))
       .then(result => sendResponse(result || { ok: false, reason: 'actuator-missing' }))
@@ -26,12 +30,12 @@
   observer.observe(document.documentElement, {
     subtree: true,
     childList: true,
-    characterData: true,
-    attributes: true
+    characterData: true
   });
 
   setInterval(emit, 5000);
   emit();
+
   function emit() {
     const text = document.body?.innerText || '';
     const buttons = [...document.querySelectorAll('button')]
@@ -45,11 +49,13 @@
     const conversationDead = /conversation not found|unable to load conversation/i.test(text);
     const progressAgeMs = testProgressAge() ?? (Date.now() - lastMutationAt);
     const uiFrozen = progressAgeMs >= 180000 && !stopVisible;
+    const identity = currentIdentity();
 
     const signal = {
       type: 'CHATSENTINEL_SIGNAL',
       url: location.href,
-      conversationId: conversationId(),
+      conversationId: identity?.id,
+      identitySource: identity?.source,
       retryVisible,
       continueVisible,
       connectionInterrupted,
@@ -67,11 +73,9 @@
     lastSignal = fingerprint;
     chrome.runtime.sendMessage(signal).catch(() => {});
   }
-  function conversationId() {
-    const explicit = document.documentElement.dataset.chatsentinelConversationId;
-    if (isFixture() && explicit) return explicit;
-    const match = location.pathname.match(/\/c\/([^/?#]+)/);
-    return match?.[1] || `page:${location.pathname}`;
+
+  function currentIdentity() {
+    return window.ChatSentinelIdentity?.resolve?.() || null;
   }
 
   function testProgressAge() {

@@ -1,75 +1,61 @@
-# Validation — ChatSentinel v1.0.0 Production Candidate
+# Validation — ChatSentinel v1.1.0
 
-## Release gate results
+Status: **PRE-RELEASE GATES PASS**; exact pushed-SHA and live normal-Chrome activation remain release gates.
 
-Executed on Windows with Node.js 22.16.0 against the production hardening branch.
+## Functional/unit/integration
 
-- Unit/integration tests: **28/28 PASS**
-- JavaScript syntax checks: **PASS**
-- PowerShell parser checks: **PASS**
-- Production policy/security check: **PASS**
-- npm runtime dependencies: **0**
-- npm development dependencies: **0**
-- `npm audit --omit=dev`: **0 vulnerabilities**
-- Browser detector/recovery E2E: **5/5 PASS**
-- `SAFE_RETRY` actuator: **PASS**
-- Retry incident counter reset: **PASS**
-- `CONTINUE_SAME_CHAT` actuator: **PASS**
-- `CONTINUE_NEW_CHAT + handoff` actuator: **PASS**
-- Production process kill/restart + state restore smoke: **PASS**
+Executed on Windows / Node.js 22.16.0:
 
-## Browser E2E scenarios
+- **32/32 tests PASS**.
+- Multi-project isolation: PASS (different project policies, parallel chats, restart persistence).
+- v1 single-project state → v1.1 Project registry migration: PASS.
+- Project/settings validation and project attachment validation: PASS.
+- Existing recovery/security/persistence/corrupt-state tests: PASS.
 
-The harness creates a temporary copy of the production extension, grants fixture access only to that copy, launches an isolated Chromium profile with a dynamically allocated DevTools port, and uses a dedicated watchdog instance/data directory.
+## Browser E2E — isolated Chromium
 
-Validated states:
+Shipping manifest is copied to a temporary test extension and only that temporary copy receives `<all_urls>` fixture permissions. Production manifest stays `https://chatgpt.com/*` only.
 
-1. active generation -> `WAIT`
-2. Retry with unknown side-effect state -> `ESCALATE`
-3. interrupted stream with uncertain checkpoint -> `RELOAD_AND_RECHECK`
-4. dead conversation -> `CONTINUE_NEW_CHAT`
-5. frozen UI -> `RELOAD_AND_RECHECK`
+- RUNNING → `WAIT`: PASS
+- Retry unknown → `ESCALATE`: PASS
+- interrupted stream → `RELOAD_AND_RECHECK`: PASS
+- dead conversation → `CONTINUE_NEW_CHAT`: PASS
+- frozen UI → `RELOAD_AND_RECHECK`: PASS
+- root-route conversation identity from state evidence: PASS
+- exact root-route no-ID → unique `tab:<id>` fallback: PASS
+- SAFE_RETRY + incident counter reset: PASS
+- CONTINUE_SAME_CHAT: PASS
+- CONTINUE_NEW_CHAT + handoff: PASS
 
-## Security/durability evidence
+## v1.1 in-page/multi-chat acceptance
 
-- Loopback-only client enforcement tested.
-- Ordinary web origins rejected.
-- Stable extension origin TOFU pairing tested; mismatched extension rejected.
-- Local-process-only pairing reset tested.
-- JSON content-type/body validation tested.
-- Rate limiting tested.
-- Persistent config/session restore across server restart tested.
-- Corrupt state quarantine tested.
-- Session TTL/max-record pruning tested.
-- Production manifest injects only on `https://chatgpt.com/*`.
-- Stable extension ID asserted by E2E/policy checks: `pcidbmcahljjpbmaecjmfmpbpfnpoepc`.
-- Private extension key verified outside repository only.
-- Structured log generation and recovery-decision audit record tested.
+- toolbar-control surface uses no popup/Side Panel: policy PASS.
+- in-page Shadow DOM Project Console becomes visible in the same ChatGPT page: PASS.
+- project create/settings through in-page UI: PASS.
+- attach current chat through in-page UI: PASS.
+- two parallel chats belong to one project: PASS.
+- native Chrome Tab Group created with project title/color and both tabs: PASS.
+- project chat focus/open behavior: PASS.
+- stable extension ID remains `pcidbmcahljjpbmaecjmfmpbpfnpoepc`: PASS.
 
-## Declared durability
+## Production gates
 
-Conversation/project policy writes are immediate. Recent session telemetry is debounced; crash RPO is **<=300 ms**. Windows supervisor restarts a crashed watchdog; production smoke verifies disk state restores after restart.
+- `npm run check`: PASS.
+- `npm run policy-check`: PASS.
+- `npm run prod-smoke`: PASS, including Project+chat persistence over process kill/restart.
+- `npm audit --omit=dev`: **0 vulnerabilities**.
+- npm dependencies: **0**; devDependencies: **0**.
+- `git diff --check`: PASS.
+- PowerShell parser: PASS for supervisor/install/uninstall/setup/pairing/setup-extension scripts.
+- third-party MIT/Apache notices/licenses present: PASS.
 
-## Final acceptance procedure
+## Remaining exact release sequence
 
-After this candidate is committed/pushed, `npm run release-validate` is executed again against the exact candidate SHA. Then main is fast-forwarded, the installed watchdog is upgraded/restarted, deliberate kill/self-restart is revalidated, and only that exact accepted commit is tagged `v1.0.0`.
-
-## Exact pushed candidate validation
-
-Accepted production code candidate:
-
-- SHA: `cac04a8b99d35d466dbbb7979e79b6115bb25149`
-- Tree: `b460be6fb5862db8ce2c5fd9a0c86375b981618c`
-- local HEAD = remote `release/v1.0.0-production`: PASS
-- clean working tree before validation: PASS
-- full `npm run release-validate` on exact pushed SHA: PASS
-
-The subsequent handoff metadata commit is documentation-only; it receives one final release validation before merge/tag.
-
-## Production activation validation
-
-After fast-forwarding the accepted candidate to `main`, the installed local service was upgraded from v0.3.0 to v1.0.0. The installer re-ran the functional validation, installed the per-user Startup fallback, and reported healthy v1.0.0.
-
-A deliberate kill of the production listener changed the listener PID and the Windows supervisor restored `GET /health` with version v1.0.0 within the restart loop. This confirms the deployed self-recovery path, not only the isolated production smoke.
-
-Normal Chrome profiles were inspected for stable extension ID `pcidbmcahljjpbmaecjmfmpbpfnpoepc`; it is not yet installed there. One-time Chrome `Load unpacked` is therefore recorded as a deployment activation step for the user, not as a failed production capability gate.
+1. Commit/push v1.1 candidate and record SHA/tree.
+2. Re-run `npm run release-validate` on exact local=remote candidate SHA with clean tree.
+3. Fast-forward `main`, then re-run exact-main release gate.
+4. Run upgrade-aware installer against the currently installed v1.0 watchdog.
+5. Deliberately kill installed v1.1 listener and verify supervisor self-restart.
+6. Reload the unpacked Chrome extension once in the user's Default profile.
+7. Live verify: toolbar click opens in-page console, create/attach a real project, project appears with current chat, and parallel project tabs group correctly.
+8. Only then tag/release `v1.1.0` and mark Production-ready.

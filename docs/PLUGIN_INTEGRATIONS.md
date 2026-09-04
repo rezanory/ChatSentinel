@@ -13,7 +13,13 @@ ChatSentinel is intentionally functional without ChatGPT plugins. No plugin sour
 | **Plugin Management** | Yes | Plugin-directory discovery/verification. | No. |
 | **ToolCheck by M8ven** | Yes | Searched for trusted browser-automation MCP alternatives; none became a runtime dependency. | No. |
 
-## Reviewed/available but not wired into v1.0 runtime
+
+## Native/browser capabilities reused in v1.1
+
+- **Chrome `tabs` / `tabGroups` APIs** — critical for grouping and focusing parallel chats of the same project; implemented directly with the native API, not an MCP dependency.
+- **Chrome `scripting` API** — injects the in-page console on toolbar click when an existing ChatGPT tab predates an unpacked-extension reload.
+- **Shadow DOM** — isolates ChatSentinel's in-page project console from ChatGPT global styles/DOM.
+## Reviewed/available but not wired into v1.1 runtime
 
 - **Make** — optional future escalation/notification workflow.
 - **aictrl.dev** — optional engineering-workflow evidence source.

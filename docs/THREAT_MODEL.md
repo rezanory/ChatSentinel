@@ -1,4 +1,4 @@
-# Threat Model — ChatSentinel v1.0.0
+# Threat Model — ChatSentinel v1.1.0
 
 ## Trusted boundary
 
@@ -9,7 +9,8 @@ The browser extension is trusted only after its stable `chrome-extension://` ori
 ## Assets
 
 - Project Git state and canonical checkpoint metadata.
-- Conversation-to-project/policy mappings.
+- Project registry, project-to-conversation membership and per-project policy.
+- Conversation/tab identity mappings used for parallel-chat supervision.
 - Recovery decisions and recent session telemetry.
 - Stable extension identity private key stored outside the repository.
 
@@ -45,10 +46,26 @@ Control: JSONL log rotation, 24-hour session TTL, maximum session count and boun
 
 Control: production manifest injects only on `chatgpt.com`. E2E builds a temporary extension copy and adds local fixture permissions only to that temporary copy. `policy-check` enforces this.
 
-### Third-party source contaminates the core/license boundary
+### Third-party source or license boundary is lost
 
-Control: production-code policy check rejects names of the reviewed external ChatGPT automation repositories inside `src/` and `extension/`. The production core is clean-room original code; third-party behavior references remain documentation only.
+Control: adapted MIT/Apache-2.0 browser patterns carry notices/licenses in `THIRD_PARTY_NOTICES.md` and `LICENSES/`; reference-only projects remain non-vendored. Runtime npm dependencies remain zero.
 
+
+### A chat is attached to the wrong project
+
+Control: project membership is explicit and persisted by conversation identity. Root-route chats use a unique `tab:<id>` fallback instead of a shared `page:/` value. If a stable ChatGPT conversation ID appears later, membership migrates from the temporary tab identity and the fallback record is forgotten.
+
+### Project A recovery policy leaks into Project B
+
+Control: projects are independent records; signal handling resolves policy and Git path from the conversation's `projectId`. Integration tests run simultaneous projects with different policies and verify isolation across restart.
+
+### A stale Chrome tab ID focuses the wrong/closed chat
+
+Control: tab IDs are verified with `chrome.tabs.get`. If unavailable, only a saved `https://chatgpt.com/` URL may be reopened; the active ChatGPT page is not navigated away by the in-page console.
+
+### The in-page panel breaks ChatGPT's own DOM/CSS
+
+Control: ChatSentinel renders inside an isolated Shadow DOM and does not change global body margins/theme classes. On-demand script injection is limited to `chatgpt.com` by production host permissions.
 ## Privacy
 
 The content script examines page text locally only to recognize known error states. It sends normalized booleans/state/timing/URL/conversation ID to the local watchdog, not the conversation body. Recovery prompts are generated locally and are not persisted in watchdog logs.

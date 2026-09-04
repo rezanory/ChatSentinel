@@ -13,8 +13,16 @@ let child;
 try {
   child = startWatchdog();
   await waitHealth();
-  await post('/conversation/register', { conversationId: 'prod-smoke', operationClass: 'read_only' });
-  const first = await post('/signal', { conversationId: 'prod-smoke', retryVisible: true, state: 'IDLE' });
+  const project = (await post('/projects/upsert', {
+    name: 'Production Smoke', projectPath: ROOT, operationClass: 'read_only',
+    autoRecovery: true, groupTabs: true, color: 'blue'
+  })).project;
+  await post('/projects/attach', {
+    projectId: project.projectId, conversationId: 'prod-smoke', tabId: 101,
+    title: 'Production smoke chat', url: 'https://chatgpt.com/'
+  });
+  const first = await post('/signal', { conversationId: 'prod-smoke', retryVisible: true, state: 'IDLE', tabId: 101 });
+  assert.equal(first.projectId, project.projectId);
   assert.equal(first.decision.action, 'SAFE_RETRY');
 
   let rejected = await fetch(`${BASE}/health`, { headers: { origin: 'https://example.com' } });
@@ -28,9 +36,14 @@ try {
   await waitExit(child);
   child = startWatchdog();
   const health = await waitHealth();
-  assert.equal(health.version, '1.0.0');
+  assert.equal(health.version, '1.1.0');
   const supervisor = await fetch(`${BASE}/supervisor`).then(r => r.json());
   assert.equal(supervisor.sessions.some(row => row.id === 'prod-smoke'), true);
+  const projects = await fetch(`${BASE}/projects`).then(r => r.json());
+  assert.equal(projects.projects.length, 1);
+  assert.equal(projects.projects[0].name, 'Production Smoke');
+  assert.equal(projects.projects[0].chatCount, 1);
+  assert.equal(projects.projects[0].chats[0].conversationId, 'prod-smoke');
 
   const stateFile = path.join(dataDir, 'data', 'state.json');
   const logFile = path.join(dataDir, 'logs', 'watchdog.jsonl');

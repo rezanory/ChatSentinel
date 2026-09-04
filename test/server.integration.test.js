@@ -120,3 +120,62 @@ test('local process can reset extension pairing safely', async t => {
   assert.equal(response.status, 200);
   await app.close();
 });
+
+test('multi-project registry isolates parallel chat groups and persists them', async t => {
+  const { dir, config } = await testConfig();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  let app = await createWatchdogServer(config);
+  let base = await listen(app);
+
+  const post = async (route, body) => {
+    const response = await fetch(`${base}${route}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const json = await response.json();
+    assert.equal(response.status, 200, `${route}: ${JSON.stringify(json)}`);
+    return json;
+  };
+
+  const alpha = (await post('/projects/upsert', {
+    name: 'Alpha', projectPath: dir, operationClass: 'read_only', autoRecovery: true, groupTabs: true, color: 'blue'
+  })).project;
+  const beta = (await post('/projects/upsert', {
+    name: 'Beta', projectPath: dir, operationClass: 'write', autoRecovery: false, groupTabs: true, color: 'red'
+  })).project;
+
+  await post('/projects/attach', { projectId: alpha.projectId, conversationId: 'alpha-1', tabId: 11, title: 'Alpha lane 1', url: 'https://chatgpt.com/' });
+  await post('/projects/attach', { projectId: alpha.projectId, conversationId: 'alpha-2', tabId: 12, title: 'Alpha lane 2', url: 'https://chatgpt.com/' });
+  await post('/projects/attach', { projectId: beta.projectId, conversationId: 'beta-1', tabId: 21, title: 'Beta lane 1', url: 'https://chatgpt.com/' });
+
+  const alphaDecision = await post('/signal', { conversationId: 'alpha-1', retryVisible: true, state: 'IDLE', tabId: 11 });
+  assert.equal(alphaDecision.projectId, alpha.projectId);
+  assert.equal(alphaDecision.decision.action, 'SAFE_RETRY');
+  assert.equal(alphaDecision.project.autoRecovery, true);
+
+  const betaDecision = await post('/signal', { conversationId: 'beta-1', retryVisible: true, state: 'IDLE', tabId: 21 });
+  assert.equal(betaDecision.projectId, beta.projectId);
+  assert.notEqual(betaDecision.decision.action, 'SAFE_RETRY');
+
+  let projects = await fetch(`${base}/projects`).then(r => r.json());
+  const alphaRow = projects.projects.find(row => row.projectId === alpha.projectId);
+  const betaRow = projects.projects.find(row => row.projectId === beta.projectId);
+  assert.equal(alphaRow.chatCount, 2);
+  assert.equal(betaRow.chatCount, 1);
+  assert.deepEqual(alphaRow.chats.map(chat => chat.conversationId).sort(), ['alpha-1', 'alpha-2']);
+  assert.deepEqual(betaRow.chats.map(chat => chat.conversationId), ['beta-1']);
+
+  await app.close();
+  app = await createWatchdogServer(config);
+  base = await listen(app);
+  projects = await fetch(`${base}/projects`).then(r => r.json());
+  assert.equal(projects.projects.length, 2);
+  assert.equal(projects.projects.find(row => row.projectId === alpha.projectId).chatCount, 2);
+  assert.equal(projects.projects.find(row => row.projectId === beta.projectId).chatCount, 1);
+
+  const context = await fetch(`${base}/project/context?conversationId=alpha-2`).then(r => r.json());
+  assert.equal(context.project.projectId, alpha.projectId);
+  assert.equal(context.config.tabId, 12);
+  await app.close();
+});

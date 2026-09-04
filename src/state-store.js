@@ -1,8 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 const EMPTY_STATE = Object.freeze({
-  schemaVersion: 1,
+  schemaVersion: 2,
+  projects: {},
   configs: {},
   sessions: {},
   meta: {}
@@ -24,7 +26,9 @@ export class StateStore {
     try {
       const raw = await fs.readFile(this.file, 'utf8');
       this.state = normalizeState(JSON.parse(raw));
+      const migrated = migrateLegacyProjects(this.state);
       this.prune();
+      if (migrated) await this.saveNow();
       return this.state;
     } catch (error) {
       if (error.code === 'ENOENT') return this.state;
@@ -35,15 +39,39 @@ export class StateStore {
     }
   }
 
+  get projects() { return this.state.projects; }
   get configs() { return this.state.configs; }
   get sessions() { return this.state.sessions; }
   get meta() { return this.state.meta; }
 
+  getProject(id) { return this.state.projects[id] || null; }
   getConfig(id) { return this.state.configs[id] || {}; }
   getSession(id) { return this.state.sessions[id] || {}; }
 
+  async setProject(id, value) {
+    this.state.projects[id] = value;
+    await this.saveNow();
+  }
+
+  async deleteProject(id) {
+    const project = this.state.projects[id];
+    delete this.state.projects[id];
+    for (const config of Object.values(this.state.configs)) {
+      if (config?.projectId !== id) continue;
+      delete config.projectId;
+      if (project?.projectPath && config.projectPath === project.projectPath) delete config.projectPath;
+    }
+    await this.saveNow();
+  }
+
   async setConfig(id, value) {
     this.state.configs[id] = value;
+    await this.saveNow();
+  }
+
+  async deleteConfig(id) {
+    delete this.state.configs[id];
+    delete this.state.sessions[id];
     await this.saveNow();
   }
 
@@ -118,13 +146,48 @@ export class StateStore {
 function normalizeState(value) {
   if (!value || typeof value !== 'object') return structuredClone(EMPTY_STATE);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    projects: isRecord(value.projects) ? value.projects : {},
     configs: isRecord(value.configs) ? value.configs : {},
     sessions: isRecord(value.sessions) ? value.sessions : {},
     meta: isRecord(value.meta) ? value.meta : {}
   };
 }
 
+
+function migrateLegacyProjects(state) {
+  let changed = false;
+  const byPath = new Map();
+  for (const [conversationId, config] of Object.entries(state.configs)) {
+    if (!config?.projectPath || config.projectId) continue;
+    const normalizedPath = String(config.projectPath).trim();
+    if (!normalizedPath) continue;
+    let projectId = byPath.get(normalizedPath);
+    if (!projectId) {
+      const digest = createHash('sha256').update(normalizedPath.toLowerCase()).digest('hex').slice(0, 16);
+      projectId = `project:legacy:${digest}`;
+      byPath.set(normalizedPath, projectId);
+      if (!state.projects[projectId]) {
+        const now = new Date().toISOString();
+        state.projects[projectId] = {
+          projectId,
+          name: path.basename(normalizedPath) || 'Migrated Project',
+          projectPath: normalizedPath,
+          operationClass: config.operationClass || '',
+          autoRecovery: false,
+          groupTabs: true,
+          color: 'blue',
+          createdAt: now,
+          updatedAt: now,
+          migratedFromV1: true
+        };
+      }
+    }
+    state.configs[conversationId] = { ...config, projectId };
+    changed = true;
+  }
+  return changed;
+}
 function isRecord(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }

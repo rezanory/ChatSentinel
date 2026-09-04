@@ -1,85 +1,52 @@
-# Canonical Handoff — ChatSentinel v1.0.0
+# Canonical Handoff — ChatSentinel v1.1.0
 
-Status: **PRODUCTION READY / LOCAL WATCHDOG ACTIVE**
+Status: **PRODUCTION CANDIDATE / PRE-RELEASE GATES PASS**
 
 Repository: `rezanory/ChatSentinel`
 Local path: `C:\ChatSentinel`
-Candidate branch: `release/v1.0.0-production`
+Working branch: `feature/v1.1.0-project-console`
 Target branch: `main`
-Previous release: `v0.3.0` at `c6df780b0aa120d618574d8ee061b099e5ecaec1`
+Previous production release: `v1.0.0` at `b792014f82b9f101016879981a128fced0130bc7`
 
-## Exact accepted production code candidate
+## User-defined Production-ready scope
 
-- SHA: `cac04a8b99d35d466dbbb7979e79b6115bb25149`
-- Tree: `b460be6fb5862db8ce2c5fd9a0c86375b981618c`
-- Local candidate HEAD = remote candidate HEAD: PASS
-- Working tree clean at candidate validation: PASS
-- `npm run release-validate` on this exact SHA: PASS
+v1.1 is not accepted merely because the watchdog recovers one conversation. Production-ready requires:
 
-## Product mission
+- multiple projects supervised simultaneously;
+- multiple parallel ChatGPT chats per project;
+- native browser grouping for parallel project chats;
+- extension controls/settings displayed inside the active ChatGPT page rather than a popup/side panel;
+- per-project local path/policy/auto-recovery/grouping settings;
+- project chat list with live recovery state and focus/open controls;
+- existing retry/hang/interruption/dead-chat recovery safety retained.
 
-ChatSentinel prevents long-running ChatGPT project work from sleeping when a conversation encounters connection interruption, Retry-only recovery, UI freeze, unknown execution state or an unrecoverable/dead conversation.
+## Implemented architecture
 
-## Production invariants
+`Project → Parallel Chats → Sessions/Recovery Decisions` is durable server state. Each ChatGPT tab signals independently. Stable conversation evidence is preferred; root-route chats safely use `tab:<id>` until a stable identity becomes available. Membership then migrates automatically.
 
-- Never blind-Retry from UI evidence alone.
-- Active execution wins over timeout heuristics.
-- Git/source-of-truth is reconciled before repeating write-capable project work.
-- Fresh checkpoint requires clean tree + local HEAD == remote HEAD.
-- Auto-recovery is opt-in and fails closed on missing controls/evidence.
-- Watchdog lives outside the affected ChatGPT conversation.
-- Production HTTP surface is loopback-only and extension-origin guarded.
-- Durable runtime state/logs/private extension key live outside the Git repository.
+The Chrome action has no popup. `project-console.js` renders a resizable Shadow DOM console in the active ChatGPT page. `background.js` uses native Chrome `tabs`, `tabGroups` and `scripting` APIs to focus/open/group parallel chats and inject the console into pre-existing tabs after extension reload.
 
-## Production capabilities
+Legacy v1 projectPath configs migrate to v1.1 Projects. The global auto-recovery master and per-project auto-recovery flag must both be enabled before automatic browser actuation.
 
-Browser signal detector, deterministic recovery engine, project-aware side-effect classifier, Git reconciler, guarded Retry/Continue/New-Chat actuators, durable state store, JSONL audit logging, secured localhost API, supervisor popup, Windows self-restart/autostart, stable extension identity and isolated production E2E harness.
+## Reuse/provenance decisions
 
-## Validation evidence
+Plugin-first/source-reuse gate was run before completing v1.1:
 
-Accepted candidate evidence:
+- `Sami21234/Chatgpt-Sidebar` (MIT): in-page docking/resizing pattern adapted into Shadow DOM.
+- `GoogleChrome/chrome-extensions-samples` (Apache-2.0): native `tabs.group` + `tabGroups.update` grouping pattern adapted.
+- `glyndavidson/chatgpt-folders` (MIT): folder/project UX reference only.
+- `nathabee/chatgpt-organizer` (MIT): Projects/Settings IA reference only; its separate `sidePanel` surface rejected for this product requirement.
 
-- 28/28 unit/integration tests PASS
-- JavaScript and PowerShell parser checks PASS
-- production security/policy check PASS
-- isolated extension detector/recovery E2E 5/5 PASS
-- `SAFE_RETRY`, retry-counter reset, `CONTINUE_SAME_CHAT`, `CONTINUE_NEW_CHAT + handoff` PASS
-- production process restart/persistence smoke PASS
-- npm dependencies 0 / devDependencies 0
-- `npm audit --omit=dev`: 0 vulnerabilities
+Full notices: `THIRD_PARTY_NOTICES.md`, `LICENSES/`, `docs/SOURCE_INVENTORY.md`.
 
-Exact details are in `docs/VALIDATION.md`.
+## Current validation
 
-## Third-party provenance
+Pre-commit release gate passes 32/32 tests, all browser recovery/identity E2E, in-page project-console acceptance, native Chrome Tab Group acceptance, production restart/persistence smoke, security policy, JS/PowerShell parsing, and npm audit with 0 vulnerabilities. Details: `docs/VALIDATION.md`.
 
-No source code from `xcanwin/KeepChatGPT`, `11me/light-session`, `dizzpy/ChatGPT-Auto-Continue`, or `boringresearch/plugin-chatgpt-automation` is present in production code. They are behavior/design references only.
+## Exact source-of-truth status
 
-No plugin/MCP source code is vendored. GitHub and Remote Desktop Commander were actively used as external development/operations tools. Watchgoose check infrastructure exists but external heartbeat remains optional/unarmed until its real private Ping URL is supplied. Other plugin candidates are optional, non-critical integrations.
+The exact candidate SHA/tree is intentionally not claimed before the feature commit exists. After the next commit/push, this handoff receives a documentation-only update binding the validated SHA/tree, then all release gates run again on that exact pushed commit.
 
-## Operational paths
+## Exact next action
 
-- service: `127.0.0.1:4317`
-- extension: `C:\ChatSentinel\extension`
-- data: `%LOCALAPPDATA%\ChatSentinel\data\state.json`
-- structured logs: `%LOCALAPPDATA%\ChatSentinel\logs\watchdog.jsonl`
-- supervisor log: `%LOCALAPPDATA%\ChatSentinel\logs\supervisor.log`
-- extension private key (local only): `%LOCALAPPDATA%\ChatSentinel\keys\extension-private.pem`
-- stable extension ID: `pcidbmcahljjpbmaecjmfmpbpfnpoepc`
-
-## Final release procedure
-
-This handoff update is documentation-only relative to the accepted code candidate. After committing/pushing it, the release gate must run once more on that exact final branch commit. If it passes, `main` is fast-forwarded, the installed watchdog is upgraded and restarted, deliberate kill/self-restart is revalidated, and only then is that exact `main` commit tagged/released as `v1.0.0`.
-
-## Production activation receipt
-
-- production hardening fast-forwarded to `main`: PASS
-- accepted main before activation receipt: `df39ca3a2a7b2130bb0fbd4aa45932b7015f3f21`
-- Windows local watchdog upgraded from v0.3.0 to **v1.0.0**: PASS
-- health endpoint on `127.0.0.1:4317`: PASS
-- Windows Startup fallback installed when Scheduled Task permission was unavailable: PASS
-- deliberate production listener kill: PASS
-- supervisor restarted watchdog automatically with a new PID and health returned v1.0.0: PASS
-- production data directory: `%LOCALAPPDATA%\ChatSentinel`
-- normal Chrome profile currently does not yet have ChatSentinel loaded; one-time `Load unpacked` remains a browser security activation step, not an implementation blocker.
-
-Production code/runtime is accepted. The release tag must point to the final main commit containing this activation receipt after one last exact-commit release validation.
+Commit/push `feature/v1.1.0-project-console` → validate exact local=remote clean SHA → bind SHA/tree in this handoff → validate docs-bound SHA → fast-forward `main` → validate exact main → run upgrade-aware Windows installer → self-restart test → user reloads the unpacked extension once → live Default-profile in-page/multi-project acceptance → tag/release `v1.1.0`.

@@ -34,11 +34,12 @@ const watchdog = spawn(process.execPath, ['src/local-watchdog.js'], {
 });
 let chrome;
 let DEVTOOLS;
+let EXTENSION_WORKER;
 
 try {
   await waitUrl('http://127.0.0.1:4320/idle');
   const health = await waitJson(`${WATCHDOG}/health`);
-  assert.equal(health.version, '1.0.0', 'v1.0 watchdog must be running');
+  assert.equal(health.version, '1.1.0', 'v1.0 watchdog must be running');
 
   chrome = spawn(CHROME, [
     `--user-data-dir=${profile}`,
@@ -55,11 +56,12 @@ try {
   const debugPort = await waitDevToolsPort(profile);
   DEVTOOLS = `http://127.0.0.1:${debugPort}`;
   await waitJson(`${DEVTOOLS}/json/version`);
-  const extensionWorker = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
-  assert.ok(extensionWorker.url.startsWith(`chrome-extension://${EXPECTED_EXTENSION_ID}/`), `unexpected extension id: ${extensionWorker.url}`);
+  EXTENSION_WORKER = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
+  assert.ok(EXTENSION_WORKER.url.startsWith(`chrome-extension://${EXPECTED_EXTENSION_ID}/`), `unexpected extension id: ${EXTENSION_WORKER.url}`);
   await sleep(500);
   await detectorSuite();
   await actuatorSuite();
+  await projectConsoleSuite();
   console.log('ChatSentinel browser E2E: PASS');
 } finally {
   chrome?.kill();
@@ -76,7 +78,9 @@ async function detectorSuite() {
   await verifyDecision('interrupt', 'RELOAD_AND_RECHECK');
   await verifyDecision('dead', 'CONTINUE_NEW_CHAT');
   await verifyDecision('frozen', 'RELOAD_AND_RECHECK');
-  console.log('detector/recovery E2E: 5/5 PASS');
+  await verifyDecision('rootidentity', 'WAIT');
+  await verifyTabFallback();
+  console.log('detector/recovery + identity E2E: 7/7 PASS');
 }
 
 async function actuatorSuite() {
@@ -123,6 +127,100 @@ async function actuatorSuite() {
   console.log('CONTINUE_NEW_CHAT + handoff actuator: PASS');
 }
 
+async function projectConsoleSuite() {
+  const pageA = await openPage(fixtureUrl('noidentity', { console: 'a' }));
+  const tabA = await workerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('console=a'));return t?{id:t.id,url:t.url,title:t.title}:null})()");
+  assert.ok(tabA?.id, 'console tab A not found');
+  await waitContentReady(tabA.id);
+  await waitEval(pageA, "document.documentElement.dataset.chatsentinelConsoleReady === '1'");
+  const toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'}).catch(e=>({ok:false,error:String(e)}))`);
+  assert.equal(toggle?.ok, true, `panel toggle failed: ${JSON.stringify(toggle)}`);
+  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.style.display === 'block'");
+  await waitEval(pageA, "Boolean(document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('newProject'))");
+  console.log('in-page project console: PASS');
+
+  const projectPath = cleanProject;
+  await evalValue(pageA, `(()=>{const s=document.getElementById('chatsentinel-project-console-host').shadowRoot;s.getElementById('newProject').click();s.getElementById('pName').value='E2E Project';s.getElementById('pPath').value=${JSON.stringify(projectPath)};s.getElementById('pPolicy').value='read_only';s.getElementById('pAuto').checked=true;s.getElementById('pGroup').checked=true;s.getElementById('pColor').value='purple';s.getElementById('saveProject').click();return true})()`);
+  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('projectList').textContent.includes('E2E Project')");
+  let projects = await fetch(`${WATCHDOG}/projects`).then(r=>r.json());
+  const project = projects.projects.find(p=>p.name==='E2E Project');
+  assert.ok(project?.projectId, 'project was not created from in-page UI');
+  console.log('in-page project settings/create: PASS');
+
+  await evalValue(pageA, `(()=>{const s=document.getElementById('chatsentinel-project-console-host').shadowRoot;s.getElementById('attachChat').click();return true})()`);
+  await waitProjectChatCount(project.projectId, 1);
+  projects = await fetch(`${WATCHDOG}/projects`).then(r=>r.json());
+  let current = projects.projects.find(p=>p.projectId===project.projectId);
+  assert.ok(current.chats.some(c=>c.tabId===tabA.id));
+  console.log('attach current chat from in-page console: PASS');
+
+  await openPage(fixtureUrl('noidentity', { console: 'b' }));
+  const tabB = await workerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('console=b'));return t?{id:t.id,url:t.url,title:t.title}:null})()");
+  assert.ok(tabB?.id, 'console tab B not found');
+  await postJson('/projects/attach',{projectId:project.projectId,conversationId:`tab:${tabB.id}`,tabId:tabB.id,title:'E2E lane B',url:tabB.url});
+  current = await waitProjectChatCount(project.projectId, 2);
+  assert.equal(current.chats.length, 2);
+
+  const grouped = await workerValue(`groupProjectTabs(${JSON.stringify(current)})`);
+  assert.equal(grouped.ok, true);
+  const groups = await workerValue("chrome.tabGroups.query({title:'E2E Project'})");
+  assert.ok(groups.some(g=>g.title==='E2E Project'&&g.color==='purple'));
+  const group = groups.find(g=>g.title==='E2E Project');
+  const tabRows = await workerValue(`chrome.tabs.query({groupId:${group.id}})`);
+  assert.ok(tabRows.some(t=>t.id===tabA.id)&&tabRows.some(t=>t.id===tabB.id));
+  console.log('parallel project Chrome Tab Group: PASS');
+
+  const focused = await workerValue(`focusTab(${tabB.id})`);
+  assert.equal(focused.ok, true);
+  const active = await workerValue("chrome.tabs.query({active:true,currentWindow:true})");
+  assert.equal(active[0]?.id, tabB.id);
+  console.log('project chat focus/open: PASS');
+}
+
+async function waitProjectChatCount(projectId, count) {
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    const result = await fetch(`${WATCHDOG}/projects`).then(r=>r.json());
+    const project = result.projects?.find(row=>row.projectId===projectId);
+    if (project?.chatCount >= count) return project;
+    await sleep(200);
+  }
+  throw new Error(`project ${projectId} did not reach ${count} chats`);
+}
+
+async function waitContentReady(tabId) {
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    const reply = await workerValue(`chrome.tabs.sendMessage(${tabId},{type:'CHATSENTINEL_GET_IDENTITY'}).catch(()=>null)`);
+    if (reply?.ok) return reply;
+    await sleep(150);
+  }
+  throw new Error(`content script not ready in tab ${tabId}`);
+}
+async function workerValue(expression) {
+  const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
+  if (reply?.result?.exceptionDetails) throw new Error(JSON.stringify(reply.result.exceptionDetails));
+  return reply?.result?.result?.value;
+}
+
+async function verifyTabFallback() {
+  const before = await fetch(`${WATCHDOG}/supervisor`).then(r => r.json());
+  const known = new Set((before.sessions || []).map(row => row.id));
+  await openPage(fixtureUrl('noidentity'));
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    const state = await fetch(`${WATCHDOG}/supervisor`).then(r => r.json());
+    const row = (state.sessions || []).find(item => /^tab:\d+$/.test(item.id) && !known.has(item.id));
+    if (row?.decision) {
+      assert.equal(row.decision.action, 'WAIT');
+      console.log(`tab fallback identity: ${row.id} PASS`);
+      return;
+    }
+    await sleep(250);
+  }
+  throw new Error('tab fallback identity was not observed');
+}
+
 async function verifyDecision(kind, expectedAction) {
   const id = `${RUN}-${kind}`;
   await openPage(fixtureUrl(kind, { cid: id }));
@@ -133,6 +231,10 @@ async function verifyDecision(kind, expectedAction) {
 
 function fixtureUrl(kind, extra = {}) {
   const params = new URLSearchParams({ watchdog: String(TEST_PORT), ...extra });
+  if (kind === 'rootidentity' || kind === 'noidentity') {
+    params.set('kind', kind);
+    return `http://127.0.0.1:4320/?${params}`;
+  }
   return `http://127.0.0.1:4320/${kind}?${params}`;
 }
 
@@ -265,7 +367,8 @@ async function prepareTestExtension(source, destination) {
   await fs.cp(source, destination, { recursive: true });
   const manifestPath = path.join(destination, 'manifest.json');
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
-  manifest.content_scripts[0].matches.push('http://127.0.0.1/*');
+  manifest.content_scripts[0].matches = ['<all_urls>'];
+  manifest.host_permissions = ['<all_urls>'];
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
 }
 

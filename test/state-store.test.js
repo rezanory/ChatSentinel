@@ -53,3 +53,27 @@ test('state store prunes stale and excess sessions', async t => {
   store.prune(now);
   assert.deepEqual(Object.keys(store.sessions).sort(), ['b', 'c']);
 });
+
+test('v1 single-project configs migrate into v1.1 project registry', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'chatsentinel-migrate-'));
+  const file = path.join(dir, 'state.json');
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  await fs.writeFile(file, JSON.stringify({
+    schemaVersion: 1,
+    configs: {
+      a: { projectPath: 'C:\\LegacyProject', operationClass: 'write' },
+      b: { projectPath: 'C:\\LegacyProject', operationClass: 'write' }
+    },
+    sessions: {},
+    meta: {}
+  }), 'utf8');
+  const store = new StateStore({ file });
+  await store.load();
+  assert.equal(store.state.schemaVersion, 2);
+  assert.equal(Object.keys(store.projects).length, 1);
+  const project = Object.values(store.projects)[0];
+  assert.equal(project.name, 'LegacyProject');
+  assert.equal(project.migratedFromV1, true);
+  assert.equal(store.getConfig('a').projectId, project.projectId);
+  assert.equal(store.getConfig('b').projectId, project.projectId);
+});

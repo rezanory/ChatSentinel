@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { decideRecovery } from './recovery-engine.js';
 import { reconcileProject } from './project-reconciler.js';
 import { startHeartbeat } from './heartbeat.js';
@@ -6,7 +7,7 @@ import { classifySideEffectRisk, isFreshCheckpoint } from './side-effect-classif
 import { StateStore } from './state-store.js';
 import { createLogger } from './logger.js';
 import { authorizeRequest, createRateLimiter, requestId, setCors } from './http-security.js';
-import { validateConversationConfig, validateReconcileRequest, validateSignal } from './validation.js';
+import { validateConversationConfig, validateProject, validateProjectAttach, validateReconcileRequest, validateSignal } from './validation.js';
 
 export async function createWatchdogServer(config) {
   const logger = createLogger({ dir: config.logDir });
@@ -85,6 +86,7 @@ async function route(req, res, ctx) {
       version: config.version,
       pid: process.pid,
       uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
+      projects: Object.keys(store.projects).length,
       sessions: Object.keys(store.sessions).length,
       conversations: Object.keys(store.configs).length,
       heartbeat: heartbeat.enabled,
@@ -107,21 +109,106 @@ async function route(req, res, ctx) {
     return json(res, 200, { ok: true, paired: false });
   }
 
+  if (req.method === 'GET' && url.pathname === '/projects') {
+    return json(res, 200, { ok: true, projects: projectRows(store) });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/project/context') {
+    const conversationId = String(url.searchParams.get('conversationId') || '').trim();
+    if (!conversationId) return json(res, 400, { ok: false, error: 'conversationId-required' });
+    const configRow = store.getConfig(conversationId);
+    const project = configRow.projectId ? store.getProject(configRow.projectId) : null;
+    return json(res, 200, {
+      ok: true,
+      conversationId,
+      config: configRow,
+      project,
+      session: store.getSession(conversationId),
+      projects: projectRows(store)
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/projects/upsert') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const parsed = validateProject(body);
+    if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
+    const projectId = parsed.value.projectId || `project:${randomUUID()}`;
+    const existing = store.getProject(projectId) || {};
+    const now = new Date().toISOString();
+    const project = { ...existing, ...parsed.value, projectId, createdAt: existing.createdAt || now, updatedAt: now };
+    await store.setProject(projectId, project);
+    logger.info('project-upserted', { projectId, name: project.name, projectPath: project.projectPath });
+    return json(res, 200, { ok: true, project, projects: projectRows(store) });
+  }
+
   if (req.method === 'GET' && (url.pathname === '/sessions' || url.pathname === '/supervisor')) {
     const rows = supervisorRows(store.sessions);
     return json(res, 200, { count: rows.length, sessions: rows });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/projects/attach') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const parsed = validateProjectAttach(body);
+    if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
+    const project = store.getProject(parsed.value.projectId);
+    if (!project) return json(res, 404, { ok: false, error: 'project-not-found', requestId: id });
+    const existing = store.getConfig(parsed.value.conversationId);
+    const next = {
+      ...existing,
+      ...parsed.value,
+      projectId: project.projectId,
+      projectPath: project.projectPath,
+      operationClass: existing.operationClass || ''
+    };
+    await store.setConfig(parsed.value.conversationId, next);
+    logger.info('conversation-attached', { projectId: project.projectId, conversationId: parsed.value.conversationId, tabId: parsed.value.tabId });
+    return json(res, 200, { ok: true, project, config: next, projects: projectRows(store) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/projects/detach') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const conversationId = String(body?.conversationId || '').trim();
+    if (!conversationId) return json(res, 400, { ok: false, error: 'conversationId-required', requestId: id });
+    const existing = store.getConfig(conversationId);
+    if (body?.forget === true) {
+      await store.deleteConfig(conversationId);
+      logger.info('conversation-forgotten', { conversationId });
+      return json(res, 200, { ok: true, config: {}, projects: projectRows(store) });
+    }
+    const next = { ...existing };
+    delete next.projectId;
+    delete next.projectPath;
+    await store.setConfig(conversationId, next);
+    logger.info('conversation-detached', { conversationId });
+    return json(res, 200, { ok: true, config: next, projects: projectRows(store) });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/projects/delete') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const projectId = String(body?.projectId || '').trim();
+    if (!projectId) return json(res, 400, { ok: false, error: 'projectId-required', requestId: id });
+    if (!store.getProject(projectId)) return json(res, 404, { ok: false, error: 'project-not-found', requestId: id });
+    await store.deleteProject(projectId);
+    logger.warn('project-deleted', { projectId });
+    return json(res, 200, { ok: true, projects: projectRows(store) });
   }
 
   if (req.method === 'POST' && (url.pathname === '/conversation/register' || url.pathname === '/project/register')) {
     const body = await readJson(req, config.maxBodyBytes);
     const parsed = validateConversationConfig(body);
     if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
-    const { conversationId, projectPath, operationClass } = parsed.value;
+    const { conversationId, projectId, projectPath, operationClass, tabId, title, url: conversationUrl } = parsed.value;
     const existing = store.getConfig(conversationId);
+    const linkedProject = projectId ? store.getProject(projectId) : null;
+    if (projectId && !linkedProject) return json(res, 404, { ok: false, error: 'project-not-found', requestId: id });
     const next = {
       ...existing,
-      ...(projectPath ? { projectPath } : {}),
-      ...(operationClass !== undefined ? { operationClass } : {})
+      ...(projectId ? { projectId } : {}),
+      ...(linkedProject?.projectPath ? { projectPath: linkedProject.projectPath } : projectPath ? { projectPath } : {}),
+      ...(operationClass !== undefined ? { operationClass } : linkedProject?.operationClass !== undefined ? { operationClass: linkedProject.operationClass } : {}),
+      ...(tabId !== undefined ? { tabId } : {}),
+      ...(title ? { title } : {}),
+      ...(conversationUrl ? { url: conversationUrl } : {})
     };
     await store.setConfig(conversationId, next);
     const reconciliation = next.projectPath ? await reconcileProject(next.projectPath) : null;
@@ -143,7 +230,8 @@ async function route(req, res, ctx) {
     const parsed = validateReconcileRequest(body);
     if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
     const current = parsed.value.conversationId ? store.getConfig(parsed.value.conversationId) : {};
-    const projectPath = parsed.value.projectPath || current.projectPath;
+    const project = current.projectId ? store.getProject(current.projectId) : null;
+    const projectPath = parsed.value.projectPath || project?.projectPath || current.projectPath;
     const reconciliation = await reconcileProject(projectPath);
     return json(res, reconciliation.ok ? 200 : 422, { ok: reconciliation.ok, reconciliation });
   }
@@ -164,27 +252,40 @@ async function handleSignal(res, signal, ctx) {
   const previous = store.getSession(id);
   let config = store.getConfig(id);
 
-  if (signal.projectPath || signal.operationClass !== undefined) {
+  const metadataChanged = (signal.tabId !== undefined && signal.tabId !== config.tabId) ||
+    (signal.title && signal.title !== config.title) ||
+    (signal.url && signal.url !== config.url);
+  if (signal.projectPath || signal.operationClass !== undefined || metadataChanged) {
     config = {
       ...config,
       ...(signal.projectPath ? { projectPath: signal.projectPath } : {}),
-      ...(signal.operationClass !== undefined ? { operationClass: signal.operationClass } : {})
+      ...(signal.operationClass !== undefined ? { operationClass: signal.operationClass } : {}),
+      ...(signal.tabId !== undefined ? { tabId: signal.tabId } : {}),
+      ...(signal.title ? { title: signal.title } : {}),
+      ...(signal.url ? { url: signal.url } : {})
     };
     await store.setConfig(id, config);
   }
 
-  const projectPath = config.projectPath;
+  const project = config.projectId ? store.getProject(config.projectId) : null;
+  const projectPath = project?.projectPath || config.projectPath;
+  const effectiveOperationClass = config.operationClass !== undefined && config.operationClass !== ''
+    ? config.operationClass
+    : (project?.operationClass || config.operationClass);
   const reconciliation = projectPath ? await reconcileProject(projectPath) : null;
   const checkpointFresh = projectPath
     ? isFreshCheckpoint(reconciliation)
     : Boolean(signal.checkpointFresh);
-  const sideEffectRisk = classifySideEffectRisk({ signal, reconciliation, previous, policy: config });
+  const sideEffectRisk = classifySideEffectRisk({ signal, reconciliation, previous, policy: { ...project, ...config, operationClass: effectiveOperationClass } });
 
   const merged = {
     ...previous,
     ...signal,
     projectPath,
-    operationClass: config.operationClass,
+    projectId: config.projectId,
+    projectName: project?.name,
+    operationClass: effectiveOperationClass,
+    autoRecovery: project?.autoRecovery,
     reconciliation,
     checkpointFresh,
     sideEffectRisk,
@@ -210,10 +311,37 @@ async function handleSignal(res, signal, ctx) {
     ok: true,
     decision,
     reconciliation,
+    projectId: config.projectId,
+    project: project || null,
     projectPath,
     sideEffectRisk,
     checkpointFresh
   });
+}
+
+function projectRows(store) {
+  return Object.values(store.projects)
+    .map(project => {
+      const chats = Object.entries(store.configs)
+        .filter(([, config]) => config?.projectId === project.projectId)
+        .map(([conversationId, config]) => {
+          const session = store.getSession(conversationId);
+          return {
+            conversationId,
+            tabId: config.tabId,
+            title: config.title,
+            url: config.url,
+            operationClass: config.operationClass,
+            state: session.state,
+            decision: session.decision,
+            updatedAt: session.updatedAt,
+            checkpointFresh: session.checkpointFresh,
+            sideEffectRisk: session.sideEffectRisk
+          };
+        });
+      return { ...project, chats, chatCount: chats.length };
+    })
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 }
 
 function supervisorRows(sessions) {
@@ -225,8 +353,11 @@ function supervisorRows(sessions) {
     progressAgeMs: row.progressAgeMs,
     sideEffectRisk: row.sideEffectRisk,
     checkpointFresh: row.checkpointFresh,
+    projectId: row.projectId,
+    projectName: row.projectName,
     projectPath: row.projectPath,
     operationClass: row.operationClass,
+    autoRecovery: row.autoRecovery,
     branch: row.reconciliation?.branch,
     head: row.reconciliation?.head,
     remoteHead: row.reconciliation?.remoteHead

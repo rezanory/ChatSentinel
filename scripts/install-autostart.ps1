@@ -3,6 +3,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $runner = Join-Path $PSScriptRoot 'run-watchdog.ps1'
 $taskName = 'ChatSentinelWatchdog'
 $dataRoot = if ($env:CHATSENTINEL_DATA_DIR) { $env:CHATSENTINEL_DATA_DIR } else { Join-Path $env:LOCALAPPDATA 'ChatSentinel' }
+$targetVersion = '1.1.0'
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw 'Node.js is required but was not found in PATH.'
@@ -11,9 +12,9 @@ if (-not (Test-Path $runner)) { throw "Runner not found: $runner" }
 
 New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
 Set-Location $root
-Write-Host '[ChatSentinel] running full production validation...'
-npm run validate
-if ($LASTEXITCODE -ne 0) { throw 'Production validation failed.' }
+Write-Host '[ChatSentinel] running production release validation...'
+npm run release-validate
+if ($LASTEXITCODE -ne 0) { throw 'Production release validation failed.' }
 
 $quotedRunner = '"' + $runner + '"'
 $taskCommand = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $quotedRunner"
@@ -38,17 +39,35 @@ if (-not $scheduled) {
   Set-Content -Path $launcher -Value $vbs -Encoding ASCII
   Write-Host "[ChatSentinel] Scheduled Task unavailable; Startup launcher installed: $launcher"
 }
+# Upgrade-aware recycle: if the old listener is healthy, stop only that node process.
+# The existing named-mutex supervisor (if any) will restart it from the new files.
+try {
+  $currentHealth = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 2
+  if ($currentHealth.ok -and $currentHealth.version -ne $targetVersion) {
+    $listener = Get-NetTCPConnection -LocalPort 4317 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($listener) {
+      Write-Host "[ChatSentinel] upgrading listener from v$($currentHealth.version) to v$targetVersion (PID $($listener.OwningProcess))"
+      Stop-Process -Id $listener.OwningProcess -Force
+      Start-Sleep -Seconds 1
+    }
+  }
+} catch {}
 
+# Safe even when a supervisor already exists: the named mutex makes duplicates exit.
 Start-Process -WindowStyle Hidden powershell.exe -ArgumentList '-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',"`"$runner`""
+
 $healthy = $false
-for ($i = 0; $i -lt 20; $i++) {
+for ($i = 0; $i -lt 30; $i++) {
   Start-Sleep -Milliseconds 500
   try {
     $health = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 2
-    if ($health.ok -and $health.version -eq '1.0.0') { $healthy = $true; break }
+    if ($health.ok -and $health.version -eq $targetVersion) { $healthy = $true; break }
   } catch {}
 }
-if (-not $healthy) { throw 'ChatSentinel supervisor started but v1.0.0 health check did not pass.' }
+if (-not $healthy) {
+  throw "ChatSentinel supervisor started but v$targetVersion health check did not pass."
+}
 
-Write-Host "[ChatSentinel] production watchdog healthy. Data: $dataRoot"
+Write-Host "[ChatSentinel] production watchdog v$targetVersion healthy. Data: $dataRoot"
 Write-Host '[ChatSentinel] Chrome extension folder: C:\ChatSentinel\extension'
+Write-Host '[ChatSentinel] Reload the unpacked extension once in chrome://extensions after an extension-code upgrade.'
