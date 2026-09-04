@@ -1,0 +1,9 @@
+{
+  "projects": [
+    {
+      "conversationId": "replace-with-chatgpt-conversation-id",
+      "projectPath": "C:\\path\\to\\project",
+      "repository": "owner/repository"
+    }
+  ]
+}
