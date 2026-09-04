@@ -29,8 +29,12 @@ export async function tickProjectOrchestration(store, projectId, { logger } = {}
     const session = conversationId ? { ...store.getSession(conversationId), conversationId } : {};
     const git = await inspectLaneBranch({ repoPath: plan.repoPath, worktreePath: lane.worktreePath, branch: lane.branch, baselineSha: lane.baselineSha });
     const completion = detectLaneCompletion({ lane, session, git });
-    const activeCommand = Object.values(store.commands).find(cmd => cmd?.payload?.projectId === projectId && cmd?.payload?.laneId === lane.laneId && ['pending','running'].includes(cmd.status));
-    const decision = decideLaneAction({ lane, session, completion, activeCommand });
+    const laneCommands = Object.values(store.commands)
+      .filter(cmd => cmd?.payload?.projectId === projectId && cmd?.payload?.laneId === lane.laneId)
+      .sort((a, b) => Date.parse(b.updatedAt || b.createdAt || 0) - Date.parse(a.updatedAt || a.createdAt || 0));
+    const activeCommand = laneCommands.find(cmd => ['pending','running'].includes(cmd.status));
+    const lastCommand = laneCommands[0] || null;
+    const decision = decideLaneAction({ lane, session, completion, activeCommand, lastCommand });
     rows.push({ lane, conversationId, session, git, completion, decision });
   }
   const projectDecision = decideProjectAction(rows);

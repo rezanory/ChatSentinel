@@ -43,3 +43,18 @@ test('silent running chat becomes actionable after the stall window', () => {
   assert.equal(result.action, OrchestratorAction.FIX);
   assert.equal(result.reason, 'lane-stalled');
 });
+
+test('idle lane with no branch progress is kicked after command grace', () => {
+  const session = { state: 'IDLE', progressAgeMs: 5, updatedAt: new Date().toISOString(), decision: { action: 'WAIT' } };
+  const lastCommand = { status: 'succeeded', completedAt: new Date(Date.now() - 180000).toISOString() };
+  const result = decideLaneAction({ lane, session, completion: { complete: false, reason: 'branch-not-advanced' }, lastCommand });
+  assert.equal(result.action, OrchestratorAction.FIX);
+  assert.equal(result.reason, 'idle-no-branch-progress');
+});
+
+test('idle lane is not kicked before command grace expires', () => {
+  const session = { state: 'IDLE', progressAgeMs: 5, updatedAt: new Date().toISOString(), decision: { action: 'WAIT' } };
+  const lastCommand = { status: 'succeeded', completedAt: new Date().toISOString() };
+  const result = decideLaneAction({ lane, session, completion: { complete: false, reason: 'branch-not-advanced' }, lastCommand });
+  assert.equal(result.action, OrchestratorAction.WAIT);
+});
