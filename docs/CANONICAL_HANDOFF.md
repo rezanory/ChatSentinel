@@ -1,6 +1,6 @@
 # Canonical Handoff — ChatSentinel v1.0.0
 
-Status: **PRODUCTION ACCEPTED CODE CANDIDATE**
+Status: **PRODUCTION READY / LOCAL WATCHDOG ACTIVE**
 
 Repository: `rezanory/ChatSentinel`
 Local path: `C:\ChatSentinel`
@@ -69,3 +69,17 @@ No plugin/MCP source code is vendored. GitHub and Remote Desktop Commander were 
 ## Final release procedure
 
 This handoff update is documentation-only relative to the accepted code candidate. After committing/pushing it, the release gate must run once more on that exact final branch commit. If it passes, `main` is fast-forwarded, the installed watchdog is upgraded and restarted, deliberate kill/self-restart is revalidated, and only then is that exact `main` commit tagged/released as `v1.0.0`.
+
+## Production activation receipt
+
+- production hardening fast-forwarded to `main`: PASS
+- accepted main before activation receipt: `df39ca3a2a7b2130bb0fbd4aa45932b7015f3f21`
+- Windows local watchdog upgraded from v0.3.0 to **v1.0.0**: PASS
+- health endpoint on `127.0.0.1:4317`: PASS
+- Windows Startup fallback installed when Scheduled Task permission was unavailable: PASS
+- deliberate production listener kill: PASS
+- supervisor restarted watchdog automatically with a new PID and health returned v1.0.0: PASS
+- production data directory: `%LOCALAPPDATA%\ChatSentinel`
+- normal Chrome profile currently does not yet have ChatSentinel loaded; one-time `Load unpacked` remains a browser security activation step, not an implementation blocker.
+
+Production code/runtime is accepted. The release tag must point to the final main commit containing this activation receipt after one last exact-commit release validation.

@@ -65,3 +65,11 @@ Accepted production code candidate:
 - full `npm run release-validate` on exact pushed SHA: PASS
 
 The subsequent handoff metadata commit is documentation-only; it receives one final release validation before merge/tag.
+
+## Production activation validation
+
+After fast-forwarding the accepted candidate to `main`, the installed local service was upgraded from v0.3.0 to v1.0.0. The installer re-ran the functional validation, installed the per-user Startup fallback, and reported healthy v1.0.0.
+
+A deliberate kill of the production listener changed the listener PID and the Windows supervisor restored `GET /health` with version v1.0.0 within the restart loop. This confirms the deployed self-recovery path, not only the isolated production smoke.
+
+Normal Chrome profiles were inspected for stable extension ID `pcidbmcahljjpbmaecjmfmpbpfnpoepc`; it is not yet installed there. One-time Chrome `Load unpacked` is therefore recorded as a deployment activation step for the user, not as a failed production capability gate.
