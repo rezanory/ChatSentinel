@@ -58,3 +58,12 @@ test('idle lane is not kicked before command grace expires', () => {
   const result = decideLaneAction({ lane, session, completion: { complete: false, reason: 'branch-not-advanced' }, lastCommand });
   assert.equal(result.action, OrchestratorAction.WAIT);
 });
+
+test('idle lane replaces chat after fix budget is exhausted', () => {
+  const session = { state: 'IDLE', progressAgeMs: 5, updatedAt: new Date().toISOString(), decision: { action: 'WAIT' } };
+  const lastCommand = { status: 'succeeded', completedAt: new Date(Date.now() - 180000).toISOString() };
+  const budgetedLane = { ...lane, fixAttempts: 2, maxFixAttempts: 2 };
+  const result = decideLaneAction({ lane: budgetedLane, session, completion: { complete: false, reason: 'branch-not-advanced' }, lastCommand });
+  assert.equal(result.action, OrchestratorAction.REPLACE);
+  assert.equal(result.reason, 'fix-budget-exhausted');
+});

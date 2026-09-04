@@ -34,8 +34,11 @@ export async function tickProjectOrchestration(store, projectId, { logger } = {}
       .sort((a, b) => Date.parse(b.updatedAt || b.createdAt || 0) - Date.parse(a.updatedAt || a.createdAt || 0));
     const activeCommand = laneCommands.find(cmd => ['pending','running'].includes(cmd.status));
     const lastCommand = laneCommands[0] || null;
-    const decision = decideLaneAction({ lane, session, completion, activeCommand, lastCommand });
-    rows.push({ lane, conversationId, session, git, completion, decision });
+    const fixPrefix = `orchestrator:${projectId}:${lane.laneId}:fix:`;
+    const fixAttempts = laneCommands.filter(cmd => String(cmd.idempotencyKey || '').startsWith(fixPrefix) && ['succeeded','failed'].includes(cmd.status)).length;
+    const effectiveLane = { ...lane, fixAttempts };
+    const decision = decideLaneAction({ lane: effectiveLane, session, completion, activeCommand, lastCommand });
+    rows.push({ lane: effectiveLane, conversationId, session, git, completion, decision });
   }
   const projectDecision = decideProjectAction(rows);
   const emitted = await materializeDecision(store, project, plan, rows, projectDecision);
