@@ -49,7 +49,7 @@
   async function createNewChatAndContinue(context) {
     const prompt = context.newChatPrompt || defaultNewChatPrompt(context);
     sessionStorage.setItem('chatsentinel:pendingPrompt', prompt);
-    location.assign('https://chatgpt.com/');
+    location.assign(context.newChatUrl || 'https://chatgpt.com/');
     return { ok: true, action: 'new-chat', executed: true };
   }
   function defaultNewChatPrompt(context) {

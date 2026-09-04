@@ -44,7 +44,8 @@ async function maybeAct(result, tabId, payload) {
     context: {
       reconciliation: result.reconciliation,
       projectPath: result.projectPath,
-      decision: result.decision
+      decision: result.decision,
+      newChatUrl: fixtureAuto ? `http://127.0.0.1:4320/newchat?auto=1&cid=${encodeURIComponent(`${payload.conversationId}-new`)}` : undefined
     }
   }).catch(error => ({ ok: false, error: String(error) }));
 

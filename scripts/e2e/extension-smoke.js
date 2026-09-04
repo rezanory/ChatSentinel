@@ -68,6 +68,13 @@ async function actuatorSuite() {
   const sent = await evalValue(continueTarget, 'document.body.dataset.sent');
   assert.match(sent, /reconcile|checkpoint|SHA/i);
   console.log('CONTINUE_SAME_CHAT actuator: PASS');
+
+  const deadId = `${RUN}-dead-auto`;
+  const deadTarget = await openPage(`http://127.0.0.1:4320/dead?auto=1&cid=${encodeURIComponent(deadId)}`);
+  await waitEval(deadTarget, "location.pathname === '/newchat' && Boolean(document.body.dataset.sent)");
+  const handoff = await evalValue(deadTarget, 'document.body.dataset.sent');
+  assert.match(handoff, /checkpoint|source-of-truth|ادامه پروژه/i);
+  console.log('CONTINUE_NEW_CHAT + handoff actuator: PASS');
 }
 async function verifyDecision(kind, expectedAction) {
   const id = `${RUN}-${kind}`;
