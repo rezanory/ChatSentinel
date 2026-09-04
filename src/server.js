@@ -9,6 +9,7 @@ import { createLogger } from './logger.js';
 import { authorizeRequest, createRateLimiter, requestId, setCors } from './http-security.js';
 import { validateCommandClaim, validateCommandComplete, validateCommandEnqueue, validateCommandProgress, validateConversationConfig, validateProject, validateProjectAttach, validateReconcileRequest, validateSignal } from './validation.js';
 import { cancelCommand, claimCommand, completeCommand, enqueueCommand, listCommands, updateCommandProgress } from './command-queue.js';
+import { configureOrchestration, tickProjectOrchestration } from './components/project-orchestrator/controller.js';
 
 export async function createWatchdogServer(config) {
   const logger = createLogger({ dir: config.logDir });
@@ -63,10 +64,23 @@ export async function createWatchdogServer(config) {
     store.scheduleSave(0);
   }, Math.min(config.sessionTtlMs, 60 * 60 * 1000));
   cleanup.unref?.();
+  let orchestrationBusy = false;
+  const orchestrationTimer = setInterval(async () => {
+    if (orchestrationBusy) return;
+    orchestrationBusy = true;
+    try {
+      for (const project of Object.values(store.projects)) {
+        if (project?.orchestration?.enabled) await tickProjectOrchestration(store, project.projectId, { logger });
+      }
+    } catch (error) { logger.error('orchestrator-auto-tick-failed', { error }); }
+    finally { orchestrationBusy = false; }
+  }, 30000);
+  orchestrationTimer.unref?.();
 
   async function close() {
     ready = false;
     clearInterval(cleanup);
+    clearInterval(orchestrationTimer);
     heartbeat.stop();
     await store.flush().catch(error => logger.error('state-flush-failed', { error }));
     await new Promise(resolve => server.close(resolve));
@@ -167,6 +181,24 @@ async function route(req, res, ctx) {
     await store.saveNow();
     logger.warn('extension-pairing-reset', { requestId: id });
     return json(res, 200, { ok: true, paired: false });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/orchestrator/configure') {
+    if (ctx.auth?.client !== 'local-process') return json(res, 403, { ok: false, error: 'local-process-required', requestId: id });
+    const body = await readJson(req, config.maxBodyBytes);
+    const projectId = String(body?.projectId || '').trim();
+    if (!projectId) return json(res, 400, { ok: false, error: 'projectId-required', requestId: id });
+    const result = await configureOrchestration(store, projectId, body);
+    return json(res, result.ok ? 200 : 400, result);
+  }
+
+  if (req.method === 'POST' && url.pathname === '/orchestrator/tick') {
+    if (ctx.auth?.client !== 'local-process') return json(res, 403, { ok: false, error: 'local-process-required', requestId: id });
+    const body = await readJson(req, config.maxBodyBytes);
+    const projectId = String(body?.projectId || '').trim();
+    if (!projectId) return json(res, 400, { ok: false, error: 'projectId-required', requestId: id });
+    const result = await tickProjectOrchestration(store, projectId, { logger });
+    return json(res, 200, result);
   }
 
   if (req.method === 'GET' && url.pathname === '/projects') {
