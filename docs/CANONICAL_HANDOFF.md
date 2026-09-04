@@ -1,12 +1,20 @@
 # Canonical Handoff — ChatSentinel v1.0.0
 
-Status: **PRODUCTION CANDIDATE**
+Status: **PRODUCTION ACCEPTED CODE CANDIDATE**
 
 Repository: `rezanory/ChatSentinel`
 Local path: `C:\ChatSentinel`
-Production candidate branch: `release/v1.0.0-production`
+Candidate branch: `release/v1.0.0-production`
 Target branch: `main`
 Previous release: `v0.3.0` at `c6df780b0aa120d618574d8ee061b099e5ecaec1`
+
+## Exact accepted production code candidate
+
+- SHA: `cac04a8b99d35d466dbbb7979e79b6115bb25149`
+- Tree: `b460be6fb5862db8ce2c5fd9a0c86375b981618c`
+- Local candidate HEAD = remote candidate HEAD: PASS
+- Working tree clean at candidate validation: PASS
+- `npm run release-validate` on this exact SHA: PASS
 
 ## Product mission
 
@@ -29,13 +37,24 @@ Browser signal detector, deterministic recovery engine, project-aware side-effec
 
 ## Validation evidence
 
-The production candidate currently passes 28/28 unit/integration tests, syntax checks, PowerShell parser checks, production security policy, isolated extension E2E, production restart/persistence smoke and npm audit with zero vulnerabilities. Exact evidence is maintained in `docs/VALIDATION.md`.
+Accepted candidate evidence:
+
+- 28/28 unit/integration tests PASS
+- JavaScript and PowerShell parser checks PASS
+- production security/policy check PASS
+- isolated extension detector/recovery E2E 5/5 PASS
+- `SAFE_RETRY`, retry-counter reset, `CONTINUE_SAME_CHAT`, `CONTINUE_NEW_CHAT + handoff` PASS
+- production process restart/persistence smoke PASS
+- npm dependencies 0 / devDependencies 0
+- `npm audit --omit=dev`: 0 vulnerabilities
+
+Exact details are in `docs/VALIDATION.md`.
 
 ## Third-party provenance
 
-No source code from the reviewed GitHub projects (`xcanwin/KeepChatGPT`, `11me/light-session`, `dizzpy/ChatGPT-Auto-Continue`, `boringresearch/plugin-chatgpt-automation`) is present in production code. They are behavior/design references only. See `docs/SOURCE_INVENTORY.md`.
+No source code from `xcanwin/KeepChatGPT`, `11me/light-session`, `dizzpy/ChatGPT-Auto-Continue`, or `boringresearch/plugin-chatgpt-automation` is present in production code. They are behavior/design references only.
 
-No plugin/MCP source code is vendored. GitHub and Remote Desktop Commander were actively used as external development/operations tools; Watchgoose check infrastructure was created but external pinging is optional and unarmed until a real private Ping URL is supplied. Other plugin candidates are non-critical optional integrations. See `docs/PLUGIN_INTEGRATIONS.md`.
+No plugin/MCP source code is vendored. GitHub and Remote Desktop Commander were actively used as external development/operations tools. Watchgoose check infrastructure exists but external heartbeat remains optional/unarmed until its real private Ping URL is supplied. Other plugin candidates are optional, non-critical integrations.
 
 ## Operational paths
 
@@ -47,6 +66,6 @@ No plugin/MCP source code is vendored. GitHub and Remote Desktop Commander were 
 - extension private key (local only): `%LOCALAPPDATA%\ChatSentinel\keys\extension-private.pem`
 - stable extension ID: `pcidbmcahljjpbmaecjmfmpbpfnpoepc`
 
-## Release next action
+## Final release procedure
 
-Commit and push this production candidate, record its exact SHA/tree below in the final release handoff update, re-run all release gates on the exact pushed commit, fast-forward `main`, upgrade the installed service, verify deliberate kill/self-restart, then tag/release `v1.0.0`. No Production-ready claim is valid before those exact steps pass.
+This handoff update is documentation-only relative to the accepted code candidate. After committing/pushing it, the release gate must run once more on that exact final branch commit. If it passes, `main` is fast-forwarded, the installed watchdog is upgraded and restarted, deliberate kill/self-restart is revalidated, and only then is that exact `main` commit tagged/released as `v1.0.0`.

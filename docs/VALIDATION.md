@@ -53,3 +53,15 @@ Conversation/project policy writes are immediate. Recent session telemetry is de
 ## Final acceptance procedure
 
 After this candidate is committed/pushed, `npm run release-validate` is executed again against the exact candidate SHA. Then main is fast-forwarded, the installed watchdog is upgraded/restarted, deliberate kill/self-restart is revalidated, and only that exact accepted commit is tagged `v1.0.0`.
+
+## Exact pushed candidate validation
+
+Accepted production code candidate:
+
+- SHA: `cac04a8b99d35d466dbbb7979e79b6115bb25149`
+- Tree: `b460be6fb5862db8ce2c5fd9a0c86375b981618c`
+- local HEAD = remote `release/v1.0.0-production`: PASS
+- clean working tree before validation: PASS
+- full `npm run release-validate` on exact pushed SHA: PASS
+
+The subsequent handoff metadata commit is documentation-only; it receives one final release validation before merge/tag.
