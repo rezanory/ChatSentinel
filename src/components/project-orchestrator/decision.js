@@ -39,7 +39,10 @@ export function decideLaneAction({ lane = {}, session = {}, completion = {}, act
     }
     return { action: OrchestratorAction.FIX, reason: `recovery-${recovery.toLowerCase()}` };
   }
-  if (Number(session.progressAgeMs || 0) >= Number(lane.stallAfterMs || 300000)) {
+  const updatedAtMs = Date.parse(session.updatedAt || '');
+  const silenceAgeMs = Number.isFinite(updatedAtMs) ? Math.max(0, Date.now() - updatedAtMs) : 0;
+  const effectiveProgressAgeMs = Math.max(Number(session.progressAgeMs || 0), silenceAgeMs);
+  if (effectiveProgressAgeMs >= Number(lane.stallAfterMs || 300000)) {
     return { action: OrchestratorAction.FIX, reason: 'lane-stalled' };
   }
   return { action: OrchestratorAction.WAIT, reason: completion.reason || 'lane-active' };

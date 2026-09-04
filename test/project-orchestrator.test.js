@@ -31,3 +31,15 @@ test('project integrates only after every required lane is complete', () => {
   rows[1].decision = { action: OrchestratorAction.FIX, reason: 'stalled' };
   assert.equal(decideProjectAction(rows).action, OrchestratorAction.FIX);
 });
+
+test('silent running chat becomes actionable after the stall window', () => {
+  const session = {
+    state: 'RUNNING',
+    progressAgeMs: 1,
+    updatedAt: new Date(Date.now() - 600000).toISOString(),
+    decision: { action: 'WAIT' }
+  };
+  const result = decideLaneAction({ lane, session, completion: { complete: false, reason: 'chat-not-idle' } });
+  assert.equal(result.action, OrchestratorAction.FIX);
+  assert.equal(result.reason, 'lane-stalled');
+});
