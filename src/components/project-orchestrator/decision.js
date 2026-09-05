@@ -3,7 +3,11 @@ export const OrchestratorAction = Object.freeze({
   NEXT: 'NEXT',
   FIX: 'FIX',
   REPLACE: 'REPLACE',
-  INTEGRATE: 'INTEGRATE'
+  INTEGRATE: 'INTEGRATE',
+  ADVANCE: 'ADVANCE',
+  REPLAN: 'REPLAN',
+  COMPLETE: 'COMPLETE',
+  BLOCKED: 'BLOCKED'
 });
 
 export function detectLaneCompletion({ lane = {}, session = {}, git = {} } = {}) {
