@@ -53,3 +53,13 @@ No schema or migration was added. No release activation is part of this lane.
 ## Exact-candidate requirement
 
 This handoff binds the implementation identity above. The final branch tip containing this handoff must rerun the independent gates before push. The pushed branch tip is the canonical lane candidate; the implementation SHA remains the exact code-change identity for review.
+
+## Post-handoff-bound E2E readiness fix-forward
+
+The first exact handoff-bound E2E revalidation exposed a startup-only MV3 service-worker readiness race before any Full Project Mode step executed. No product assertion or Full Mode behavior failed. The browser harness now boundedly reacquires the current extension service-worker CDP target across suspend/restart and emits worker-state diagnostics only on readiness failure.
+
+E2E harness fix-forward SHA: `5cf8e2293fca6ea0d8265dd7ad62d5c2ee14114a`
+
+After this fix-forward, two consecutive complete browser E2E runs passed, including tab-launch guard, crash recovery, delivery/continuation recovery, DOM compaction, real Full Mode create/attach/profile/group/snapshot activation, active parallel chat projection and durable lane-command ownership. Production extension/runtime behavior is unchanged by this harness-only fix.
+
+Because this handoff file is updated after that fix-forward, the new handoff-bound branch tip must receive one final complete gate run before push/freeze.
