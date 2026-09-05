@@ -1,6 +1,6 @@
 # ChatSentinel v1.3 Delivery Timeout Recovery Handoff V1
 
-Status: **GREEN IMPLEMENTATION CANDIDATE — DOCS-BOUND REVALIDATION REQUIRED**
+Status: **GREEN FINAL CANDIDATE - READY TO PUSH**
 
 Repository: `rezanory/ChatSentinel`
 Branch: `fix/v13-delivery-timeout-recovery`
@@ -40,3 +40,15 @@ No prompt text is reconstructed or resent by this component. It still delegates 
 ## Final freeze protocol
 
 Bind this handoff in a docs-only commit, rerun the complete independent gate set on that exact docs-bound SHA without fail-fast, then push only if every gate remains green. The pushed branch SHA is the canonical lane candidate; no merge to `main` or production activation is authorized here.
+## Docs-bound exact revalidation
+
+Validation basis SHA: `21abf8080c01a29d21da133d2d61362d3dfcf0d5`
+Validation basis tree: `a20fe91e218b7dccb13fd22bc6b8fe89cbb4230b`
+
+The complete independent gate set was rerun on the docs-bound candidate with no fail-fast behavior. Canonical gate rows were all exit `0`: version-check, aggregate Node tests, syntax/check, security policy, shell parser, browser E2E, production smoke, security audit, full lane diff check, and Windows PowerShell parser.
+
+The aggregate Node suite remained **149/149 PASS**. Browser E2E remained green for the new red timeout layout: detector `delivery-timeout-red -> RETRY_MESSAGE_DELIVERY`, visible sibling Retry actuation, cooldown deduplication, and historical timeout `WAIT` behavior.
+
+One earlier browser run failed before detector execution because the generic service-worker tab-launch guard did not initialize. It was not accepted as green. Without changing lane code or orchestration, the same exact SHA subsequently passed isolated E2E after test-port quiescence and then passed the complete independent gate round. This transient harness startup failure is therefore recorded rather than hidden.
+
+This receipt commit changes only this handoff. It must itself receive the same final gate set before push; if any gate is red, the branch remains unpushed until fix-forward and revalidation are green.
