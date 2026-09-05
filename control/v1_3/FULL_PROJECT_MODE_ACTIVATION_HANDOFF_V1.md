@@ -63,3 +63,11 @@ E2E harness fix-forward SHA: `5cf8e2293fca6ea0d8265dd7ad62d5c2ee14114a`
 After this fix-forward, two consecutive complete browser E2E runs passed, including tab-launch guard, crash recovery, delivery/continuation recovery, DOM compaction, real Full Mode create/attach/profile/group/snapshot activation, active parallel chat projection and durable lane-command ownership. Production extension/runtime behavior is unchanged by this harness-only fix.
 
 Because this handoff file is updated after that fix-forward, the new handoff-bound branch tip must receive one final complete gate run before push/freeze.
+
+## Final browser panel readiness fix-forward
+
+A later exact-candidate E2E run exposed another pre-Full-Mode harness race: the panel toggle request succeeded but the test assumed the first toggle necessarily meant `open=true`. The harness now treats the returned panel state as authoritative and boundedly toggles once more only when the first successful response reports the panel closed. This changes test readiness only; production panel behavior is unchanged.
+
+Panel readiness harness fix-forward SHA: `3e6ff8f440629fb22568f213ca98e560c41873f6`
+
+The complete browser E2E passed after this fix, including the real Full Project Mode activation path. The handoff-bound tip containing this note requires the final complete gate run before push.
