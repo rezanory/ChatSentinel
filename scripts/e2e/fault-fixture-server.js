@@ -36,6 +36,15 @@ function render(kind, id) {
       <button aria-label="Retry" onclick="document.body.dataset.deliveryRetryClicked='1';document.body.dataset.deliveryRetryCount=String(Number(document.body.dataset.deliveryRetryCount||0)+1)">Retry</button>
     </div>
   </main>`;
+  if (kind === 'delivery-timeout-red') state = `<main>
+    <article data-message-author-role="user" data-message-id="delivery-red-user">Pending user prompt</article>
+  </main>
+  <div id="composer-timeout-shell" class="composer-status-shell">
+    <div class="composer-timeout-banner bg-red-500/10">
+      <div class="composer-timeout-copy"><span>Message delivery timed out.</span></div>
+      <div class="composer-timeout-action"><button onclick="document.body.dataset.deliveryRedRetryClicked='1';document.body.dataset.deliveryRedRetryCount=String(Number(document.body.dataset.deliveryRedRetryCount||0)+1)"><span>Retry</span></button></div>
+    </div>
+  </div>`;
   if (kind === 'delivery-timeout-history') state = `<main>
     <article data-message-author-role="user" data-message-id="delivery-old-user">Old user prompt</article>
     <div role="alert" data-message-id="delivery-old-timeout">Message delivery timed out. Please try again.<button aria-label="Retry">Retry</button></div>

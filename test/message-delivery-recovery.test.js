@@ -68,16 +68,41 @@ function alertWithRetry({ order = 2, id = 'timeout-1' } = {}) {
   return { marker, button };
 }
 
-function documentFixture({ turns = [], markers = [], buttons = [] } = {}) {
+function documentFixture({ turns = [], markers = [], textMarkers = [], buttons = [] } = {}) {
+  const bodyText = [...turns, ...markers, ...textMarkers].map(row => row.innerText).join('\n');
+  const textNodes = textMarkers.map(marker => ({ nodeValue: marker.innerText, parentElement: marker, parentNode: marker }));
   return {
-    body: { innerText: [...turns, ...markers].map(row => row.innerText).join('\n') },
+    body: { innerText: bodyText, textContent: bodyText },
     querySelectorAll(selector) {
       if (selector === '[data-message-author-role]') return turns;
       if (selector === 'button') return buttons;
       if (selector.startsWith('[role="alert"]')) return markers;
       return [];
+    },
+    createTreeWalker() {
+      let index = 0;
+      return { nextNode() { return textNodes[index++] || null; } };
     }
   };
+}
+
+function attach(parent, ...children) {
+  for (const child of children) {
+    child.parentElement = parent;
+    parent.children.push(child);
+  }
+  return parent;
+}
+function redComposerTimeout({ order = 2 } = {}) {
+  const banner = node({ text: 'Message delivery timed out. Retry', order });
+  const marker = node({ text: 'Message delivery timed out.', order: order + 0.02 });
+  const copyWrap = node({ text: 'Message delivery timed out.', order: order + 0.01 });
+  const actionWrap = node({ text: 'Retry', order: order + 0.03 });
+  const button = node({ label: 'Retry', order: order + 0.04 });
+  attach(copyWrap, marker);
+  attach(actionWrap, button);
+  attach(banner, copyWrap, actionWrap);
+  return { marker, button };
 }
 
 function memoryStorage() {
@@ -97,6 +122,36 @@ test('active message delivery timeout requires the associated native Retry butto
   assert.equal(result.retryVisible, true);
   assert.equal(result.retryButton, button);
   assert.equal(result.incidentKey, 'message:delivery-u1');
+});
+
+test('current red composer timeout is discovered outside main without role=alert and binds sibling Retry', () => {
+  const api = loadApi();
+  const user = node({ text: 'Do the work', role: 'user', id: 'red-user', order: 1 });
+  const { marker, button } = redComposerTimeout({ order: 2 });
+  const result = api.inspect(documentFixture({ turns: [user], textMarkers: [marker], buttons: [button] }));
+  assert.equal(result.active, true);
+  assert.equal(result.timeoutMarkerPresent, true);
+  assert.equal(result.retryButton, button);
+  assert.equal(result.incidentKey, 'user:red-user');
+});
+
+test('red composer timeout ignores an unrelated Retry outside the local timeout region', () => {
+  const api = loadApi();
+  const { marker } = redComposerTimeout({ order: 2 });
+  const unrelated = node({ text: 'Retry', label: 'Retry', order: 10 });
+  const result = api.inspect(documentFixture({ textMarkers: [marker], buttons: [unrelated] }));
+  assert.equal(result.active, false);
+  assert.equal(result.timeoutMarkerPresent, true);
+  assert.equal(result.reason, 'retry-button-missing');
+});
+
+test('disabled associated Retry is not actionable', () => {
+  const api = loadApi();
+  const { marker, button } = redComposerTimeout({ order: 2 });
+  button.disabled = true;
+  const result = api.inspect(documentFixture({ textMarkers: [marker], buttons: [button] }));
+  assert.equal(result.active, false);
+  assert.equal(result.reason, 'retry-button-missing');
 });
 
 test('generic Retry without delivery-timeout marker is not classified as message delivery failure', () => {

@@ -4,8 +4,8 @@ Responsibility: recover only the ChatGPT outgoing-message failure state that dis
 
 ## Contract
 
-- Detect the active delivery-timeout marker, not a generic Retry button.
-- Bind retry to the native Retry control associated with that timeout region.
+- Detect the active delivery-timeout marker, not a generic Retry button, including composer/status banners rendered outside `main` and without `role="alert"`.
+- Bind retry only to an actionable visible native Retry control in the nearest bounded DOM region associated with that marker; sibling-wrapper layouts are supported without falling back to unrelated Retry controls.
 - Treat the timeout as inactive when a later user/assistant turn follows it.
 - Generate a stable per-incident key from message/user identity when available.
 - Deduplicate repeated actuation during a cooldown.
