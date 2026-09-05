@@ -329,7 +329,9 @@
   }
 
   async function runtime(message) {
-    return chrome.runtime.sendMessage(message);
+    const guard = globalThis.ChatSentinelRuntimeContext;
+    if (!guard?.sendMessage) return { ok: false, invalidated: true, reason: 'extension-context-invalidated' };
+    return guard.sendMessage(message);
   }
 
   function bindResize(handle) {

@@ -1,8 +1,12 @@
 (() => {
   let lastMutationAt = Date.now();
   let lastSignal = '';
+  const runtimeContext = globalThis.ChatSentinelRuntimeContext;
+  let disposed = false;
+  let observer = null;
+  let heartbeatTimer = null;
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  const runtimeListener = (message, _sender, sendResponse) => {
     if (message?.type === 'CHATSENTINEL_GET_IDENTITY') {
       sendResponse({ ok: true, identity: currentIdentity() });
       return;
@@ -33,11 +37,12 @@
       .then(result => sendResponse(result || { ok: false, reason: 'actuator-missing' }))
       .catch(error => sendResponse({ ok: false, error: String(error) }));
     return true;
-  });
+  };
+  if (!runtimeContext?.addMessageListener?.(runtimeListener)) return;
 
   deliverPendingPrompt();
 
-  const observer = new MutationObserver(() => {
+  observer = new MutationObserver(() => {
     lastMutationAt = Date.now();
     emit();
   });
@@ -48,10 +53,12 @@
     characterData: true
   });
 
-  setInterval(emit, 5000);
+  heartbeatTimer = setInterval(emit, 5000);
   emit();
 
   function emit() {
+    if (disposed) return;
+    if (!runtimeContext?.isAlive?.()) { dispose(); return; }
     const text = document.body?.innerText || '';
     const buttons = [...document.querySelectorAll('button')]
       .map(button => (button.innerText || button.getAttribute('aria-label') || '').trim())
@@ -97,7 +104,19 @@
     );
     if (fingerprint === lastSignal && progressAgeMs < 60000) return;
     lastSignal = fingerprint;
-    chrome.runtime.sendMessage(signal).catch(() => {});
+    runtimeContext.sendMessage(signal).then(result => {
+      if (result?.invalidated) dispose();
+    }).catch(() => dispose());
+  }
+
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    observer?.disconnect?.();
+    observer = null;
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+    runtimeContext?.removeMessageListener?.(runtimeListener);
   }
 
   function currentIdentity() {
