@@ -2,6 +2,13 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 
+export function isExtensionWorkerTarget(target, extensionId, workerPath = 'background.js') {
+  const id = String(extensionId || '').trim();
+  if (!id) return false;
+  return target?.type === 'service_worker'
+    && target.url === `chrome-extension://${id}/${workerPath}`;
+}
+
 export async function findBrowserExecutable(options = {}) {
   const platform = options.platform || process.platform;
   const env = options.env || process.env;

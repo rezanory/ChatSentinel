@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { findBrowserExecutable, systemChromeCandidates, playwrightCacheCandidates, findPlaywrightChromium } from '../scripts/e2e/browser-paths.js';
+import { findBrowserExecutable, systemChromeCandidates, playwrightCacheCandidates, findPlaywrightChromium, isExtensionWorkerTarget } from '../scripts/e2e/browser-paths.js';
 
 test('system Chrome candidates cover native Windows, macOS and Linux locations', () => {
   const win = systemChromeCandidates('win32', {
@@ -20,6 +20,18 @@ test('system Chrome candidates cover native Windows, macOS and Linux locations',
   const linux = systemChromeCandidates('linux', {}, '/home/r');
   assert.ok(linux.includes('/usr/bin/google-chrome'));
   assert.ok(linux.includes('/usr/bin/chromium'));
+});
+
+test('extension worker matching rejects unrelated Chromium component workers', () => {
+  const extensionId = 'pcidbmcahljjpbmaecjmfmpbpfnpoepc';
+  assert.equal(isExtensionWorkerTarget({
+    type: 'service_worker',
+    url: `chrome-extension://${extensionId}/background.js`
+  }, extensionId), true);
+  assert.equal(isExtensionWorkerTarget({
+    type: 'service_worker',
+    url: 'chrome-extension://glbjnfimcajjenihimblfaponejbkoph/background.js'
+  }, extensionId), false);
 });
 
 test('Playwright cache candidates use native per-platform cache roots', () => {

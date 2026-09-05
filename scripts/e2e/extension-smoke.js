@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import assert from 'node:assert/strict';
-import { findBrowserExecutable } from './browser-paths.js';
+import { findBrowserExecutable, isExtensionWorkerTarget } from './browser-paths.js';
 
 const ROOT = path.resolve('.');
 const execFileAsync = promisify(execFile);
@@ -63,7 +63,7 @@ try {
   const debugPort = await waitDevToolsPort(profile);
   DEVTOOLS = `http://127.0.0.1:${debugPort}`;
   await waitJson(`${DEVTOOLS}/json/version`);
-  EXTENSION_WORKER = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
+  EXTENSION_WORKER = await waitTarget(isChatSentinelWorkerTarget);
   assert.ok(EXTENSION_WORKER.url.startsWith(`chrome-extension://${EXPECTED_EXTENSION_ID}/`), `unexpected extension id: ${EXTENSION_WORKER.url}`);
   await sleep(500);
   await launchGuardSuite();
@@ -546,7 +546,7 @@ async function workerValue(expression) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       if (!EXTENSION_WORKER?.webSocketDebuggerUrl || attempt > 0) {
-        EXTENSION_WORKER = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
+        EXTENSION_WORKER = await waitTarget(isChatSentinelWorkerTarget);
       }
       const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
       if (reply?.result?.exceptionDetails) throw new Error(JSON.stringify(reply.result.exceptionDetails));
@@ -624,6 +624,10 @@ async function postJson(route, body) {
   const json = await res.json();
   if (!res.ok) throw new Error(`${route}: ${JSON.stringify(json)}`);
   return json;
+}
+
+function isChatSentinelWorkerTarget(target) {
+  return isExtensionWorkerTarget(target, EXPECTED_EXTENSION_ID);
 }
 
 async function waitTarget(predicate) {
