@@ -1,0 +1,31 @@
+{
+  "schema_version": "chatsentinel.workflow-continuation-acceptance.v1",
+  "status": "GREEN_SOURCE_CANDIDATE",
+  "branch": "feat/v13-workflow-continuation",
+  "source_candidate": "a8119634dd1fbd9e03f93b0d5723798f60d96e60",
+  "source_tree": "fd310988d42b54a53fc7342a1daf6ab620e709f6",
+  "parent": "6ea09e4c6d8543c84e074f41bc65fba8004726d7",
+  "workflow_profile_id": "rezanory/chat-project:ph7-ph10.5:v1",
+  "terminal_stage_id": "PH10.5-W22",
+  "max_parallel_lanes": 8,
+  "canonical_totals": {
+    "packs": 49,
+    "components": 162,
+    "waves": 76
+  },
+  "gates": {
+    "version": "PASS",
+    "unit": "175/175 PASS",
+    "check": "PASS",
+    "policy": "PASS",
+    "shell": "PASS",
+    "e2e": "PASS",
+    "production_smoke": "PASS",
+    "audit": "PASS_0_VULNERABILITIES",
+    "diff_check": "PASS",
+    "canonical_validator": "PASS_READ_ONLY_PRESERVED"
+  },
+  "stable_runtime_mutated": false,
+  "main_mutated": false,
+  "production_mutated": false
+}

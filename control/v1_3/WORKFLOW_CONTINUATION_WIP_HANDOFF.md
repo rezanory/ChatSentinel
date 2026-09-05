@@ -31,3 +31,6 @@ Still required in the next chat:
 
 Operational stable line at handoff: ChatSentinel 1.2.1, stable branch `stable/v1.2.1`, prompt-delivery hotfix docs-bound SHA `05d7370a43087845d806389f5ae867f81b82df73`.
 Baseline 1.2.0 remains archived/immutable at SHA `9ec1cd6ab074556620015c655505ec62f6a3101a`.
+
+---
+Superseded by `control/v1_3/WORKFLOW_CONTINUATION_GREEN_HANDOFF.md` and `control/v1_3/WORKFLOW_CONTINUATION_ACCEPTANCE_RECEIPT.json` after source candidate `a8119634dd1fbd9e03f93b0d5723798f60d96e60` passed the full collect-all acceptance set.
