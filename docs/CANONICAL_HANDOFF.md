@@ -105,3 +105,13 @@ Post-reload isolated live acceptance of the stale-focus membership-repair path p
 Live UI review found that Project counts and Parallel Chats reflected raw attached conversation membership rather than active work. This is superseded by `a2c78497a87fc6d4c3fbab4dc194905b30e6596f`: Active Parallel Chats now use real tab/activity and fresh lifecycle evidence, terminal/stale rows are excluded from the active projection, and stable memberships detach on actual tab close. Historical/raw state is not destructively erased by the projection.
 
 Pre-handoff gates are fully green: 125/125 unit, syntax, policy, browser E2E (including completed-live-tab exclusion and stable closed-tab cleanup), production smoke, npm audit 0 vulnerabilities, PowerShell parser 6/6 and diff-check.
+
+## v1.3.0 Cross-Platform Bootstrap / Full Project Mode — 2026-09-05
+
+The immutable base for future development is ChatSentinel `1.2.0` at `9ec1cd6ab074556620015c655505ec62f6a3101a`, preserved as remote branch `baseline/v1.2.0` plus an external source/extension/Git-bundle archive with integrity hashes. New development moved to `feat/v1.3-cross-platform-bootstrap`.
+
+Implementation checkpoint `dafccc38eb7612d17902a65208f6b51d0f88e3d3` adds cross-platform Windows/macOS bootstrap, platform-aware prerequisites and data paths, approval-gated install/update/repair/uninstall planning, macOS launchd support, optional GitHub runner setup, Setup MCP bridge, Extension Setup Assistant, version archive/side-by-side restore tooling, and the canonical `CHATSENTINEL FULL PROJECT MODE` profile.
+
+The ChatSentinel panel now provides one-click `Insert Full Project Mode`: it prepends the canonical activation phrase to the current composer, preserves existing prompt text, does not send automatically, and deduplicates repeated clicks. Existing recovery, snapshots, Active Parallel Chats, DOM compaction, search/export/import, audit/history and Component-First integration controls remain part of Full Project Mode.
+
+Pre-doc validation is green at 145/145 tests, version consistency, syntax, security policy, macOS shell parsing, Windows PowerShell parsing, browser E2E including the real Setup Assistant and one-click Full Project Mode, production smoke, zero-vulnerability npm audit and diff-check. Exact docs-bound validation is still required before push. macOS code-level acceptance is green, while live-device acceptance is explicitly pending until an authorized Mac is connected.
