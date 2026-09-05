@@ -83,6 +83,10 @@ try {
 
 async function launchGuardSuite() {
   const guardReady = await waitWorkerCondition("typeof globalThis.ChatSentinelTabLaunchGuard === 'object'");
+  if (!guardReady) {
+    const debug = await workerValue(`({href:globalThis.location?.href,guard:typeof globalThis.ChatSentinelTabLaunchGuard,command:typeof globalThis.ChatSentinelCommandManager,snapshot:typeof globalThis.ChatSentinelSessionSnapshots,restore:typeof globalThis.ChatSentinelSessionRestore})`).catch(error => ({ error: String(error) }));
+    console.error('tab launch guard worker debug:', JSON.stringify(debug));
+  }
   assert.equal(guardReady, true, 'tab launch guard did not initialize in service worker');
   const sanitized = await workerValue(`globalThis.ChatSentinelTabLaunchGuard.safeNewChatUrl('https://chatgpt.com/?prompt-textarea=SECRET&foo=bar')`);
   assert.ok(!/prompt-textarea|SECRET/.test(sanitized), `unsafe launch URL: ${sanitized}`);
@@ -515,9 +519,22 @@ async function waitWorkerCondition(expression, timeoutMs = 10000) {
 }
 
 async function workerValue(expression) {
-  const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
-  if (reply?.result?.exceptionDetails) throw new Error(JSON.stringify(reply.result.exceptionDetails));
-  return reply?.result?.result?.value;
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      if (!EXTENSION_WORKER?.webSocketDebuggerUrl) {
+        EXTENSION_WORKER = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
+      }
+      const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
+      if (reply?.result?.exceptionDetails) throw new Error(JSON.stringify(reply.result.exceptionDetails));
+      return reply?.result?.result?.value;
+    } catch (error) {
+      lastError = error;
+      EXTENSION_WORKER = null;
+      await sleep(100);
+    }
+  }
+  throw lastError;
 }
 
 async function verifyTabFallback() {
