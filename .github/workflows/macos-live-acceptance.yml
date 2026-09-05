@@ -1,0 +1,72 @@
+name: macOS Live Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos-live:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Release validation
+        run: npm run release-validate
+      - name: Inspect native prerequisites
+        run: node scripts/setup-cli.mjs inspect
+
+      - name: Install launchd watchdog
+        run: bash scripts/install-autostart-macos.sh
+
+      - name: Verify live health
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4317/health > health.json; then
+              break
+            fi
+            sleep 1
+          done
+          cat health.json
+          node -e "const h=require('./health.json'); if(!h.ok||h.version!=='1.3.0'||!h.pid) process.exit(1)"
+
+      - name: Verify launchd KeepAlive restart
+        shell: bash
+        run: |
+          old_pid=$(node -p "require('./health.json').pid")
+          kill -9 "$old_pid"
+          rm -f restarted-health.json
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4317/health > restarted-health.json; then
+              new_pid=$(node -p "require('./restarted-health.json').pid")
+              if [[ "$new_pid" != "$old_pid" ]]; then
+                break
+              fi
+            fi
+            sleep 1
+          done
+          cat restarted-health.json
+          new_pid=$(node -p "require('./restarted-health.json').pid")
+          if [[ "$new_pid" == "$old_pid" ]]; then
+            echo "launchd did not replace the killed watchdog PID" >&2
+            exit 1
+          fi
+          node -e "const h=require('./restarted-health.json'); if(!h.ok||h.version!=='1.3.0'||!h.pid) process.exit(1)"
+          launchctl print "gui/$UID/com.chatsentinel.watchdog" | head -80
+
+      - name: Cleanup launchd service
+        if: always()
+        run: bash scripts/uninstall-autostart-macos.sh
