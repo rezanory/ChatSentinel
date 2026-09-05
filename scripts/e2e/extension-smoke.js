@@ -445,7 +445,8 @@ async function commandManagerSuite() {
 }
 
 async function waitCommand(commandId, expectedStatus) {
-  const deadline = Date.now() + 15000;
+  // Command polling is backed by a 30s MV3 alarm; allow one full alarm interval plus bounded execution time.
+  const deadline = Date.now() + 45000;
   while (Date.now() < deadline) {
     const data = await fetch(`${WATCHDOG}/commands?limit=200`).then(r => r.json());
     const command = data.commands?.find(row => row.commandId === commandId);
