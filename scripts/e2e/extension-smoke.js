@@ -163,6 +163,7 @@ async function detectorSuite() {
   await verifyDecision('running', 'WAIT');
   await verifyDecision('retry', 'ESCALATE');
   await verifyDecision('delivery-timeout', 'RETRY_MESSAGE_DELIVERY');
+  await verifyDecision('delivery-timeout-red', 'RETRY_MESSAGE_DELIVERY');
   await verifyDecision('delivery-timeout-history', 'WAIT');
   await verifyDecision('interrupt', 'CONTINUE_SAME_CHAT');
   await verifyDecision('interrupt-history', 'WAIT');
@@ -170,7 +171,7 @@ async function detectorSuite() {
   await verifyDecision('frozen', 'RELOAD_AND_RECHECK');
   await verifyDecision('rootidentity', 'WAIT');
   await verifyTabFallback();
-  console.log('detector/recovery + identity E2E: 10/10 PASS');
+  console.log('detector/recovery + identity E2E: 11/11 PASS');
 }
 
 async function actuatorSuite() {
@@ -182,6 +183,15 @@ async function actuatorSuite() {
   const deliveryRetryCount = await evalValue(deliveryTarget, 'Number(document.body.dataset.deliveryRetryCount || 0)');
   assert.equal(deliveryRetryCount, 1, 'delivery retry must be incident-deduplicated during cooldown');
   console.log('message delivery timeout native Retry actuator: PASS');
+
+  const redDeliveryTarget = await openPage(fixtureUrl('delivery-timeout-red', {
+    auto: '1', cid: `${RUN}-delivery-timeout-red-auto`
+  }));
+  await waitEval(redDeliveryTarget, "document.body.dataset.deliveryRedRetryClicked === '1'");
+  await sleep(1200);
+  const redDeliveryRetryCount = await evalValue(redDeliveryTarget, 'Number(document.body.dataset.deliveryRedRetryCount || 0)');
+  assert.equal(redDeliveryRetryCount, 1, 'red composer delivery retry must be incident-deduplicated during cooldown');
+  console.log('red composer timeout sibling Retry actuator: PASS');
 
   await postJson('/conversation/register', {
     conversationId: `${RUN}-retry-auto`,
