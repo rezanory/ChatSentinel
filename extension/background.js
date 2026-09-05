@@ -1,8 +1,17 @@
+importScripts('session-snapshot-store.js', 'session-restore-controller.js');
+
 const DEFAULT_WATCHDOG = 'http://127.0.0.1:4317';
 const CLIENT_HEADERS = Object.freeze({
   'content-type': 'application/json',
   'x-chatsentinel-client': 'extension'
 });
+const sessionSnapshotStore = new ChatSentinelSessionSnapshots.SessionSnapshotStore({ storage: chrome.storage.local });
+const sessionRestoreController = new ChatSentinelSessionRestore.SessionRestoreController({
+  chromeApi: chrome, snapshotStore: sessionSnapshotStore, apiRequest,
+  onError: error => console.warn('ChatSentinel session restore:', error)
+});
+globalThis.sessionSnapshotStore = sessionSnapshotStore;
+globalThis.sessionRestoreController = sessionRestoreController;
 
 importScripts('components/tab-launch-guard/controller.js', 'command-executor.js');
 
@@ -10,26 +19,30 @@ const crashRecoveryInFlight = new Set();
 const crashRecoveryPending = new Map();
 
 chrome.action.onClicked.addListener(tab => togglePanelInTab(tab));
-chrome.tabs.onRemoved.addListener(tabId => {
+chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   const guard = globalThis.ChatSentinelTabLaunchGuard;
   chrome.storage.local.remove([`pendingProject:${tabId}`, guard?.crashRecoveryKey?.(tabId)]).catch(() => {});
-  detachRemovedFallback(tabId).catch(() => {});
+  if (!removeInfo?.isWindowClosing) detachRemovedFallback(tabId).catch(() => {});
+  sessionRestoreController.scheduleCaptureAll(removeInfo?.isWindowClosing ? 'window-closing' : 'tab-removed');
 });
+chrome.runtime.onStartup.addListener(() => sessionRestoreController.restoreAfterBrowserRestart()
+  .then(() => sessionRestoreController.captureAllProjects('post-startup').catch(() => {}))
+  .catch(error => console.warn('ChatSentinel startup restore:', error)));
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  const guard = globalThis.ChatSentinelTabLaunchGuard;
-  if (!guard) return;
-  const titleFailure = typeof changeInfo.title === 'string'
-    ? guard.classifyTab({ ...tab, title: changeInfo.title })
-    : null;
-  const urlFailure = typeof changeInfo.url === 'string'
-    ? guard.classifyTab({ ...tab, url: changeInfo.url, title: '' })
-    : null;
-  const failure = titleFailure?.crashed ? titleFailure : (urlFailure?.crashed ? urlFailure : null);
-  if (!failure) return;
+  if (changeInfo.url || changeInfo.title || changeInfo.pinned !== undefined || changeInfo.groupId !== undefined) sessionRestoreController.scheduleCaptureAll('tab-updated');
+  const guard = globalThis.ChatSentinelTabLaunchGuard; if (!guard) return;
+  const titleFailure = typeof changeInfo.title === 'string' ? guard.classifyTab({ ...tab, title: changeInfo.title }) : null;
+  const urlFailure = typeof changeInfo.url === 'string' ? guard.classifyTab({ ...tab, url: changeInfo.url, title: '' }) : null;
+  const failure = titleFailure?.crashed ? titleFailure : (urlFailure?.crashed ? urlFailure : null); if (!failure) return;
   const observed = { ...tab, url: changeInfo.url || tab?.url, title: changeInfo.title || tab?.title };
-  recoverCrashedProjectTab(tabId, observed, failure).catch(error =>
-    console.warn('ChatSentinel crashed-tab recovery failed', error));
+  recoverCrashedProjectTab(tabId, observed, failure).catch(error => console.warn('ChatSentinel crashed-tab recovery failed', error));
 });
+chrome.tabs.onMoved.addListener(() => sessionRestoreController.scheduleCaptureAll('tab-moved'));
+chrome.tabs.onAttached.addListener(() => sessionRestoreController.scheduleCaptureAll('tab-attached'));
+chrome.tabs.onDetached.addListener(() => sessionRestoreController.scheduleCaptureAll('tab-detached'));
+chrome.tabGroups.onCreated.addListener(() => sessionRestoreController.scheduleCaptureAll('group-created'));
+chrome.tabGroups.onUpdated.addListener(() => sessionRestoreController.scheduleCaptureAll('group-updated'));
+chrome.tabGroups.onMoved.addListener(() => sessionRestoreController.scheduleCaptureAll('group-moved'));
 
 async function detachRemovedFallback(tabId) {
   const conversationId = `tab:${tabId}`;
@@ -246,11 +259,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function handleMessage(message, sender) {
   if (message.type === 'CHATSENTINEL_SIGNAL') return forwardSignal(message, sender.tab);
-  if (message.type === 'CHATSENTINEL_API') return apiRequest(message.route, message.method, message.body, watchdogBase(message.pageUrl));
+  if (message.type === 'CHATSENTINEL_API') {
+    const result = await apiRequest(message.route, message.method, message.body, watchdogBase(message.pageUrl));
+    if (result?.ok && /^\/projects\/(?:upsert|attach|detach|delete)$/.test(message.route || '')) sessionRestoreController.scheduleCaptureAll('project-change');
+    return result;
+  }
   if (message.type === 'CHATSENTINEL_TAB_CONTEXT') return tabContext(sender.tab);
   if (message.type === 'CHATSENTINEL_FOCUS_TAB') return focusTab(message.tabId, message.url);
   if (message.type === 'CHATSENTINEL_GROUP_PROJECT_TABS') return groupProjectTabs(message.project);
   if (message.type === 'CHATSENTINEL_NEW_PROJECT_CHAT') return newProjectChat(message.project, sender.tab);
+  if (message.type === 'CHATSENTINEL_LIST_SESSION_SNAPSHOTS') return { ok: true, snapshots: await sessionRestoreController.listSnapshots(message.projectId) };
+  if (message.type === 'CHATSENTINEL_CAPTURE_SESSION_SNAPSHOT') return { ok: true, snapshot: await sessionRestoreController.captureProjectById(message.projectId, message.reason || 'manual') };
+  if (message.type === 'CHATSENTINEL_RESTORE_SESSION_SNAPSHOT') return sessionRestoreController.restoreSnapshot(message.snapshotId, { entryIds: message.entryIds, conversationIds: message.conversationIds, activate: message.activate !== false });
+  if (message.type === 'CHATSENTINEL_SWITCH_PROJECT') return sessionRestoreController.switchProject(message.projectId);
   return { ok: false, error: 'unknown-message' };
 }
 
