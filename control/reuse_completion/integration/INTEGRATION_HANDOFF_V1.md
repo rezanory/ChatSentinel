@@ -1,0 +1,57 @@
+# Reuse Completion Integration Handoff V1
+
+Status: **GREEN INTEGRATION CANDIDATE — PRE-RELEASE ONLY**
+
+Repository: `rezanory/ChatSentinel`
+Worktree: `C:\ChatSentinel`
+Branch: `integration/reuse-completion-v1`
+Baseline reconciled local=remote: `d7214d334d11f6ea8590aab78f875db35da5a337`
+Validated implementation SHA: `b6e65a68d003366e2a49518bc404749671c77a90`
+Validated implementation tree: `2128e026e2f99ad05b472f6b98133fe519ff573a`
+Date: 2026-09-05
+
+## Exact green candidates serially unioned
+
+| Lane | Exact lane candidate | Integration commit |
+|---|---|---|
+| C1 session/snapshot restore | `88a0be40279adb4bc3148f5c507b0efc3de4e6ec` | `59e42b0` |
+| C3 search/export/import | `82d1052ec64a3bb849daf4625392e2c736144d0a` | `beab08e` |
+| C4 audit/history/folders | `22a1a4a2f5c8c65eadf361d41971076bbd59ba8b` | `9ab012d` |
+| Chat Control | `46317fabcfe3047fddb603080ea527295496bab5` | `f267cab` |
+| Integration Controller | `964b28de914a08023481b7133ce2346f38e3202b` | `645b87b` |
+| Reuse research/provenance | `9f25213` | `33f660e` |
+
+Integration syntax-gate coverage was then fixed forward in `b6e65a6` so the standalone Integration Controller and Chat Control component are covered by `npm run check`.
+## Component-First integration boundaries
+
+- C1 keeps snapshot storage/restore in standalone components; only `background.js` composition was reconciled with existing crash/runtime recovery.
+- C3 keeps search and portable bundle logic standalone; only shared server/console composition was unioned.
+- C4 keeps audit history and project tree standalone; only shared server/console composition was unioned.
+- Chat Control owns Focus/Reload/Close/Replace policy; the executor is a thin adapter. Integration preserved `replaceFromTabId` prompt-ownership transfer.
+- Integration Controller remains standalone under `src/components/integration-controller/`.
+- Research lane changes are provenance/docs/licenses only.
+
+## Integration-scope fix-forwards
+
+- C1 shared `background.js` and `package.json` conflicts resolved additively without dropping crash/runtime recovery.
+- C3 shared server/test conflict exposed a missing test-block closure; fixed and revalidated.
+- C4 shared console/server conflicts were composed additively so C3 search/import/export remained intact.
+- Chat Control adapter retained current single-delivery ownership semantics during replacement.
+- Syntax gate was extended to cover newly integrated standalone controller modules.
+
+A final aggregate run initially observed one browser-E2E assertion during concurrent validation. Investigation showed another E2E process occupying fixed test port `4318` with a stale test watchdog; after isolation, the complete browser E2E passed. This was recorded as test-environment contention, not suppressed as a product failure.
+## Issue #3 acceptance evidence
+
+1. Restart persistence/restore: C1 session restore tests cover browser restart reuse/create behavior and project switching.
+2. Automatic snapshots/selective restore: snapshot-store and restore-controller tests cover dedupe, retention, selective restore, failure isolation and safe URL policy.
+3. Durable/retryable queue: command-queue lifecycle tests, server command API tests and durable supervisor browser E2E are green.
+4. Search/filter: project-search focused tests and integrated search route/UI are green.
+5. Export/import: portable-bundle tests and preview-before-apply server integration are green.
+6. Audit/history UI + folders: audit-history/project-tree focused tests, server integration and project console composition are green.
+7. No critical third-party runtime dependency: security policy reports zero runtime dependencies.
+8. Provenance: `THIRD_PARTY_NOTICES.md`, `LICENSES/`, `docs/SOURCE_INVENTORY.md` and `control/reuse_completion/research/PROVENANCE_MANIFEST_V1.json` are updated.
+9. Existing recovery/security/E2E: aggregate unit, syntax, policy, browser E2E, production smoke, npm audit and PowerShell parser gates are required on the exact docs-bound SHA before push.
+
+## Release boundary
+
+Issue #3 remains **OPEN**. This handoff does not authorize a `main` merge, Issue #3 closure, Production tag, installer rollout, or production activation. The integration branch may be pushed only after the docs-bound exact SHA passes the complete independent gate set and local/remote candidate heads are reconciled.

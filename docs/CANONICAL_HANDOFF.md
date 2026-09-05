@@ -73,3 +73,15 @@ Verified completed lane tabs are disposable execution surfaces: O1/CCTL/R/C4/ICT
 A live anti-stall bug was found after cleanup: missing C1/C3 chats could not be recreated because CREATE_LANE_CHAT used a permanent idempotency key from an earlier successful generation. The Project Orchestrator component now advances a deterministic createGeneration from succeeded create history so later missing chats receive a new idempotency key. Full integration gates remain mandatory.
 
 The project-level recovery follow-up for Connection interrupted. Waiting for the complete answer remains tracked separately in the ICTL handoff; implementation is still pending and must preserve continuation through delivery of the complete answer.
+
+## v1.2 Reuse Completion — Integration Candidate Checkpoint — 2026-09-05
+
+The reuse-completion integration lane reconciled from `d7214d334d11f6ea8590aab78f875db35da5a337` and serially unioned only exact green candidates for C1 session restore, C3 search/export/import, C4 audit/history/folders, standalone Chat Control, standalone Integration Controller, and the reuse research/provenance lane. Component-First ownership was preserved; shared conflicts were resolved only at composition boundaries.
+
+Validated implementation checkpoint before this documentation binding: `b6e65a68d003366e2a49518bc404749671c77a90` (tree `2128e026e2f99ad05b472f6b98133fe519ff573a`). Exact candidate mapping, integration fix-forwards and Issue #3 evidence are recorded in `control/reuse_completion/integration/INTEGRATION_HANDOFF_V1.md`; validation contention and release protections are recorded in `control/reuse_completion/integration/ANTI_BLOCKER_V1.md`.
+
+Issue #3 acceptance surfaces are now represented in the integration candidate: browser-restart project session restore; automatic snapshots and selective restore; durable/retryable command queue; project/chat search and filters; preview-before-apply configuration/recovery export-import; audit/history and nested folders; zero critical third-party runtime dependency; and updated license/provenance evidence. The exact docs-bound SHA must still pass the complete independent gate set before the integration branch is pushed as green.
+
+The earlier lifecycle-checkpoint sentence saying the `Connection interrupted. Waiting for the complete answer` recovery follow-up was still pending is superseded. Response-completion recovery and message-delivery-timeout recovery were already integrated before this lane and their focused/unit/browser E2E continuations are green in the current candidate; they remain distinct from browser renderer/tab-crash recovery.
+
+Issue #3 remains **OPEN**. No `main` merge, Issue #3 closure, Production tag, installer rollout, or production activation is authorized by this checkpoint.
