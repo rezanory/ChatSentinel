@@ -71,3 +71,11 @@ Watchgoose remains optional and outside the critical recovery path. Its check ca
 12. One-time unpacked extension Reload in the user's normal Chrome profile followed by live in-page console/project-group verification.
 
 Third-party attribution is tracked in `THIRD_PARTY_NOTICES.md`, `LICENSES/` and `docs/SOURCE_INVENTORY.md`.
+
+## v1.3.0 superseding production-readiness status — 2026-09-05
+
+The v1.1 material above is historical. ChatSentinel v1.3.0 has now completed the cross-platform implementation acceptance boundary on exact implementation `a65c436462d0a4fe3ac6524ae5374112b84a83bc` (tree `fb1288bf52f7bcdcb4de9da0049226dc0e65a809`). Windows release gates are fully green at 179/179 tests plus version/syntax/policy/shell/browser-E2E/production-smoke/audit/diff, PowerShell parser 7/7 and repository-boundary scan 0. Existing Windows live production acceptance confirms Watchdog 1.3.0, supervisor self-restart, unpacked extension 1.3.0, and the in-page Full Project Mode surface.
+
+GitHub-hosted macOS 15 ARM64 run `33980902560` is fully green on the same exact main SHA through release validation, setup inspection, launchd installation, live health 1.3.0, KeepAlive restart to a new PID, and cleanup. Rollback 1.2.1 remains checksum-verified and separately installable.
+
+Production tagging remains fail-closed until the documentation-bound exact SHA repeats all independent gates, exact main repeats macOS Live Acceptance, and the exact v1.3.0 archive is checksum-verified. When those gates pass, the Full Project Mode prohibition on Production tagging is satisfied for v1.3.0.

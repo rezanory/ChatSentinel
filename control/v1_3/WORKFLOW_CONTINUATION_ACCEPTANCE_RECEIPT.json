@@ -19,5 +19,6 @@
   "diff_check": "PASS",
   "powershell_parser": "PASS: 7/7",
   "release_authorized": false,
-  "next_gate": "revalidate docs-bound exact SHA before push"
+  "next_gate": "superseded by final cross-platform acceptance binding",
+  "superseded_by": "control/v1_3/FINAL_CROSS_PLATFORM_ACCEPTANCE_RECEIPT.json"
 }

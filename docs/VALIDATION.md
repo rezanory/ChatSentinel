@@ -68,3 +68,9 @@ Shipping manifest is copied to a temporary test extension and only that temporar
 - clean tree: PASS
 - full release validation: PASS
 - PowerShell parser suite: PASS
+
+## v1.3.0 final cross-platform acceptance — 2026-09-05
+
+The v1.1 sequence above is historical. Final v1.3.0 accepted implementation `a65c436462d0a4fe3ac6524ae5374112b84a83bc` (tree `fb1288bf52f7bcdcb4de9da0049226dc0e65a809`) passes the complete Windows collect-all release gates: 179/179 unit/integration tests, version consistency, syntax/check, security policy, shell parsing, complete browser E2E, production smoke, npm audit with 0 vulnerabilities, diff check, Windows PowerShell parser 7/7, and repository-boundary scan 0.
+
+macOS 15 ARM64 live run `33980902560` on the same exact main SHA passes release validation, setup inspection, launchd install, live `/health` version 1.3.0, deliberate KeepAlive restart to a new PID, and cleanup. The documentation-only final acceptance binding must itself be independently revalidated before the Production tag/release is created.

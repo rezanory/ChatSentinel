@@ -35,3 +35,7 @@ Source tree: `83cca14a44a77c01d36bb5350fbb37fed7818966`
 Stable `C:\ChatSentinel` remains untouched on v1.2.1. `main`, production tags and traffic are not changed by this candidate lane.
 
 This handoff binding is documentation-only. The docs-bound exact SHA must receive the same complete independent gate set before push; only that pushed SHA is the final lane candidate.
+
+## Superseded by final v1.3 cross-platform acceptance
+
+The workflow-continuation candidate above is now incorporated into final accepted implementation `a65c436462d0a4fe3ac6524ae5374112b84a83bc` (tree `fb1288bf52f7bcdcb4de9da0049226dc0e65a809`). Windows collect-all validation is green at 179/179 tests plus all release gates, PowerShell parser 7/7 and repository-boundary scan 0. macOS 15 ARM64 live run `33980902560` is also green through release validation, setup inspection, launchd install, live 1.3.0 health, KeepAlive restart and cleanup. Canonical final evidence is `FINAL_CROSS_PLATFORM_ACCEPTANCE_RECEIPT.json` and `FINAL_CROSS_PLATFORM_ACCEPTANCE_HANDOFF.md`.

@@ -30,3 +30,7 @@ Windows Runner process discovery uses `tasklist`; Remote Desktop Commander disco
 ## Windows test teardown stabilization
 
 A final aggregate run exposed a Windows-only `EBUSY` during temporary server-directory removal after the multi-project integration test had already passed. Test cleanup now uses a bounded retry helper only for `EBUSY`, `EPERM`, and `ENOTEMPTY`; unrelated cleanup errors still fail immediately and the final retry still fails closed. The complete server integration file passed three consecutive runs after this harness-only stabilization. Product runtime behavior is unchanged.
+
+## Environmental acceptance resolved — 2026-09-05
+
+The earlier physical-Mac limitation is superseded by authorized GitHub-hosted macOS 15 ARM64 live acceptance. Exact-main run `33980902560` passed release validation, setup inspection, launchd install, live `/health` on 1.3.0, deliberate KeepAlive restart to a new PID, and cleanup. There is no remaining cross-platform environmental blocker for the v1.3.0 release path. Optional self-hosted runner registration remains intentionally outside mandatory product acceptance because it requires a target repository and separate registration authorization.

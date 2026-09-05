@@ -68,3 +68,9 @@ The exact pre-final candidate exposed one teardown-only Windows `EBUSY` while de
 The earlier notes requiring a new exact final revalidation are superseded by the pushed integrated candidate lineage. Exact docs-bound validation basis `bd2271f033db44ded8b8f285639bc437720875c7` passed 175/175 unit tests plus version, syntax/check, security policy, shell parser, browser E2E, production smoke, zero-vulnerability audit, diff, cross-repository-boundary, and Windows PowerShell parser 7/7 gates.
 
 Windows code/runtime acceptance is green. macOS code-level parser/unit coverage remains green, but macOS live-device deployment acceptance is still explicitly pending because no Mac device is connected; this must not be represented as a failed Windows or source-development gate.
+
+## Final macOS hosted live acceptance — 2026-09-05
+
+The pending macOS boundary above is now superseded. GitHub-hosted macOS 15 ARM64 run `33980902560` executed against exact main `a65c436462d0a4fe3ac6524ae5374112b84a83bc` (tree `fb1288bf52f7bcdcb4de9da0049226dc0e65a809`) and completed green. Release validation, native setup inspection and launchd installation all passed. `/health` returned ChatSentinel `1.3.0` with PID `15345`; after deliberate SIGKILL, launchd KeepAlive restored a healthy `1.3.0` Watchdog as PID `15632`; cleanup then removed `com.chatsentinel.watchdog` successfully.
+
+The exact accepted implementation also passes the Windows collect-all release gates at 179/179 tests, PowerShell parser 7/7 and repository-boundary scan 0. Final release freeze now requires only the documentation-bound exact-SHA revalidation/archive/tag sequence recorded in `FINAL_CROSS_PLATFORM_ACCEPTANCE_HANDOFF.md`.

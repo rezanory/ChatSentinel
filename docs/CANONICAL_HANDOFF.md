@@ -131,3 +131,13 @@ The exact source candidate passed 175/175 unit tests plus version, syntax, polic
 GitHub Issue #3 (Production reuse completion) is now CLOSED / completed with final acceptance evidence. The integrated docs-bound validation basis is `bd2271f033db44ded8b8f285639bc437720875c7` (tree `40e237963eedaea499481969a080a845a733a9e4`), with 175/175 unit tests and all independent version, syntax, policy, shell, browser E2E, production smoke, zero-vulnerability audit, diff, cross-repository-boundary and 7/7 PowerShell parser gates green.
 
 ChatSentinel and every attached project remain repository-separated. Stable v1.2.1 is untouched. The only remaining non-source boundary is macOS live-device deployment validation because no Mac device is connected; Windows/source development acceptance is complete.
+
+## v1.3.0 Final Cross-Platform Acceptance Binding — 2026-09-05
+
+The macOS-pending statement immediately above is superseded. Final accepted implementation `a65c436462d0a4fe3ac6524ae5374112b84a83bc` (tree `fb1288bf52f7bcdcb4de9da0049226dc0e65a809`) was exact `main` and exact remote branch head during acceptance. Windows collect-all validation passes **179/179** tests plus version consistency, syntax/check, security policy, shell parser, browser E2E, production smoke, npm audit with 0 vulnerabilities and diff check; Windows PowerShell parser is **7/7 PASS** and the external-roadmap repository-boundary scan is **0 matches**.
+
+GitHub-hosted macOS 15 ARM64 run `33980902560` is fully green on that exact SHA: release validation PASS, native setup inspection PASS, launchd install PASS, `/health` returned version `1.3.0` with PID `15345`, deliberate SIGKILL was recovered by KeepAlive as PID `15632`, and launchd cleanup PASS. The prior macOS failures were fix-forwarded through portable archive/state/test behavior, Chrome for Testing discovery, and exact ChatSentinel service-worker binding.
+
+Rollback v1.2.1 remains preserved at `C:\ChatSentinel-worktrees\ChatSentinel-versions\ChatSentinel-1.2.1`; its manifest SHA/tree and source/extension/bundle SHA256 values were independently rechecked unchanged. Canonical final acceptance evidence is `control/v1_3/FINAL_CROSS_PLATFORM_ACCEPTANCE_RECEIPT.json` plus `control/v1_3/FINAL_CROSS_PLATFORM_ACCEPTANCE_HANDOFF.md`.
+
+This section is documentation-only relative to the accepted implementation identity. Before Production tagging, the exact docs-bound commit must receive the complete independent gate set, promotion to `main` must remain ancestry-safe, exact main must receive macOS Live Acceptance again, and the exact v1.3.0 source/extension/Git-bundle archive must be checksum-verified.
