@@ -179,3 +179,39 @@ test('multi-project registry isolates parallel chat groups and persists them', a
   assert.equal(context.config.tabId, 12);
   await app.close();
 });
+
+test('search and portable import/export routes enforce preview-before-apply', async t => {
+  const { dir, config } = await testConfig();
+  t.after(() => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
+  const app = await createWatchdogServer(config);
+  const base = await listen(app);
+  const post = async (route, body, expected = 200) => {
+    const response = await fetch(`${base}${route}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+    });
+    const json = await response.json();
+    assert.equal(response.status, expected, `${route}: ${JSON.stringify(json)}`);
+    return json;
+  };
+
+  const project = (await post('/projects/upsert', {
+    name: 'Portable Alpha', projectPath: dir, operationClass: 'read_only', autoRecovery: true, color: 'green'
+  })).project;
+  await post('/projects/attach', { projectId: project.projectId, conversationId: 'portable-chat', title: 'Needle search title', tabId: 44 });
+  await post('/signal', { conversationId: 'portable-chat', state: 'RUNNING', tabId: 44 });
+
+  const search = await fetch(`${base}/search?query=needle&projectId=${encodeURIComponent(project.projectId)}&state=RUNNING`).then(r => r.json());
+  assert.equal(search.count, 1);
+  assert.equal(search.results[0].conversationId, 'portable-chat');
+
+  const exported = await fetch(`${base}/portable/export?projectId=${encodeURIComponent(project.projectId)}`).then(r => r.json());
+  assert.equal(exported.bundle.projects.length, 1);
+  assert.equal(exported.bundle.recoverySnapshots['portable-chat'].state, 'RUNNING');
+  const preview = await post('/portable/import/preview', { bundle: exported.bundle });
+  assert.equal(preview.preview.projectsUpdate, 1);
+  const rejected = await post('/portable/import/apply', { bundle: exported.bundle }, 400);
+  assert.equal(rejected.error, 'preview-token-required');
+  const applied = await post('/portable/import/apply', { bundle: exported.bundle, previewToken: preview.previewToken, applyRecoverySnapshots: true });
+  assert.equal(applied.ok, true);
+  await app.close();
+});
