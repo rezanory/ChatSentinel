@@ -55,3 +55,22 @@ A final aggregate run initially observed one browser-E2E assertion during concur
 ## Release boundary
 
 Issue #3 remains **OPEN**. This handoff does not authorize a `main` merge, Issue #3 closure, Production tag, installer rollout, or production activation. The integration branch may be pushed only after the docs-bound exact SHA passes the complete independent gate set and local/remote candidate heads are reconciled.
+## Post-Reload live acceptance fix-forward
+
+A real Chrome reload acceptance was performed against the pushed candidate `1394df4898872d4c480c307c3fa93f4dd354bc0c`.
+The MV3 worker woke correctly, claimed commands, and the watchdog/extension channel was healthy. A stale `tabId` Focus command with a valid fallback URL successfully recovered by opening/focusing a replacement tab, but live inspection showed the durable project registry still retained the stale old `tabId`.
+
+This integration-scope defect was fixed in `cf1d908d4d32077b7c80219a4e01db4aed5ca160` by adding standalone `ChatSentinelChatMembershipRepair` and thin executor composition. After a stale Focus fallback succeeds, the stable conversation membership is reattached to the recovered tab, lane/branch attribution is preserved, project grouping is refreshed best-effort, and retry idempotency continues to use the existing Chat Control progress marker.
+
+Validation before documentation binding:
+- focused Chat Control + membership repair: 8/8 PASS;
+- aggregate unit suite: 120/120 PASS;
+- syntax/check: PASS;
+- security policy: PASS, zero runtime dependencies;
+- browser E2E: PASS;
+- production smoke: PASS;
+- npm audit: 0 vulnerabilities;
+- PowerShell parser suite: 6/6 PASS;
+- diff-check: PASS.
+
+The exact docs-bound SHA after this evidence update must still pass the same complete gate set before push/freeze. Issue #3 remains OPEN until the final live reload acceptance of this fix is observed.

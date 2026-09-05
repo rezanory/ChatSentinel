@@ -23,3 +23,10 @@ Browser E2E uses fixed test port `4318`. A concurrent validation process can tem
 - No Production tag or production activation is allowed here.
 - Exact lane candidates, not moving branch tips, are the integration inputs.
 - If any docs-bound independent gate fails, do not describe or push that HEAD as the green integration candidate.
+## Live stale-tab membership blocker — resolved in integration scope
+
+Post-Reload live acceptance proved the MV3 worker and durable command channel were active, but exposed one stale-focus lifecycle gap: URL fallback could recover a missing tab while leaving the project registry bound to the old `tabId`. Repeated Focus could therefore create another replacement.
+
+Fix-forward: `cf1d908d4d32077b7c80219a4e01db4aed5ca160` adds a standalone membership-repair component. It reattaches the stable conversation to the recovered tab after successful stale Focus and preserves existing lane metadata. The pre-fix live registry was repaired once manually to prevent additional duplicate recovery during validation.
+
+Release anti-blocker: the extension must be Reloaded once after this fix is pushed, then a live stale-focus acceptance must show `membershipRepaired: true` and the registry `tabId` must equal the recovered tab. Until that exact observation, do not close Issue #3 or call the project Production Ready.

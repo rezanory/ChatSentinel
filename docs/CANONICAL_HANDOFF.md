@@ -85,3 +85,11 @@ Issue #3 acceptance surfaces are now represented in the integration candidate: b
 The earlier lifecycle-checkpoint sentence saying the `Connection interrupted. Waiting for the complete answer` recovery follow-up was still pending is superseded. Response-completion recovery and message-delivery-timeout recovery were already integrated before this lane and their focused/unit/browser E2E continuations are green in the current candidate; they remain distinct from browser renderer/tab-crash recovery.
 
 Issue #3 remains **OPEN**. No `main` merge, Issue #3 closure, Production tag, installer rollout, or production activation is authorized by this checkpoint.
+
+## v1.2 Post-Reload stale-focus membership checkpoint — 2026-09-05
+
+Live acceptance after reloading ChatSentinel 1.1.1 confirmed the MV3 service worker wakes and claims durable commands. It also exposed one final integration lifecycle gap: stale Focus URL fallback recovered a replacement tab but did not migrate the durable project membership from the old `tabId`.
+
+Integration fix `cf1d908d4d32077b7c80219a4e01db4aed5ca160` adds standalone stale-focus membership repair and preserves Component-First Chat Control boundaries. Pre-doc validation is fully green at 120/120 unit tests plus syntax, policy, browser E2E, production smoke, zero-vulnerability audit, PowerShell parser and diff checks.
+
+This supersedes any claim that the prior pushed integration SHA alone was ready for release. One final extension Reload plus live registry-migration acceptance is still required after the new docs-bound green SHA is pushed. Issue #3 remains OPEN; no main merge or Production tag is authorized yet.
