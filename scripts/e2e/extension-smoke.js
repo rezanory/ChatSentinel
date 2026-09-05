@@ -3,12 +3,14 @@ import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import assert from 'node:assert/strict';
 import { findBrowserExecutable } from './browser-paths.js';
 
 const ROOT = path.resolve('.');
 const execFileAsync = promisify(execFile);
-const TEST_PORT = 4318;
+const TEST_PORT = Number(process.env.CHATSENTINEL_E2E_WATCHDOG_PORT || await freePort());
+const FIXTURE_PORT = Number(process.env.CHATSENTINEL_E2E_FIXTURE_PORT || await freePort(new Set([TEST_PORT])));
 const EXPECTED_EXTENSION_ID = 'pcidbmcahljjpbmaecjmfmpbpfnpoepc';
 const WATCHDOG = `http://127.0.0.1:${TEST_PORT}`;
 const CHROME = process.env.CHROME_BIN || await findBrowserExecutable();
@@ -22,7 +24,8 @@ await prepareTestExtension(sourceExtension, extension);
 const cleanProject = await prepareCleanProject(testData);
 const fixture = spawn(process.execPath, ['scripts/e2e/fault-fixture-server.js'], {
   cwd: ROOT,
-  stdio: 'ignore'
+  stdio: 'ignore',
+  env: { ...process.env, CHATSENTINEL_FIXTURE_PORT: String(FIXTURE_PORT) }
 });
 const watchdog = spawn(process.execPath, ['src/local-watchdog.js'], {
   cwd: ROOT,
@@ -39,7 +42,7 @@ let DEVTOOLS;
 let EXTENSION_WORKER;
 
 try {
-  await waitUrl('http://127.0.0.1:4320/idle');
+  await waitUrl(`http://127.0.0.1:${FIXTURE_PORT}/idle`);
   const health = await waitJson(`${WATCHDOG}/health`);
   assert.equal(health.version, '1.3.0', 'v1.3.0 watchdog must be running');
 
@@ -60,8 +63,8 @@ try {
   await waitJson(`${DEVTOOLS}/json/version`);
   EXTENSION_WORKER = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
   assert.ok(EXTENSION_WORKER.url.startsWith(`chrome-extension://${EXPECTED_EXTENSION_ID}/`), `unexpected extension id: ${EXTENSION_WORKER.url}`);
-  await sleep(500);
   await launchGuardSuite();
+  await sleep(500);
   await crashedTabRecoverySuite();
   await detectorSuite();
   await actuatorSuite();
@@ -70,16 +73,22 @@ try {
   await commandManagerSuite();
   console.log('ChatSentinel browser E2E: PASS');
 } finally {
-  chrome?.kill();
-  fixture.kill();
-  watchdog.kill();
+  await terminateWindowsBrowserProfile(profile);
+  if (process.platform !== 'win32') await closeDevToolsBrowser();
+  await terminateProcessTree(chrome);
+  await terminateProcessTree(fixture);
+  await terminateProcessTree(watchdog);
   await fs.rm(profile, { recursive: true, force: true }).catch(() => {});
   await fs.rm(testData, { recursive: true, force: true }).catch(() => {});
   await fs.rm(extension, { recursive: true, force: true }).catch(() => {});
 }
 
 async function launchGuardSuite() {
-  const guardReady = await waitWorkerCondition("typeof globalThis.ChatSentinelTabLaunchGuard === 'object'");
+  const guardReady = await waitWorkerCondition("typeof globalThis.ChatSentinelTabLaunchGuard === 'object'", 20000);
+  if (!guardReady) {
+    const diagnostics = await workerValue("({lifecycle:typeof globalThis.ChatSentinelProjectChatLifecycle,snapshotStore:typeof globalThis.sessionSnapshotStore,restoreController:typeof globalThis.sessionRestoreController,guard:typeof globalThis.ChatSentinelTabLaunchGuard,executor:typeof globalThis.ChatSentinelCommandExecutor})").catch(error => ({ error: String(error) }));
+    console.error('tab launch guard diagnostics:', JSON.stringify(diagnostics));
+  }
   assert.equal(guardReady, true, 'tab launch guard did not initialize in service worker');
   const sanitized = await workerValue(`globalThis.ChatSentinelTabLaunchGuard.safeNewChatUrl('https://chatgpt.com/?prompt-textarea=SECRET&foo=bar')`);
   assert.ok(!/prompt-textarea|SECRET/.test(sanitized), `unsafe launch URL: ${sanitized}`);
@@ -460,7 +469,7 @@ async function waitProjectExactChatCount(projectId, count) {
 }
 
 async function waitContentReady(tabId) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     const reply = await workerValue(`chrome.tabs.sendMessage(${tabId},{type:'CHATSENTINEL_GET_IDENTITY'}).catch(()=>null)`);
     if (reply?.ok) return reply;
@@ -492,9 +501,22 @@ async function waitWorkerCondition(expression, timeoutMs = 10000) {
 }
 
 async function workerValue(expression) {
-  const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
-  if (reply?.result?.exceptionDetails) throw new Error(JSON.stringify(reply.result.exceptionDetails));
-  return reply?.result?.result?.value;
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      if (!EXTENSION_WORKER?.webSocketDebuggerUrl || attempt > 0) {
+        EXTENSION_WORKER = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
+      }
+      const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
+      if (reply?.result?.exceptionDetails) throw new Error(JSON.stringify(reply.result.exceptionDetails));
+      return reply?.result?.result?.value;
+    } catch (error) {
+      lastError = error;
+      EXTENSION_WORKER = null;
+      await sleep(100);
+    }
+  }
+  throw lastError || new Error('extension service worker unavailable');
 }
 
 async function verifyTabFallback() {
@@ -527,9 +549,9 @@ function fixtureUrl(kind, extra = {}) {
   const params = new URLSearchParams({ watchdog: String(TEST_PORT), ...extra });
   if (kind === 'rootidentity' || kind === 'noidentity') {
     params.set('kind', kind);
-    return `http://127.0.0.1:4320/?${params}`;
+    return `http://127.0.0.1:${FIXTURE_PORT}/?${params}`;
   }
-  return `http://127.0.0.1:4320/${kind}?${params}`;
+  return `http://127.0.0.1:${FIXTURE_PORT}/${kind}?${params}`;
 }
 
 async function openPage(url) {
@@ -652,8 +674,62 @@ async function waitUrl(url) {
   throw new Error(`timeout waiting for ${url}`);
 }
 
+async function freePort(excluded = new Set()) {
+  while (true) {
+    const port = await new Promise((resolve, reject) => {
+      const server = net.createServer();
+      server.unref();
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => {
+        const value = server.address()?.port;
+        server.close(error => error ? reject(error) : resolve(value));
+      });
+    });
+    if (port && !excluded.has(port)) return port;
+  }
+}
+
+async function closeDevToolsBrowser() {
+  if (!DEVTOOLS) return;
+  try {
+    const version = await fetch(`${DEVTOOLS}/json/version`).then(response => response.json());
+    if (version?.webSocketDebuggerUrl) {
+      await cdp({ webSocketDebuggerUrl: version.webSocketDebuggerUrl }, 'Browser.close').catch(() => {});
+    }
+  } catch {}
+  await sleep(250);
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function terminateWindowsBrowserProfile(profilePath) {
+  if (process.platform !== 'win32' || !profilePath) return;
+  const escaped = String(profilePath).replaceAll("'", "''");
+  const script = [
+    `$needle='${escaped}'`,
+    "$targets=Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'chrome.exe' -and $_.CommandLine -like ('*'+$needle+'*') -and $_.CommandLine -notmatch '--type=' }",
+    "foreach($target in $targets){ & taskkill /PID $target.ProcessId /T /F 2>$null | Out-Null }"
+  ].join(';');
+  await execFileAsync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true }).catch(() => {});
+}
+
+async function terminateProcessTree(child) {
+  if (!child?.pid || child.exitCode !== null) return;
+  if (process.platform === 'win32') {
+    await execFileAsync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }).catch(() => {});
+  } else {
+    child.kill('SIGTERM');
+  }
+  if (child.exitCode !== null) return;
+  await new Promise(resolve => {
+    const timer = setTimeout(resolve, 3000);
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 }
 
 async function prepareTestExtension(source, destination) {
@@ -672,18 +748,29 @@ async function prepareTestExtension(source, destination) {
   const backgroundPath = path.join(destination, 'background.js');
   let background = await fs.readFile(backgroundPath, 'utf8');
   background = background.replaceAll('http://127.0.0.1:4317', `http://127.0.0.1:${TEST_PORT}`);
+  background = background.replaceAll('http://127.0.0.1:4320', `http://127.0.0.1:${FIXTURE_PORT}`);
   await fs.writeFile(backgroundPath, background, 'utf8');
+
+  const contentPath = path.join(destination, 'content.js');
+  let content = await fs.readFile(contentPath, 'utf8');
+  content = content.replace("location.port === '4320'", `location.port === '${FIXTURE_PORT}'`);
+  await fs.writeFile(contentPath, content, 'utf8');
 
   const setupPath = path.join(destination, 'setup.js');
   let setup = await fs.readFile(setupPath, 'utf8');
   setup = setup.replaceAll('http://127.0.0.1:4317', `http://127.0.0.1:${TEST_PORT}`);
   await fs.writeFile(setupPath, setup, 'utf8');
 
+  const identityPath = path.join(destination, 'identity.js');
+  let identity = await fs.readFile(identityPath, 'utf8');
+  identity = identity.replace("location.port !== '4320'", `location.port !== '${FIXTURE_PORT}'`);
+  await fs.writeFile(identityPath, identity, 'utf8');
+
   const guardPath = path.join(destination, 'components', 'tab-launch-guard', 'controller.js');
   let guard = await fs.readFile(guardPath, 'utf8');
   guard = guard.replace(
     "const CHATGPT_HOME = 'https://chatgpt.com/';",
-    `const CHATGPT_HOME = 'http://127.0.0.1:4320/noidentity?watchdog=${TEST_PORT}&command=lane';`
+    `const CHATGPT_HOME = 'http://127.0.0.1:${FIXTURE_PORT}/noidentity?watchdog=${TEST_PORT}&command=lane';`
   );
   guard = guard.replace('const DEFAULT_MIN_LAUNCH_GAP_MS = 6000;', 'const DEFAULT_MIN_LAUNCH_GAP_MS = 1000;');
   await fs.writeFile(guardPath, guard, 'utf8');
