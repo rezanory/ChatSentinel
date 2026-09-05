@@ -8,7 +8,7 @@ export async function enqueueCommand(store, input) {
   pruneCommands(store);
   if (input.idempotencyKey) {
     const existing = Object.values(store.commands).find(row =>
-      row.idempotencyKey === input.idempotencyKey && !['failed', 'cancelled'].includes(row.status));
+      row.idempotencyKey === input.idempotencyKey);
     if (existing) return { command: existing, deduplicated: true };
   }
 

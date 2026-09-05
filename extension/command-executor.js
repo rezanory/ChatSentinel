@@ -38,10 +38,13 @@
         result
       });
     } catch (error) {
-      const retryAfterMs = Math.min(15000, 750 * Math.max(1, Number(command.attempts || 1)));
+      const requestedDelay = Number(error?.retryAfterMs);
+      const retryAfterMs = Number.isFinite(requestedDelay)
+        ? Math.max(250, Math.min(60000, requestedDelay))
+        : Math.min(15000, 750 * Math.max(1, Number(command.attempts || 1)));
       await commandApi('/commands/complete', 'POST', {
         commandId: command.commandId,
-        outcome: 'retry',
+        outcome: error?.terminal === true ? 'failed' : 'retry',
         error: String(error?.message || error),
         retryAfterMs
       }).catch(() => {});
@@ -69,29 +72,73 @@
     }
   }
 
-  async function createLaneChat(command, workerId) {
+  async function createLaneChat(command, workerId, options = {}) {
+    const guard = globalThis.ChatSentinelTabLaunchGuard;
+    if (!guard) throw new Error('tab-launch-guard-unavailable');
     const payload = command.payload || {};
     const project = await getProject(payload.projectId);
     if (!project) throw new Error('project-not-found');
     const progress = command.progress || {};
     let tab = progress.tabId ? await safeGetTab(progress.tabId) : null;
 
+    if (tab && progress.launchFailureReason === 'chatgpt-rate-limited') {
+      await chrome.tabs.reload(tab.id).catch(() => {});
+      await sleep(guard.DEFAULT_PAGE_SETTLE_MS);
+    }
+
     if (!tab) {
-      tab = await chrome.tabs.create({
-        url: payload.url || 'https://chatgpt.com/',
-        active: false
+      const safeUrl = guard.safeNewChatUrl(payload.url);
+      const slot = await guard.acquireLaunchSlot(chrome.storage.local, sleep);
+      tab = await chrome.tabs.create({ url: safeUrl, active: false });
+      await progressCommand(command, workerId, {
+        step: 'tab-created',
+        tabId: tab.id,
+        windowId: tab.windowId,
+        launchAt: slot.launchAt,
+        launchWaitMs: slot.waitMs,
+        launchUrl: safeUrl,
+        launchUrlSanitized: guard.containsPromptInUrl(payload.url) || Boolean(payload.url && payload.url !== safeUrl)
       });
-      await progressCommand(command, workerId, { step: 'tab-created', tabId: tab.id, windowId: tab.windowId });
+      await sleep(guard.DEFAULT_PAGE_SETTLE_MS);
+    }
+
+    let currentTab = await safeGetTab(tab.id);
+    const metadata = guard.classifyTab(currentTab || tab);
+    if (!metadata.healthy) {
+      await handleLaunchFailure(command, workerId, tab, metadata);
+    }
+
+    try {
+      await ensureContent(tab.id);
+    } catch (error) {
+      currentTab = await safeGetTab(tab.id);
+      const afterFailure = guard.classifyTab(currentTab || tab);
+      if (!afterFailure.healthy) await handleLaunchFailure(command, workerId, tab, afterFailure);
+      const retry = retryableError('content-script-not-ready', guard.retryDelay('content-script-not-ready', command.attempts));
+      retry.cause = error;
+      throw retry;
+    }
+
+    const launchState = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_GET_LAUNCH_STATE' })
+      .catch(() => null);
+    if (launchState?.rateLimited) {
+      await handleRateLimitedLaunch(command, workerId, tab);
+    }
+    if (launchState?.crashed) {
+      await handleLaunchFailure(command, workerId, tab, launchState);
+    }
+    if (command.progress?.launchFailureReason) {
+      await progressCommand(command, workerId, { step: 'launch-healthy', launchFailureReason: null });
     }
 
     const fallbackId = `tab:${tab.id}`;
-    if (!progress.attached) {
+    if (!command.progress?.attached) {
       const attached = await commandApi('/projects/attach', 'POST', {
         projectId: project.projectId,
         conversationId: fallbackId,
         tabId: tab.id,
         title: payload.laneName || payload.laneId || tab.title || 'ChatSentinel lane',
-        url: tab.url || payload.url || 'https://chatgpt.com/',
+        url: (await safeGetTab(tab.id))?.url || guard.safeNewChatUrl(),
         laneId: payload.laneId,
         laneName: payload.laneName,
         branch: payload.branch,
@@ -101,26 +148,56 @@
       await progressCommand(command, workerId, { step: 'attached', tabId: tab.id, attached: true });
     }
 
-    if (project.groupTabs !== false && !progress.grouped) {
+    if (project.groupTabs !== false && !command.progress?.grouped) {
       const refreshed = await getProject(project.projectId);
       const grouped = await groupProjectTabs(refreshed);
       if (!grouped?.ok) throw new Error(grouped?.error || 'tab-group-failed');
       await progressCommand(command, workerId, { step: 'grouped', tabId: tab.id, grouped: true });
     }
 
-    await ensureContent(tab.id);
-    if (!progress.promptSent) {
+    const preSendState = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_GET_LAUNCH_STATE' })
+      .catch(() => null);
+    if (preSendState?.rateLimited) await handleRateLimitedLaunch(command, workerId, tab);
+    if (preSendState?.crashed) await handleLaunchFailure(command, workerId, tab, preSendState);
+
+    let ownership = null;
+    if (!command.progress?.promptSent) {
+      ownership = await guard.claimPromptOwnership(
+        chrome.storage.local,
+        payload,
+        tab.id,
+        safeGetTab,
+        { commandId: command.commandId, replaceFromTabId: options.replaceFromTabId }
+      );
+      if (!ownership.allowed) {
+        await commandApi('/projects/detach', 'POST', { conversationId: `tab:${tab.id}`, forget: true }).catch(() => {});
+        await chrome.tabs.remove(tab.id).catch(() => {});
+        return {
+          projectId: project.projectId,
+          tabId: ownership.owner?.tabId,
+          laneId: payload.laneId,
+          branch: payload.branch,
+          promptSent: false,
+          deduplicated: true,
+          reason: ownership.reason,
+          ownerTabId: ownership.owner?.tabId
+        };
+      }
       const sent = await chrome.tabs.sendMessage(tab.id, {
         type: 'CHATSENTINEL_SEND_PROMPT',
         commandId: command.commandId,
         prompt: payload.prompt
       }).catch(error => ({ ok: false, error: String(error) }));
-      if (!sent?.ok) throw new Error(sent?.error || sent?.reason || 'prompt-send-failed');
+      if (!sent?.ok) {
+        await guard.releasePromptOwnership(chrome.storage.local, ownership, tab.id, safeGetTab).catch(() => {});
+        throw new Error(sent?.error || sent?.reason || 'prompt-send-failed');
+      }
+      await guard.markPromptDelivered(chrome.storage.local, ownership, tab.id).catch(() => {});
       await progressCommand(command, workerId, { step: 'prompt-sent', tabId: tab.id, promptSent: true });
     }
 
     const identity = await waitForStableIdentity(tab.id, fallbackId);
-    if (identity && identity !== fallbackId && identity !== progress.stableConversationId) {
+    if (identity && identity !== fallbackId && identity !== command.progress?.stableConversationId) {
       const stableAttach = await commandApi('/projects/attach', 'POST', {
         projectId: project.projectId,
         conversationId: identity,
@@ -144,21 +221,40 @@
       conversationId: identity || fallbackId,
       laneId: payload.laneId,
       branch: payload.branch,
-      promptSent: true
+      promptSent: true,
+      launchUrl: command.progress?.launchUrl,
+      launchUrlSanitized: Boolean(command.progress?.launchUrlSanitized)
     };
   }
 
   async function sendPrompt(command, workerId) {
-    const tab = await resolveTargetTab(command.payload || {});
+    const guard = globalThis.ChatSentinelTabLaunchGuard;
+    if (!guard) throw new Error('tab-launch-guard-unavailable');
+    const payload = command.payload || {};
+    const tab = await resolveTargetTab(payload);
     if (!tab) throw new Error('target-tab-not-found');
     await ensureContent(tab.id);
     if (!command.progress?.promptSent) {
+      const ownership = await guard.claimPromptOwnership(
+        chrome.storage.local,
+        payload,
+        tab.id,
+        safeGetTab,
+        { commandId: command.commandId }
+      );
+      if (!ownership.allowed) {
+        return { tabId: ownership.owner?.tabId, promptSent: false, deduplicated: true, reason: ownership.reason };
+      }
       const sent = await chrome.tabs.sendMessage(tab.id, {
         type: 'CHATSENTINEL_SEND_PROMPT',
         commandId: command.commandId,
-        prompt: command.payload.prompt
+        prompt: payload.prompt
       }).catch(error => ({ ok: false, error: String(error) }));
-      if (!sent?.ok) throw new Error(sent?.error || sent?.reason || 'prompt-send-failed');
+      if (!sent?.ok) {
+        await guard.releasePromptOwnership(chrome.storage.local, ownership, tab.id, safeGetTab).catch(() => {});
+        throw new Error(sent?.error || sent?.reason || 'prompt-send-failed');
+      }
+      await guard.markPromptDelivered(chrome.storage.local, ownership, tab.id).catch(() => {});
       await progressCommand(command, workerId, { step: 'prompt-sent', tabId: tab.id, promptSent: true });
     }
     return { tabId: tab.id, promptSent: true };
@@ -194,12 +290,47 @@
 
   async function replaceCommand(command, workerId) {
     const oldTab = await resolveTargetTab(command.payload || {});
-    const result = await createLaneChat(command, workerId);
+    const result = await createLaneChat(command, workerId, { replaceFromTabId: oldTab?.id });
+    if (result?.deduplicated) {
+      return { ...result, replacedTabId: oldTab?.id, oldClosed: false };
+    }
     if (command.payload?.closeOld && oldTab?.id && oldTab.id !== result.tabId) {
       await chrome.tabs.remove(oldTab.id).catch(() => {});
       return { ...result, replacedTabId: oldTab.id, oldClosed: true };
     }
     return { ...result, replacedTabId: oldTab?.id, oldClosed: false };
+  }
+
+  async function handleLaunchFailure(command, workerId, tab, detail = {}) {
+    const guard = globalThis.ChatSentinelTabLaunchGuard;
+    const count = Number(command.progress?.replacementCount || 0);
+    if (!guard.replacementAllowed(count)) {
+      await chrome.tabs.remove(tab?.id).catch(() => {});
+      const error = retryableError(`${detail.reason || 'launch-failed'}-replacement-budget-exhausted`, 0, true);
+      throw error;
+    }
+    await chrome.tabs.remove(tab?.id).catch(() => {});
+    await progressCommand(command, workerId, guard.replacementProgress(command.progress, detail.reason || 'launch-failed'));
+    throw retryableError(detail.reason || 'launch-failed', guard.retryDelay(detail.reason, command.attempts));
+  }
+
+  async function handleRateLimitedLaunch(command, workerId, tab) {
+    const guard = globalThis.ChatSentinelTabLaunchGuard;
+    const count = Number(command.progress?.rateLimitRecheckCount || 0);
+    if (!guard.rateLimitRecheckAllowed(count)) {
+      await chrome.tabs.remove(tab?.id).catch(() => {});
+      await progressCommand(command, workerId, { tabId: null, step: 'launch-rate-limit-exhausted' });
+      throw retryableError('chatgpt-rate-limit-budget-exhausted', 0, true);
+    }
+    await progressCommand(command, workerId, guard.rateLimitProgress(command.progress));
+    throw retryableError('chatgpt-rate-limited', guard.retryDelay('chatgpt-rate-limited', command.attempts));
+  }
+
+  function retryableError(message, retryAfterMs, terminal = false) {
+    const error = new Error(message);
+    error.retryAfterMs = retryAfterMs;
+    error.terminal = terminal;
+    return error;
   }
 
   async function progressCommand(command, workerId, progress) {
@@ -247,7 +378,7 @@
       if (attempt === 2) {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['components/message-delivery-recovery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'project-console.js']
+          files: ['components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'project-console.js']
         }).catch(() => {});
       }
       await sleep(500);
