@@ -1,8 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { detectLaneCompletion, decideLaneAction, decideProjectAction, OrchestratorAction } from '../src/components/project-orchestrator/decision.js';
+import { deriveLaneCommandHistory, laneCreateIdempotencyKey } from '../src/components/project-orchestrator/controller.js';
 
 const lane = { laneId: 'C1', branch: 'feat/c1', baselineSha: 'base', prompt: 'go' };
+
+test('missing chat rotates CREATE_LANE_CHAT idempotency generation after a prior success', () => {
+  const commands = [
+    { type: 'CREATE_LANE_CHAT', status: 'succeeded', idempotencyKey: 'orchestrator:p1:C1:create' },
+    { type: 'CREATE_LANE_CHAT', status: 'failed', idempotencyKey: 'orchestrator:p1:C1:create:retry' },
+    { type: 'SEND_PROMPT', status: 'failed', idempotencyKey: 'orchestrator:p1:C1:fix:t1' }
+  ];
+  const history = deriveLaneCommandHistory(commands, { projectId: 'p1', laneId: 'C1' });
+  assert.equal(history.createGeneration, 1);
+  assert.equal(history.fixAttempts, 1);
+  assert.equal(laneCreateIdempotencyKey('p1', { laneId: 'C1', createGeneration: 0 }), 'orchestrator:p1:C1:create:0');
+  assert.equal(laneCreateIdempotencyKey('p1', { laneId: 'C1', createGeneration: 1 }), 'orchestrator:p1:C1:create:1');
+});
 
 test('lane completion requires an advanced remote branch and idle chat', () => {
   const complete = detectLaneCompletion({ lane, session: { state: 'IDLE' }, git: { remoteHead: 'next', clean: true, localHead: 'next' } });

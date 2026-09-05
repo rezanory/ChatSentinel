@@ -56,3 +56,13 @@ Superseding validation for O1 decision/controller changes: focused orchestrator 
 Live command history exposed that repeated successful/failed FIX commands were not being counted toward `maxFixAttempts`. O1 now derives per-lane FIX attempt count from durable command history. For idle/no-branch-progress lanes, reaching the configured budget deterministically changes the next action from `FIX` to `REPLACE`, preventing infinite prompt loops.
 
 Validation after this change: focused orchestrator tests 7/7 PASS, full `npm test` 48/48 PASS, `npm run check` PASS.
+
+## Post-green live lifecycle addendum - 2026-09-05
+
+Git-verified completed O1/CCTL/R/C4/ICTL tabs were closed through the existing durable CLOSE_CHAT path and stale project registrations were removed. Current/integration and incomplete lane tabs are not cleanup targets.
+
+Live cleanup exposed a durable idempotency bug: after an earlier successful CREATE_LANE_CHAT, a later missing chat deduplicated forever. O1 now derives createGeneration from succeeded lane-create history and keys NEXT creation with that generation. A focused regression test covers missing-chat recreation; FIX-attempt accounting is unchanged.
+
+Operational cleanup rule: only after a lane is Git-verified complete and no longer needed, close its tab through Chat Control / Durable Command Queue and forget stale registration. Never close the current/integration chat or an incomplete required lane.
+
+The separate Connection interrupted. Waiting for the complete answer recovery follow-up remains tracked in the ICTL handoff and must be resolved in recovery/continuation scope, not folded into O1.

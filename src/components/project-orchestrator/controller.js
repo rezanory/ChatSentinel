@@ -34,9 +34,8 @@ export async function tickProjectOrchestration(store, projectId, { logger } = {}
       .sort((a, b) => Date.parse(b.updatedAt || b.createdAt || 0) - Date.parse(a.updatedAt || a.createdAt || 0));
     const activeCommand = laneCommands.find(cmd => ['pending','running'].includes(cmd.status));
     const lastCommand = laneCommands[0] || null;
-    const fixPrefix = `orchestrator:${projectId}:${lane.laneId}:fix:`;
-    const fixAttempts = laneCommands.filter(cmd => String(cmd.idempotencyKey || '').startsWith(fixPrefix) && ['succeeded','failed'].includes(cmd.status)).length;
-    const effectiveLane = { ...lane, fixAttempts };
+    const history = deriveLaneCommandHistory(laneCommands, { projectId, laneId: lane.laneId });
+    const effectiveLane = { ...lane, ...history };
     const decision = decideLaneAction({ lane: effectiveLane, session, completion, activeCommand, lastCommand });
     rows.push({ lane: effectiveLane, conversationId, session, git, completion, decision });
   }
@@ -61,7 +60,7 @@ async function materializeDecision(store, project, plan, rows, decision) {
   const lane = row.lane;
   const common = { projectId: project.projectId, laneId: lane.laneId, laneName: lane.laneName, branch: lane.branch, role: lane.role };
   if (decision.action === OrchestratorAction.NEXT) {
-    return enqueueCommand(store, { type: 'CREATE_LANE_CHAT', idempotencyKey: `orchestrator:${project.projectId}:${lane.laneId}:create`, payload: { ...common, prompt: lane.prompt } });
+    return enqueueCommand(store, { type: 'CREATE_LANE_CHAT', idempotencyKey: laneCreateIdempotencyKey(project.projectId, lane), payload: { ...common, prompt: lane.prompt } });
   }
   if (decision.action === OrchestratorAction.REPLACE) {
     return enqueueCommand(store, { type: 'REPLACE_CHAT', idempotencyKey: `orchestrator:${project.projectId}:${lane.laneId}:replace:${row.session?.updatedAt || 'none'}`, payload: { ...common, conversationId: row.conversationId, prompt: lane.replacePrompt || lane.prompt, closeOld: true } });
@@ -71,6 +70,18 @@ async function materializeDecision(store, project, plan, rows, decision) {
     return enqueueCommand(store, { type, idempotencyKey: `orchestrator:${project.projectId}:${lane.laneId}:fix:${row.session?.updatedAt || 'none'}`, payload: type === 'RELOAD_CHAT' ? { ...common, conversationId: row.conversationId } : { ...common, conversationId: row.conversationId, prompt: lane.fixPrompt || 'Continue from the latest canonical handoff. Reconcile GitHub/local first, fix-forward all in-scope failures, run full suites without fail-fast, push, and hand off.' } });
   }
   return null;
+}
+
+export function deriveLaneCommandHistory(laneCommands = [], { projectId, laneId } = {}) {
+  const fixPrefix = `orchestrator:${projectId}:${laneId}:fix:`;
+  const fixAttempts = laneCommands.filter(cmd => String(cmd?.idempotencyKey || '').startsWith(fixPrefix) && ['succeeded','failed'].includes(cmd?.status)).length;
+  const createGeneration = laneCommands.filter(cmd => cmd?.type === 'CREATE_LANE_CHAT' && cmd?.status === 'succeeded').length;
+  return { fixAttempts, createGeneration };
+}
+
+export function laneCreateIdempotencyKey(projectId, lane = {}) {
+  const generation = Math.max(0, Number(lane.createGeneration || 0));
+  return `orchestrator:${projectId}:${lane.laneId}:create:${generation}`;
 }
 
 function normalizeLane(lane) {

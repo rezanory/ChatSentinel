@@ -65,3 +65,11 @@ O1 authoritative lane is green on `feat/project-orchestrator-v1` from baseline `
 Implementation candidate: `fdcfb5ae2a09809052c20f26c311d1b655582309` (tree `63ceb6428119f527c214d9e2111258d63c23960e`). It adds a Component-First Autonomous Project Orchestrator that detects lane completion, decides `NEXT/FIX/REPLACE/INTEGRATE`, and materializes actions through the existing Durable Command Queue/extension executor. Full O1 evidence and exact next action: `control/reuse_completion/orchestrator/O1_HANDOFF.md`.
 
 Issue #3 remains OPEN. This checkpoint does **not** authorize Production tagging, main merge, or self-certification of independent gates.
+
+## v1.2 Live Lifecycle / Tab Cleanup Checkpoint - 2026-09-05
+
+Verified completed lane tabs are disposable execution surfaces: O1/CCTL/R/C4/ICTL were reconciled against Git/handoffs, closed through durable CLOSE_CHAT, and stale project registrations were removed. Incomplete C1/C3 and the current/integration chat remain protected from cleanup.
+
+A live anti-stall bug was found after cleanup: missing C1/C3 chats could not be recreated because CREATE_LANE_CHAT used a permanent idempotency key from an earlier successful generation. The Project Orchestrator component now advances a deterministic createGeneration from succeeded create history so later missing chats receive a new idempotency key. Full integration gates remain mandatory.
+
+The project-level recovery follow-up for Connection interrupted. Waiting for the complete answer remains tracked separately in the ICTL handoff; implementation is still pending and must preserve continuation through delivery of the complete answer.
