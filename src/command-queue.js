@@ -32,11 +32,12 @@ export async function enqueueCommand(store, input) {
   return { command, deduplicated: false };
 }
 
-export async function claimCommand(store, { workerId, leaseMs = 60000 }) {
+export async function claimCommand(store, { workerId, leaseMs = 60000, excludeTypes = [] }) {
   pruneCommands(store);
   const nowMs = Date.now();
+  const excluded = new Set((excludeTypes || []).map(value => String(value || '').toUpperCase()));
   const candidates = Object.values(store.commands)
-    .filter(command => isClaimable(command, nowMs))
+    .filter(command => isClaimable(command, nowMs) && !excluded.has(String(command.type || '').toUpperCase()))
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
   const command = candidates[0];
   if (!command) return null;

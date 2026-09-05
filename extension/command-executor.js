@@ -3,6 +3,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
   const ALARM = 'chatsentinel-command-poll';
   const LEASE_MS = 60000;
   const MAX_BATCH = 6;
+  const RATE_SENSITIVE_TYPES = Object.freeze(['CREATE_LANE_CHAT', 'SEND_PROMPT', 'RELOAD_CHAT', 'REPLACE_CHAT']);
   let polling = false;
 
   chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
@@ -17,11 +18,21 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     polling = true;
     try {
       const workerId = await getWorkerId();
-      for (let index = 0; index < MAX_BATCH; index += 1) {
-        const claimed = await commandApi('/commands/claim', 'POST', { workerId, leaseMs: LEASE_MS });
+      const requestRate = globalThis.ChatSentinelRequestRateLimit;
+      const initialGate = await requestRate?.gate?.(chrome.storage.local) || { allowed: true, level: 0 };
+      const batchLimit = initialGate.allowed
+        ? (requestRate?.batchLimit?.(initialGate.level, MAX_BATCH) || MAX_BATCH)
+        : MAX_BATCH;
+      for (let index = 0; index < batchLimit; index += 1) {
+        const gate = await requestRate?.gate?.(chrome.storage.local) || { allowed: true };
+        const claimBody = { workerId, leaseMs: LEASE_MS };
+        if (!gate.allowed) claimBody.excludeTypes = RATE_SENSITIVE_TYPES;
+        const claimed = await commandApi('/commands/claim', 'POST', claimBody);
         const command = claimed?.command;
         if (!command) break;
+        const rateSensitive = isRateSensitiveCommand(command.type);
         await executeClaimed(command, workerId);
+        if (rateSensitive) await requestRate?.markRequest?.(chrome.storage.local);
       }
     } catch (error) {
       console.warn('ChatSentinel command poll failed', error);
@@ -120,7 +131,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     const launchState = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_GET_LAUNCH_STATE' })
       .catch(() => null);
     if (launchState?.rateLimited) {
-      await handleRateLimitedLaunch(command, workerId, tab);
+      await handleRateLimitedLaunch(command, workerId, tab, launchState);
     }
     if (launchState?.crashed) {
       await handleLaunchFailure(command, workerId, tab, launchState);
@@ -156,7 +167,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
 
     const preSendState = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_GET_LAUNCH_STATE' })
       .catch(() => null);
-    if (preSendState?.rateLimited) await handleRateLimitedLaunch(command, workerId, tab);
+    if (preSendState?.rateLimited) await handleRateLimitedLaunch(command, workerId, tab, preSendState);
     if (preSendState?.crashed) await handleLaunchFailure(command, workerId, tab, preSendState);
 
     if (!command.progress?.promptSent) {
@@ -224,6 +235,9 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     const tab = await resolveTargetTab(payload);
     if (!tab) throw new Error('target-tab-not-found');
     await ensureContent(tab.id);
+    const preSendState = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_GET_LAUNCH_STATE' }).catch(() => null);
+    if (preSendState?.rateLimited) await handleRateLimitedLaunch(command, workerId, tab, preSendState);
+    if (preSendState?.crashed) await handleLaunchFailure(command, workerId, tab, preSendState);
     if (!command.progress?.promptSent) {
       const delivery = await sendPromptWithVerification(command, workerId, tab, payload);
       if (delivery.deduplicated) {
@@ -414,8 +428,13 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     throw retryableError(detail.reason || 'launch-failed', guard.retryDelay(detail.reason, command.attempts));
   }
 
-  async function handleRateLimitedLaunch(command, workerId, tab) {
+  async function handleRateLimitedLaunch(command, workerId, tab, detail = {}) {
     const guard = globalThis.ChatSentinelTabLaunchGuard;
+    const requestRate = globalThis.ChatSentinelRequestRateLimit;
+    const state = await requestRate?.recordRateLimit?.(
+      chrome.storage.local,
+      detail.requestRateLimitIncidentKey || ('launch:' + String(tab?.id || 'unknown') + ':' + String(command.commandId || ''))
+    );
     const count = Number(command.progress?.rateLimitRecheckCount || 0);
     if (!guard.rateLimitRecheckAllowed(count)) {
       await chrome.tabs.remove(tab?.id).catch(() => {});
@@ -423,7 +442,15 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
       throw retryableError('chatgpt-rate-limit-budget-exhausted', 0, true);
     }
     await progressCommand(command, workerId, guard.rateLimitProgress(command.progress));
-    throw retryableError('chatgpt-rate-limited', guard.retryDelay('chatgpt-rate-limited', command.attempts));
+    const adaptiveDelay = Math.max(
+      guard.retryDelay('chatgpt-rate-limited', command.attempts),
+      Math.min(60_000, Math.max(0, Number(state?.cooldownUntil || 0) - Date.now()))
+    );
+    throw retryableError('chatgpt-rate-limited', adaptiveDelay);
+  }
+
+  function isRateSensitiveCommand(type) {
+    return RATE_SENSITIVE_TYPES.includes(String(type || ''));
   }
 
   function retryableError(message, retryAfterMs, terminal = false) {
@@ -478,7 +505,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
       if (attempt === 2) {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['components/runtime-context-guard/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js']
+          files: ['components/runtime-context-guard/controller.js', 'components/request-rate-limit/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js']
         }).catch(() => {});
       }
       await sleep(500);

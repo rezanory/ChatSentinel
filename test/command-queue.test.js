@@ -75,3 +75,24 @@ test('command lease/progress/retry lifecycle is resumable', async t => {
   assert.equal(rows[0].status, 'succeeded');
   assert.equal(rows[0].result.tabId, 42);
 });
+
+test('claim can skip rate-sensitive commands without consuming their attempts', async t => {
+  const { dir, store } = await makeStore();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const blocked = await enqueueCommand(store, {
+    type: 'CREATE_LANE_CHAT',
+    payload: { projectId: 'p1', prompt: 'rate-sensitive' }
+  });
+  const local = await enqueueCommand(store, {
+    type: 'GROUP_PROJECT_TABS',
+    payload: { projectId: 'p1' }
+  });
+  const claimed = await claimCommand(store, {
+    workerId: 'worker-a',
+    leaseMs: 5000,
+    excludeTypes: ['CREATE_LANE_CHAT', 'SEND_PROMPT', 'RELOAD_CHAT', 'REPLACE_CHAT']
+  });
+  assert.equal(claimed.commandId, local.command.commandId);
+  assert.equal(store.commands[blocked.command.commandId].attempts, 0);
+  assert.equal(store.commands[blocked.command.commandId].status, 'pending');
+});

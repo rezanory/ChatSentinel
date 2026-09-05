@@ -13,8 +13,16 @@
     }
     if (message?.type === 'CHATSENTINEL_GET_LAUNCH_STATE') {
       const guard = globalThis.ChatSentinelTabLaunchGuard;
+      const requestRate = globalThis.ChatSentinelRequestRateLimit;
+      const rateObservation = requestRate?.inspect?.(document) || { active: false, incidentKey: '' };
+      const rateDismissal = rateObservation.active ? requestRate?.dismiss?.(document) : null;
       const state = guard?.inspectPage?.(document) || { healthy: false, rateLimited: false, crashed: false, reason: 'launch-guard-unavailable' };
-      sendResponse({ ok: true, ...state });
+      sendResponse({
+        ok: true,
+        ...state,
+        requestRateLimitIncidentKey: rateObservation.incidentKey || '',
+        requestRateLimitDismissed: Boolean(rateDismissal?.dismissed)
+      });
       return;
     }
     if (message?.type === 'CHATSENTINEL_PROMPT_DELIVERY_STATE') {
@@ -78,6 +86,11 @@
     const stopVisible = buttons.some(value => /stop generating|stop/i.test(value));
     const interruption = globalThis.ChatSentinelResponseCompletion?.inspect?.(document);
     const connectionInterrupted = interruption?.active === true;
+    const requestRateApi = globalThis.ChatSentinelRequestRateLimit;
+    const requestRateObservation = requestRateApi?.inspect?.(document) || { active: false };
+    const requestRateDismissal = requestRateObservation.active
+      ? requestRateApi?.dismiss?.(document)
+      : null;
     const delivery = globalThis.ChatSentinelMessageDeliveryRecovery?.inspect?.(document);
     const retryVisible = !delivery?.timeoutMarkerPresent && buttons.some(value => /retry|try again/i.test(value));
     const messageDeliveryTimedOut = delivery?.active === true;
@@ -99,6 +112,10 @@
       messageDeliveryTimedOut,
       messageDeliveryIncidentKey: delivery?.incidentKey,
       messageDeliveryRetryCount,
+      requestRateLimited: requestRateObservation.active === true,
+      requestRateLimitIncidentKey: requestRateObservation.incidentKey || '',
+      requestRateLimitDismissed: Boolean(requestRateDismissal?.dismissed),
+      requestRateLimitDismissLabel: requestRateDismissal?.dismissLabel || requestRateObservation.dismissLabel || '',
       connectionInterrupted,
       interruptionSource: interruption?.source,
       interruptionIncidentKey: interruption?.incidentKey,

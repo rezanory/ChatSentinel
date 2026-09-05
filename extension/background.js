@@ -13,7 +13,7 @@ const sessionRestoreController = new ChatSentinelSessionRestore.SessionRestoreCo
 globalThis.sessionSnapshotStore = sessionSnapshotStore;
 globalThis.sessionRestoreController = sessionRestoreController;
 
-importScripts('components/tab-launch-guard/controller.js', 'command-executor.js');
+importScripts('components/request-rate-limit/controller.js', 'components/tab-launch-guard/controller.js', 'command-executor.js');
 
 const crashRecoveryInFlight = new Set();
 const crashRecoveryPending = new Map();
@@ -246,7 +246,7 @@ async function togglePanelInTab(tab) {
   if (response?.ok) return response;
   await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    files: ['components/runtime-context-guard/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js']
+    files: ['components/runtime-context-guard/controller.js', 'components/request-rate-limit/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js']
   });
   response = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_TOGGLE_PANEL' }).catch(error => ({ ok: false, error: String(error) }));
   return response || { ok: false, error: 'panel-toggle-failed' };
@@ -321,6 +321,13 @@ async function forwardSignal(signal, tab) {
   await attachPendingProject(tabId, normalized);
   await migrateTabIdentity(tabId, conversationId, normalized);
 
+  const requestRate = globalThis.ChatSentinelRequestRateLimit;
+  if (normalized.requestRateLimited) {
+    await requestRate?.recordRateLimit?.(chrome.storage.local, normalized.requestRateLimitIncidentKey || ('tab:' + tabId));
+  } else if (normalized.state === 'IDLE' && !normalized.connectionInterrupted && !normalized.messageDeliveryTimedOut) {
+    await requestRate?.noteHealthy?.(chrome.storage.local);
+  }
+
   const response = await apiRequest('/signal', 'POST', {
     ...normalized,
     retryCount: await effectiveRetryCount(normalized)
@@ -335,6 +342,14 @@ async function forwardSignal(signal, tab) {
 
 async function maybeAct(result, tabId, payload) {
   if (!result?.decision || !tabId) return { executed: false, reason: 'decision-or-tab-missing' };
+  if (payload?.requestRateLimited) {
+    return {
+      executed: false,
+      reason: 'request-rate-limit-active',
+      dismissed: Boolean(payload.requestRateLimitDismissed),
+      incidentKey: payload.requestRateLimitIncidentKey || ''
+    };
+  }
   const fixtureAuto = isFixtureAuto(payload.url);
   const projectEnabled = Boolean(result.project?.autoRecovery);
   if (!fixtureAuto && !projectEnabled) {

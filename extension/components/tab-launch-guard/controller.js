@@ -5,7 +5,7 @@
   const DEFAULT_MIN_LAUNCH_GAP_MS = 6000;
   const DEFAULT_PAGE_SETTLE_MS = 1500;
   const MAX_REPLACEMENTS = 2;
-  const MAX_RATE_LIMIT_RECHECKS = 3;
+  const MAX_RATE_LIMIT_RECHECKS = 5;
   const CRASH_RECOVERY_PREFIX = 'chatsentinel:tab-crash-recovery:';
   const CRASH_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
   const CRASH_URL_PREFIXES = Object.freeze([

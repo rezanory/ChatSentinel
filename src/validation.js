@@ -119,7 +119,15 @@ export function validateCommandClaim(body) {
   if (!isRecord(body)) return invalid('json-object-required');
   const workerId = cleanString(body.workerId, 160);
   if (!workerId) return invalid('workerId-required');
-  return { ok: true, value: { workerId, leaseMs: finiteNumber(body.leaseMs ?? 60000, 5000, 120000) } };
+  const rawExcluded = body.excludeTypes === undefined ? [] : body.excludeTypes;
+  if (!Array.isArray(rawExcluded) || rawExcluded.length > COMMAND_TYPES.size) return invalid('command-exclude-types-invalid');
+  const excludeTypes = [...new Set(rawExcluded.map(value => cleanString(value, 80).toUpperCase()))];
+  if (excludeTypes.some(type => !COMMAND_TYPES.has(type))) return invalid('command-exclude-types-invalid');
+  return { ok: true, value: {
+    workerId,
+    leaseMs: finiteNumber(body.leaseMs ?? 60000, 5000, 120000),
+    excludeTypes
+  } };
 }
 
 export function validateCommandProgress(body) {
