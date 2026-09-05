@@ -54,3 +54,7 @@ Runner registration is implemented but intentionally not executed without an exp
 ## Release boundary
 
 The exact docs-bound SHA produced after this handoff must pass the complete independent gate set before push/freeze. `main` is not merged by this lane, Issue #3 is not closed here, and no Production tag is created. After the final green push, the Windows Watchdog may be restarted on 1.3.0 and the Chrome extension must be reloaded to activate the new UI; the frozen 1.2.0 baseline remains independently installable.
+
+## Post-validation bridge detection fix-forward
+
+Live Windows Setup sanity-check correctly detected the existing GitHub Runner but initially reported the active Remote Desktop Commander bridge as absent. The detector now performs a bounded Windows command-line process probe for `desktop-commander` / `wonderwhy-er`, cached for 30 seconds in the long-running Watchdog to avoid repeated WMI cost. Explicit `CHATSENTINEL_REMOTE_BRIDGE=1` registration remains the highest-priority signal. Focused detector tests and live `setup-cli inspect` now report the current bridge as `installed=true`, `source=process`. This change requires a new exact final validation before push/freeze.

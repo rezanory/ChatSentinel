@@ -22,3 +22,7 @@ Baseline: `baseline/v1.2.0` @ `9ec1cd6ab074556620015c655505ec62f6a3101a`
 ## Remaining environmental acceptance
 
 A physical macOS device is not currently connected to the authorized command channel. macOS live checks must cover bootstrap, Chrome extension load, Watchdog launchd persistence, restart recovery, Setup Assistant health, and optional runner registration before macOS deployment is called production-validated.
+
+## Remote bridge visibility
+
+Windows Runner process discovery uses `tasklist`; Remote Desktop Commander discovery needs command-line evidence because its executable is normally Node.js. The Windows remote-bridge probe therefore uses a cached `Get-CimInstance Win32_Process` query only when no explicit bridge registration environment variable exists. This keeps Setup refresh responsive while avoiding a false “bridge missing” result on the current device.

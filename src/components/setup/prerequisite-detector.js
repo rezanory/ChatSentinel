@@ -3,6 +3,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { deviceProfile } from './device-profile.js';
 
+let windowsBridgeCache = { at: 0, installed: false };
+
 export function detectPrerequisites(options = {}) {
   const profile = options.profile || deviceProfile(options);
   const run = options.run || defaultRun;
@@ -18,7 +20,7 @@ export function detectPrerequisites(options = {}) {
       : { installed: false, command: null, version: null };
   const chrome = detectChrome(profile, { run, exists });
   const runner = detectRunner(profile, { exists, env, run });
-  const remoteBridge = detectRemoteBridge(profile, { env, run });
+  const remoteBridge = detectRemoteBridge(profile, { env, run, useCache: run === defaultRun });
   return {
     ok: true,
     profile,
@@ -76,9 +78,18 @@ function detectRunner(profile, { exists, env, run }) {
   };
 }
 
-function detectRemoteBridge(profile, { env, run }) {
+function detectRemoteBridge(profile, { env, run, useCache = false }) {
   if (env.CHATSENTINEL_REMOTE_BRIDGE === '1') return { installed: true, source: 'env' };
-  if (profile.platform === 'win32') return { installed: false, source: null };
+  if (profile.platform === 'win32') {
+    if (useCache && Date.now() - windowsBridgeCache.at < 30_000) {
+      return { installed: windowsBridgeCache.installed, source: windowsBridgeCache.installed ? 'process' : null, cached: true };
+    }
+    const command = "$p=Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'desktop-commander|wonderwhy-er' } | Select-Object -First 1; if($p){$p.ProcessId}";
+    const result = run('powershell.exe', ['-NoProfile', '-Command', command]);
+    const installed = result.status === 0 && /\d+/.test(result.stdout || '');
+    if (useCache) windowsBridgeCache = { at: Date.now(), installed };
+    return { installed, source: installed ? 'process' : null, cached: false };
+  }
   const result = run('pgrep', ['-f', 'desktop-commander|wonderwhy-er']);
   const processDetected = result.status === 0 && /\d+/.test(result.stdout || '');
   return { installed: processDetected, source: processDetected ? 'process' : null };

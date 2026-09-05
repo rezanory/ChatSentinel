@@ -127,3 +127,22 @@ test('missing package manager is represented explicitly before package installat
   const applied = await applySetupPlan(winPlan, { approvedStepIds: ['manual:winget'], dryRun: false });
   assert.equal(applied.results[0].status, 'manual-required');
 });
+
+test('Windows prerequisite detector can recognize an authorized Remote Desktop Commander process', () => {
+  const outputs = new Map([
+    ['node --version', { status: 0, stdout: 'v22.16.0' }],
+    ['git --version', { status: 0, stdout: 'git version 2.54.0' }],
+    ['gh --version', { status: 0, stdout: 'gh version 2.96.0' }],
+    ['winget --version', { status: 0, stdout: 'v1.10.340' }],
+    ['tasklist /FI IMAGENAME eq Runner.Listener.exe /NH', { status: 1, stdout: '' }]
+  ]);
+  const run = (command, args) => {
+    if (command === 'powershell.exe' && args.includes('-Command')) return { status: 0, stdout: '6932\n' };
+    return outputs.get(`${command} ${args.join(' ')}`) || { status: 1, stderr: 'missing' };
+  };
+  const profile = deviceProfile({ platform: 'win32', arch: 'x64', hostname: 'win', home: 'C:\\Users\\r', env: { LOCALAPPDATA: 'C:\\Users\\r\\AppData\\Local' } });
+  const exists = file => /Google\\Chrome\\Application\\chrome\.exe$/i.test(file);
+  const report = detectPrerequisites({ profile, run, exists, env: {} });
+  assert.equal(report.prerequisites.remoteBridge.installed, true);
+  assert.equal(report.prerequisites.remoteBridge.source, 'process');
+});
