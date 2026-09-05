@@ -52,3 +52,37 @@ The aggregate Node suite remained **149/149 PASS**. Browser E2E remained green f
 One earlier browser run failed before detector execution because the generic service-worker tab-launch guard did not initialize. It was not accepted as green. Without changing lane code or orchestration, the same exact SHA subsequently passed isolated E2E after test-port quiescence and then passed the complete independent gate round. This transient harness startup failure is therefore recorded rather than hidden.
 
 This receipt commit changes only this handoff. It must itself receive the same final gate set before push; if any gate is red, the branch remains unpushed until fix-forward and revalidation are green.
+
+## Final canonical freeze after browser-harness fix-forward
+
+This section supersedes the earlier intermediate validation-basis notes above.
+
+Exact runtime/test candidate SHA: `8d7329365161e07d061507023f55a10dc4b5abcb`
+Exact runtime/test candidate tree: `999f573510b5cb8aded1da0c1289b278c99a43d7`
+
+The delivery-timeout implementation remains the original component-scoped change from `29e105c46d1f2094b4a9f7673c522de44f6373fe`. Subsequent code commits are test-harness-only fix-forward work; they do not change production runtime, Full Project Mode, orchestration, migrations, traffic, flags, or production activation.
+
+Browser E2E was hardened for parallel/high-load execution only:
+- watchdog and fixture servers use per-run dynamic loopback ports instead of fixed shared ports;
+- the copied test extension receives those fixture/watchdog ports in its fixture-only identity/content/background substitutions;
+- stale service-worker targets are reacquired;
+- Windows cleanup terminates only the Chrome process tree using that run's unique temporary profile;
+- one configurable `CHATSENTINEL_E2E_WAIT_MS` budget defaults to 90000 ms for bounded high-load waits; normal green runs complete as soon as their conditions become true.
+
+Final focused validation on the exact worktree before freeze: **18/18 PASS** for message-delivery recovery plus recovery policy.
+
+Final full validation on exact candidate `8d7329365161e07d061507023f55a10dc4b5abcb`, collect-all/no fail-fast:
+- version-check: PASS
+- aggregate Node suite: **149/149 PASS**
+- syntax/check: PASS
+- security policy: PASS
+- shell parser: **4/4 PASS**
+- browser E2E: PASS, including red composer timeout detection, sibling Retry actuation, cooldown deduplication, and historical timeout `WAIT`
+- production smoke: PASS
+- `npm audit --omit=dev`: zero vulnerabilities
+- baseline-to-candidate `git diff --check`: PASS
+- Windows PowerShell parser: **7/7 PASS**
+
+No runtime source outside the delivery-timeout component was changed. The only non-component code changes are the browser fixture/E2E surfaces required by this lane.
+
+The next docs-only receipt commit must pass the same complete gate set before push. The exact pushed SHA is the canonical lane handoff.
