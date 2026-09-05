@@ -74,3 +74,7 @@ Validation before documentation binding:
 - diff-check: PASS.
 
 The exact docs-bound SHA after this evidence update must still pass the same complete gate set before push/freeze. Issue #3 remains OPEN until the final live reload acceptance of this fix is observed.
+
+## Final E2E harness stabilization
+
+A Chrome registration timing flake was eliminated in test scope by `d3b624e5a279bd1ddc4ef6bdb48048bcca515d15`: Project Console tab A/B discovery now uses the existing bounded worker wait instead of an immediate one-shot query. Two consecutive isolated browser E2E executions completed fully green after the change. No production runtime behavior was altered by this commit.

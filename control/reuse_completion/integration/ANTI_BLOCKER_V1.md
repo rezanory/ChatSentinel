@@ -30,3 +30,7 @@ Post-Reload live acceptance proved the MV3 worker and durable command channel we
 Fix-forward: `cf1d908d4d32077b7c80219a4e01db4aed5ca160` adds a standalone membership-repair component. It reattaches the stable conversation to the recovered tab after successful stale Focus and preserves existing lane metadata. The pre-fix live registry was repaired once manually to prevent additional duplicate recovery during validation.
 
 Release anti-blocker: the extension must be Reloaded once after this fix is pushed, then a live stale-focus acceptance must show `membershipRepaired: true` and the registry `tabId` must equal the recovered tab. Until that exact observation, do not close Issue #3 or call the project Production Ready.
+
+## E2E tab-registration timing flake — resolved
+
+The final docs-bound validation exposed Chrome test-harness timing where `openPage` succeeded but an immediate `chrome.tabs.query()` occasionally could not yet see project-console tab A/B. This is not a runtime product failure; the harness now uses bounded `waitWorkerValue` registration waits in `d3b624e5a279bd1ddc4ef6bdb48048bcca515d15`. Two consecutive isolated full browser E2E runs passed after this change.

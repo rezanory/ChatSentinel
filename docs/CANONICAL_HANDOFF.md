@@ -93,3 +93,5 @@ Live acceptance after reloading ChatSentinel 1.1.1 confirmed the MV3 service wor
 Integration fix `cf1d908d4d32077b7c80219a4e01db4aed5ca160` adds standalone stale-focus membership repair and preserves Component-First Chat Control boundaries. Pre-doc validation is fully green at 120/120 unit tests plus syntax, policy, browser E2E, production smoke, zero-vulnerability audit, PowerShell parser and diff checks.
 
 This supersedes any claim that the prior pushed integration SHA alone was ready for release. One final extension Reload plus live registry-migration acceptance is still required after the new docs-bound green SHA is pushed. Issue #3 remains OPEN; no main merge or Production tag is authorized yet.
+
+Final validation also hardened the browser E2E harness against Chrome tab-registration timing: `d3b624e5a279bd1ddc4ef6bdb48048bcca515d15` replaces immediate Project Console tab A/B queries with bounded registration waits. Two consecutive isolated browser E2E runs passed after this test-only stabilization; runtime product behavior is unchanged.
