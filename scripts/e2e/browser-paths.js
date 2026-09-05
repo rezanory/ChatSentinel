@@ -30,6 +30,8 @@ export function systemChromeCandidates(platform, env = process.env, home = os.ho
   }
   if (platform === 'darwin') {
     return [
+      '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
+      path.posix.join(home, 'Applications', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
       '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       path.posix.join(home, 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome')
     ];

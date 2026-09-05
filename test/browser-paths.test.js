@@ -12,7 +12,9 @@ test('system Chrome candidates cover native Windows, macOS and Linux locations',
   assert.ok(win.some(value => value.endsWith(path.win32.join('Google', 'Chrome', 'Application', 'chrome.exe'))));
 
   const mac = systemChromeCandidates('darwin', {}, '/Users/r');
+  assert.equal(mac[0], '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
   assert.ok(mac.includes('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'));
+  assert.ok(mac.some(value => value.includes('/Users/r/Applications/Google Chrome for Testing.app')));
   assert.ok(mac.some(value => value.includes('/Users/r/Applications/Google Chrome.app')));
 
   const linux = systemChromeCandidates('linux', {}, '/home/r');
@@ -34,6 +36,17 @@ test('Playwright Chromium discovery covers macOS ARM64 app layout', async () => 
     exists: async file => file === target
   });
   assert.equal(found, target);
+});
+
+test('browser discovery prefers Chrome for Testing over branded Chrome on macOS', async () => {
+  const testing = '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
+  const branded = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const found = await findBrowserExecutable({
+    platform: 'darwin', home: '/Users/r', env: {},
+    exists: async file => file === testing || file === branded,
+    readdir: async () => []
+  });
+  assert.equal(found, testing);
 });
 
 test('browser discovery falls back to installed system Chrome when Playwright cache is absent', async () => {
