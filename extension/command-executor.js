@@ -247,7 +247,7 @@
       if (attempt === 2) {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'project-console.js']
+          files: ['components/message-delivery-recovery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'project-console.js']
         }).catch(() => {});
       }
       await sleep(500);

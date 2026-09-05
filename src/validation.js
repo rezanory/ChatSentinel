@@ -35,6 +35,8 @@ export function validateSignal(body) {
     progressAgeMs: finiteNumber(body.progressAgeMs, 0, 7 * 24 * 60 * 60 * 1000),
     retryCount: finiteNumber(body.retryCount, 0, 100),
     retryVisible: Boolean(body.retryVisible),
+    messageDeliveryTimedOut: Boolean(body.messageDeliveryTimedOut),
+    messageDeliveryRetryCount: finiteNumber(body.messageDeliveryRetryCount, 0, 10),
     connectionInterrupted: Boolean(body.connectionInterrupted),
     conversationDead: Boolean(body.conversationDead),
     uiFrozen: Boolean(body.uiFrozen),

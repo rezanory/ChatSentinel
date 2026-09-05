@@ -13,12 +13,16 @@ test('signal normalizes numeric and boolean fields', () => {
     conversationId: 'chat',
     state: 'running',
     progressAgeMs: -10,
-    retryVisible: 1
+    retryVisible: 1,
+    messageDeliveryTimedOut: 1,
+    messageDeliveryRetryCount: 99
   });
   assert.equal(result.ok, true);
   assert.equal(result.value.state, 'RUNNING');
   assert.equal(result.value.progressAgeMs, 0);
   assert.equal(result.value.retryVisible, true);
+  assert.equal(result.value.messageDeliveryTimedOut, true);
+  assert.equal(result.value.messageDeliveryRetryCount, 10);
 });
 
 test('reconcile requires project or conversation reference', () => {

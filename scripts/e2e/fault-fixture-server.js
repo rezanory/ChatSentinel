@@ -29,6 +29,17 @@ function render(kind, id) {
 
   if (kind === 'running') state = '<button aria-label="Stop generating">Stop generating</button>';
   if (kind === 'retry') state = '<button id="retry" onclick="document.body.dataset.retryClicked=\'1\';this.textContent=\'Retried\'">Retry</button>';
+  if (kind === 'delivery-timeout') state = `<main>
+    <article data-message-author-role="user" data-message-id="delivery-user">Pending user prompt</article>
+    <div role="alert" data-message-id="delivery-timeout">Message delivery timed out. Please try again.
+      <button aria-label="Retry" onclick="document.body.dataset.deliveryRetryClicked='1';document.body.dataset.deliveryRetryCount=String(Number(document.body.dataset.deliveryRetryCount||0)+1)">Retry</button>
+    </div>
+  </main>`;
+  if (kind === 'delivery-timeout-history') state = `<main>
+    <article data-message-author-role="user" data-message-id="delivery-old-user">Old user prompt</article>
+    <div role="alert" data-message-id="delivery-old-timeout">Message delivery timed out. Please try again.<button aria-label="Retry">Retry</button></div>
+    <article data-message-author-role="assistant" data-message-id="delivery-later-assistant">Later completed answer</article>
+  </main>`;
   if (kind === 'interrupt') state = `<main><article data-message-author-role="assistant" data-message-id="active-partial">Partial answer</article><div role="alert">Connection interrupted. Waiting for the complete answer</div></main>`;
   if (kind === 'interrupt-history') state = `<main>
     <article data-message-author-role="assistant" data-message-id="old-interrupt">Connection interrupted. Waiting for the complete answer</article>

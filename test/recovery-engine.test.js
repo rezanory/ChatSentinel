@@ -42,3 +42,24 @@ test('active interruption takes precedence over stale-ui reload when generation 
   const result = decideRecovery({ connectionInterrupted: true, uiFrozen: true, progressAgeMs: 300000 });
   assert.equal(result.action, Action.CONTINUE_SAME_CHAT);
 });
+
+test('message delivery timeout uses the native delivery retry independently of generic retry risk', () => {
+  const result = decideRecovery({
+    messageDeliveryTimedOut: true,
+    messageDeliveryRetryCount: 0,
+    retryVisible: true,
+    sideEffectRisk: 'possible'
+  });
+  assert.equal(result.action, Action.RETRY_MESSAGE_DELIVERY);
+  assert.equal(result.reason, 'message-delivery-timeout-native-retry');
+});
+
+test('message delivery timeout stops after the bounded native retry budget', () => {
+  const result = decideRecovery({
+    messageDeliveryTimedOut: true,
+    messageDeliveryRetryCount: 2,
+    retryVisible: true
+  });
+  assert.equal(result.action, Action.ESCALATE);
+  assert.equal(result.reason, 'message-delivery-timeout-retry-budget-exhausted');
+});

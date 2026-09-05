@@ -51,11 +51,16 @@
       .map(button => (button.innerText || button.getAttribute('aria-label') || '').trim())
       .filter(Boolean);
 
-    const retryVisible = buttons.some(value => /retry|try again/i.test(value));
     const continueVisible = buttons.some(value => /continue generating|continue/i.test(value));
     const stopVisible = buttons.some(value => /stop generating|stop/i.test(value));
     const interruption = globalThis.ChatSentinelResponseCompletion?.inspect?.(document);
     const connectionInterrupted = interruption?.active === true;
+    const delivery = globalThis.ChatSentinelMessageDeliveryRecovery?.inspect?.(document);
+    const retryVisible = !delivery?.timeoutMarkerPresent && buttons.some(value => /retry|try again/i.test(value));
+    const messageDeliveryTimedOut = delivery?.active === true;
+    const messageDeliveryRetryCount = delivery?.incidentKey
+      ? globalThis.ChatSentinelMessageDeliveryRecovery?.retryCount?.(delivery.incidentKey) || 0
+      : 0;
     const conversationDead = /conversation not found|unable to load conversation/i.test(text);
     const progressAgeMs = testProgressAge() ?? (Date.now() - lastMutationAt);
     const uiFrozen = progressAgeMs >= 180000 && !stopVisible;
@@ -68,6 +73,9 @@
       identitySource: identity?.source,
       retryVisible,
       continueVisible,
+      messageDeliveryTimedOut,
+      messageDeliveryIncidentKey: delivery?.incidentKey,
+      messageDeliveryRetryCount,
       connectionInterrupted,
       interruptionSource: interruption?.source,
       interruptionIncidentKey: interruption?.incidentKey,

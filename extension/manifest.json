@@ -43,6 +43,7 @@
         "https://chatgpt.com/*"
       ],
       "js": [
+        "components/message-delivery-recovery/controller.js",
         "components/response-completion-recovery/controller.js",
         "identity.js",
         "actuator.js",
