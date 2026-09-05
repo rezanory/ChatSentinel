@@ -1,22 +1,37 @@
-# ChatSentinel v1.3 Workflow Continuation — Candidate Handoff
+# ChatSentinel v1.3 Workflow Continuation — Green Candidate Handoff
 
-Status: `REVALIDATION_REQUIRED`
+Status: `GREEN_VALIDATED_SOURCE_CANDIDATE`
+Repository: `rezanory/ChatSentinel`
 Branch: `feat/v13-workflow-continuation`
 Worktree: `C:\ChatSentinel-worktrees\v13-workflow`
+Source candidate: `460363e016c01757ac99cac2cb635a78e99468d0`
+Source tree: `83cca14a44a77c01d36bb5350fbb37fed7818966`
 
-## Delivered generic capability
+## Delivered
 
-- completion of the current stage is never treated as completion of the whole project unless it is the declared terminal stage;
-- a green stage automatically advances to the next stage;
-- required lanes are materialized with bounded parallelism without dropping lanes beyond the immediate launch bound;
-- a green integration lane supplies the exact durable baseline for the next stage;
-- missing next-stage or baseline evidence fails closed through REPLAN/BLOCKED behavior;
-- Verified Prompt Delivery, Full Project Mode, durable command ownership, and `baselineSha` propagation remain integrated.
+- Workflow Continuation is repository-agnostic and project-specific roadmap data is not embedded in ChatSentinel.
+- Each project supplies its own manifest, normally `control/chatsentinel-workflow.json`.
+- Current-stage completion never implies project completion before the declared terminal stage.
+- A green stage automatically advances and materializes bounded parallel lanes without dropping remaining required lanes.
+- A green integration lane supplies the exact durable baseline for the next stage.
+- Missing next-stage/baseline evidence fails closed via REPLAN/BLOCKED behavior.
+- External `workflowProfileId` compilation is explicitly rejected.
+- `baselineSha` remains preserved through command validation, browser execution, membership repair, and project projection.
 
-## Repository separation
+## Exact source-candidate acceptance
 
-ChatSentinel contains no project-specific roadmap compiler or embedded external-repository workflow profile. Project roadmaps remain in the project repository that owns them; ChatSentinel consumes only the generic workflow manifest contract.
+- version binding: PASS;
+- unit: **175/175 PASS**;
+- syntax/check: PASS;
+- security policy: PASS;
+- shell parser: PASS;
+- browser E2E: PASS;
+- production smoke: PASS;
+- dependency audit: PASS, 0 vulnerabilities;
+- diff check: PASS;
+- Windows PowerShell parser: **7/7 PASS**;
+- cross-repository reference scan: **0 matches**.
 
-## Acceptance boundary
+Stable `C:\ChatSentinel` remains untouched on v1.2.1. `main`, production tags and traffic are not changed by this candidate lane.
 
-Earlier green evidence predates repository decoupling and is superseded for release purposes. The exact decoupled branch tip must pass the full independent unit, syntax, policy, shell, browser E2E, production smoke, dependency audit, diff, and platform parser gates before this handoff may be marked green.
+This handoff binding is documentation-only. The docs-bound exact SHA must receive the same complete independent gate set before push; only that pushed SHA is the final lane candidate.

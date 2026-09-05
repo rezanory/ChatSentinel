@@ -119,3 +119,9 @@ Pre-doc validation is green at 145/145 tests, version consistency, syntax, secur
 Post-validation Windows setup inspection additionally confirmed the active self-hosted Runner and, after a small cached process-probe fix-forward, the active Remote Desktop Commander bridge. The final 1.3 candidate must therefore be revalidated on the superseding exact SHA before push/freeze; the macOS live-device acceptance boundary remains unchanged.
 
 A final Windows test-harness flake was also isolated: temporary server-directory teardown could transiently return `EBUSY` after successful assertions. Cleanup now uses bounded retries only for known transient Windows filesystem errors, and the full server integration file passed three consecutive runs. This is test-only stabilization and requires one final exact-SHA aggregate revalidation before push.
+
+## v1.3 Workflow Continuation repository-boundary correction — 2026-09-05
+
+ChatSentinel workflow continuation is now repository-agnostic. The superseding source candidate `460363e016c01757ac99cac2cb635a78e99468d0` removes the embedded external-roadmap profile/compiler and explicitly rejects `workflowProfileId`; attached projects must own their own `control/chatsentinel-workflow.json` manifest.
+
+The exact source candidate passed 175/175 unit tests plus version, syntax, policy, shell, browser E2E, production smoke, zero-vulnerability audit, diff and 7/7 PowerShell parser gates. Stable v1.2.1 remains untouched. The docs-bound branch tip must pass the same complete gate set before push and remains separate from `main`/production promotion.
