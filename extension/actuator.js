@@ -45,7 +45,7 @@
     return { ok: true, action: 'message-delivery-retry', executed: true, nativeRetry: true };
   }
 
-  function continueInterruptedResponse(context) {
+  async function continueInterruptedResponse(context) {
     const recovery = globalThis.ChatSentinelResponseCompletion;
     const ticket = recovery?.prepareAttempt?.(document);
     if (ticket && ticket.allowed === false) {
@@ -58,7 +58,7 @@
       };
     }
     const prompt = recovery?.buildContinuationPrompt?.(context) || defaultContinuePrompt(context);
-    const result = sendPrompt(prompt);
+    const result = await sendPrompt(prompt);
     if (result?.ok && ticket?.allowed) recovery?.markAttempt?.(ticket);
     return { ...result, action: 'response-completion', responseCompletion: true };
   }
@@ -79,15 +79,22 @@
     return { ok: true, action: label, executed: true };
   }
 
-  function sendPrompt(prompt) {
-    const composer = findComposer();
-    if (!composer) return { ok: false, reason: 'composer-not-found' };
-    composer.focus();
-    setComposerText(composer, prompt);
-    const send = findSendButton();
-    if (!send) return { ok: false, reason: 'send-button-not-found' };
-    send.click();
-    return { ok: true, action: 'send-prompt', executed: true };
+  async function sendPrompt(prompt) {
+    const delivery = globalThis.ChatSentinelPromptDelivery;
+    if (!delivery?.prepare || !delivery?.click) {
+      return { ok: false, reason: 'prompt-delivery-component-unavailable' };
+    }
+    const prepared = await delivery.prepare(document, String(prompt || ''));
+    if (!prepared?.ok) return { ...prepared, action: 'send-prompt', executed: false };
+    const clicked = delivery.click(prepared);
+    if (!clicked?.ok) return { ...clicked, action: 'send-prompt', executed: false };
+    return {
+      ok: true,
+      action: 'send-prompt',
+      executed: true,
+      deliveryPending: true,
+      injectionMethod: prepared.method
+    };
   }
 
   async function createNewChatAndContinue(context) {
@@ -118,27 +125,6 @@
 
   function sendPendingPrompt(prompt) {
     return sendPrompt(prompt);
-  }
-
-  function findComposer() {
-    return document.querySelector('#prompt-textarea, textarea, [contenteditable="true"]');
-  }
-  function findSendButton() {
-    return [...document.querySelectorAll('button')].find(button => {
-      const label = (button.getAttribute('aria-label') || button.innerText || '').trim();
-      return /send|ارسال/i.test(label) && isVisible(button) && !button.disabled;
-    });
-  }
-
-  function setComposerText(element, text) {
-    if ('value' in element) {
-      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value')?.set;
-      setter ? setter.call(element, text) : (element.value = text);
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      return;
-    }
-    element.textContent = text;
-    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
   }
 
   function isVisible(element) {

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ChatSentinel",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Production watchdog, multi-project console and recovery controller for long-running ChatGPT project work.",
   "permissions": [
     "storage",
@@ -46,6 +46,7 @@
         "components/runtime-context-guard/controller.js",
         "components/tab-launch-guard/controller.js",
         "components/message-delivery-recovery/controller.js",
+        "components/prompt-delivery/controller.js",
         "components/response-completion-recovery/controller.js",
         "identity.js",
         "actuator.js",

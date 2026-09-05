@@ -158,40 +158,26 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     if (preSendState?.rateLimited) await handleRateLimitedLaunch(command, workerId, tab);
     if (preSendState?.crashed) await handleLaunchFailure(command, workerId, tab, preSendState);
 
-    let ownership = null;
     if (!command.progress?.promptSent) {
-      ownership = await guard.claimPromptOwnership(
-        chrome.storage.local,
-        payload,
-        tab.id,
-        safeGetTab,
-        { commandId: command.commandId, replaceFromTabId: options.replaceFromTabId }
+      const delivery = await sendPromptWithVerification(
+        command, workerId, tab, payload,
+        { replaceFromTabId: options.replaceFromTabId }
       );
-      if (!ownership.allowed) {
+      if (delivery.deduplicated) {
         await commandApi('/projects/detach', 'POST', { conversationId: `tab:${tab.id}`, forget: true }).catch(() => {});
-        await chrome.tabs.remove(tab.id).catch(() => {});
+        if (Number(delivery.ownerTabId) !== Number(tab.id)) await chrome.tabs.remove(tab.id).catch(() => {});
         return {
           projectId: project.projectId,
-          tabId: ownership.owner?.tabId,
+          tabId: delivery.ownerTabId,
           laneId: payload.laneId,
           branch: payload.branch,
-          promptSent: false,
+          promptSent: Boolean(delivery.promptSent),
+          deliveryConfirmed: Boolean(delivery.deliveryConfirmed),
           deduplicated: true,
-          reason: ownership.reason,
-          ownerTabId: ownership.owner?.tabId
+          reason: delivery.reason,
+          ownerTabId: delivery.ownerTabId
         };
       }
-      const sent = await chrome.tabs.sendMessage(tab.id, {
-        type: 'CHATSENTINEL_SEND_PROMPT',
-        commandId: command.commandId,
-        prompt: payload.prompt
-      }).catch(error => ({ ok: false, error: String(error) }));
-      if (!sent?.ok) {
-        await guard.releasePromptOwnership(chrome.storage.local, ownership, tab.id, safeGetTab).catch(() => {});
-        throw new Error(sent?.error || sent?.reason || 'prompt-send-failed');
-      }
-      await guard.markPromptDelivered(chrome.storage.local, ownership, tab.id).catch(() => {});
-      await progressCommand(command, workerId, { step: 'prompt-sent', tabId: tab.id, promptSent: true });
     }
 
     const identity = await waitForStableIdentity(tab.id, fallbackId);
@@ -220,6 +206,8 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
       laneId: payload.laneId,
       branch: payload.branch,
       promptSent: true,
+      deliveryConfirmed: Boolean(command.progress?.deliveryConfirmed),
+      deliveryEvidence: command.progress?.deliveryEvidence,
       launchUrl: command.progress?.launchUrl,
       launchUrlSanitized: Boolean(command.progress?.launchUrlSanitized)
     };
@@ -233,29 +221,143 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     if (!tab) throw new Error('target-tab-not-found');
     await ensureContent(tab.id);
     if (!command.progress?.promptSent) {
-      const ownership = await guard.claimPromptOwnership(
-        chrome.storage.local,
-        payload,
-        tab.id,
-        safeGetTab,
-        { commandId: command.commandId }
-      );
-      if (!ownership.allowed) {
-        return { tabId: ownership.owner?.tabId, promptSent: false, deduplicated: true, reason: ownership.reason };
+      const delivery = await sendPromptWithVerification(command, workerId, tab, payload);
+      if (delivery.deduplicated) {
+        return {
+          tabId: delivery.ownerTabId,
+          promptSent: false,
+          deliveryConfirmed: Boolean(delivery.deliveryConfirmed),
+          deduplicated: true,
+          reason: delivery.reason
+        };
       }
-      const sent = await chrome.tabs.sendMessage(tab.id, {
-        type: 'CHATSENTINEL_SEND_PROMPT',
-        commandId: command.commandId,
-        prompt: payload.prompt
-      }).catch(error => ({ ok: false, error: String(error) }));
-      if (!sent?.ok) {
-        await guard.releasePromptOwnership(chrome.storage.local, ownership, tab.id, safeGetTab).catch(() => {});
-        throw new Error(sent?.error || sent?.reason || 'prompt-send-failed');
-      }
-      await guard.markPromptDelivered(chrome.storage.local, ownership, tab.id).catch(() => {});
-      await progressCommand(command, workerId, { step: 'prompt-sent', tabId: tab.id, promptSent: true });
     }
-    return { tabId: tab.id, promptSent: true };
+    return { tabId: tab.id, promptSent: true, deliveryConfirmed: true };
+  }
+
+  async function sendPromptWithVerification(command, workerId, tab, payload, ownershipOptions = {}) {
+    const guard = globalThis.ChatSentinelTabLaunchGuard;
+    let existing = await promptDeliveryState(tab.id, payload.prompt);
+    if (existing?.contaminatedUrl) {
+      await sanitizePromptContamination(tab.id, existing.url);
+      await ensureContent(tab.id);
+      existing = await promptDeliveryState(tab.id, payload.prompt);
+    }
+    if (existing?.userTurnMatched && !existing?.contaminatedUrl) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'CHATSENTINEL_PROMPT_DELIVERY_CONFIRMED', commandId: command.commandId
+      }).catch(() => {});
+      await progressCommand(command, workerId, {
+        step: 'prompt-confirmed', tabId: tab.id, promptSent: true, deliveryConfirmed: true,
+        deliveryEvidence: 'existing-user-turn'
+      });
+      return { promptSent: true, deliveryConfirmed: true, evidence: existing };
+    }
+
+    const ownership = await guard.claimPromptOwnership(
+      chrome.storage.local, payload, tab.id, safeGetTab,
+      { commandId: command.commandId, ...ownershipOptions }
+    );
+    if (!ownership.allowed) {
+      const ownerTabId = Number(ownership.owner?.tabId);
+      const ownerTab = Number.isInteger(ownerTabId) ? await safeGetTab(ownerTabId) : null;
+      let ownerEvidence = ownerTab ? await promptDeliveryState(ownerTabId, payload.prompt) : null;
+      if (ownerEvidence?.contaminatedUrl && ownerTab) {
+        await sanitizePromptContamination(ownerTabId, ownerEvidence.url);
+        await ensureContent(ownerTabId);
+        ownerEvidence = await promptDeliveryState(ownerTabId, payload.prompt);
+      }
+      if (ownerEvidence?.userTurnMatched && !ownerEvidence?.contaminatedUrl) {
+        return {
+          promptSent: true, deliveryConfirmed: true, deduplicated: true,
+          reason: 'prompt-owned-by-confirmed-live-tab', ownerTabId, evidence: ownerEvidence
+        };
+      }
+      if (ownerTab) {
+        const recovered = await sendPromptWithVerification(command, workerId, ownerTab, payload, ownershipOptions);
+        return {
+          ...recovered,
+          deduplicated: true,
+          ownerTabId,
+          reason: 'recovered-unconfirmed-live-owner'
+        };
+      }
+      throw retryableError('prompt-owner-unavailable', 1500);
+    }
+
+    const beforeUrl = (await safeGetTab(tab.id))?.url || '';
+    const sent = await chrome.tabs.sendMessage(tab.id, {
+      type: 'CHATSENTINEL_SEND_PROMPT',
+      commandId: command.commandId,
+      prompt: payload.prompt
+    }).catch(error => ({ ok: false, error: String(error) }));
+    if (!sent?.ok) {
+      await guard.releasePromptOwnership(chrome.storage.local, ownership, tab.id, safeGetTab).catch(() => {});
+      throw retryableError(sent?.error || sent?.reason || 'prompt-send-failed', 1500);
+    }
+
+    const verification = await waitForPromptDelivery(tab.id, payload.prompt, beforeUrl);
+    if (!verification.confirmed) {
+      await guard.releasePromptOwnership(chrome.storage.local, ownership, tab.id, safeGetTab).catch(() => {});
+      await progressCommand(command, workerId, {
+        step: 'prompt-delivery-unconfirmed', tabId: tab.id, promptSent: false, deliveryConfirmed: false,
+        promptDeliveryReason: verification.reason, promptDeliveryUrl: verification.url
+      });
+      if (verification.contaminatedUrl) await sanitizePromptContamination(tab.id, verification.url);
+      throw retryableError(`prompt-delivery-unconfirmed:${verification.reason || 'unknown'}`, 1500);
+    }
+
+    await guard.markPromptDelivered(chrome.storage.local, ownership, tab.id).catch(() => {});
+    await chrome.tabs.sendMessage(tab.id, {
+      type: 'CHATSENTINEL_PROMPT_DELIVERY_CONFIRMED', commandId: command.commandId
+    }).catch(() => {});
+    const evidence = verification.userTurnMatched ? 'user-turn' : 'stable-conversation-url';
+    await progressCommand(command, workerId, {
+      step: 'prompt-confirmed', tabId: tab.id, promptSent: true, deliveryConfirmed: true, deliveryEvidence: evidence
+    });
+    return { promptSent: true, deliveryConfirmed: true, evidence: verification };
+  }
+
+  async function promptDeliveryState(tabId, prompt) {
+    return chrome.tabs.sendMessage(tabId, {
+      type: 'CHATSENTINEL_PROMPT_DELIVERY_STATE', prompt
+    }).catch(() => null);
+  }
+
+  async function waitForPromptDelivery(tabId, prompt, beforeUrl, timeoutMs = 12000) {
+    const guard = globalThis.ChatSentinelTabLaunchGuard;
+    const deadline = Date.now() + timeoutMs;
+    let last = { confirmed: false, reason: 'delivery-evidence-timeout', url: beforeUrl };
+    const beforeStable = isStableConversationUrl(beforeUrl);
+    while (Date.now() < deadline) {
+      const tab = await safeGetTab(tabId);
+      if (!tab) return { confirmed: false, reason: 'tab-gone', url: '' };
+      const url = String(tab.url || '');
+      if (guard?.containsPromptInUrl?.(url)) {
+        return { confirmed: false, contaminatedUrl: true, reason: 'prompt-url-contaminated', url };
+      }
+      const state = await promptDeliveryState(tabId, prompt);
+      if (state?.userTurnMatched && !state?.contaminatedUrl) {
+        return { ...state, confirmed: true, reason: 'user-turn-confirmed', url };
+      }
+      if (!beforeStable && isStableConversationUrl(url)) {
+        return { ...(state || {}), confirmed: true, reason: 'stable-conversation-url', url };
+      }
+      last = { ...(state || {}), confirmed: false, reason: state?.reason || 'delivery-evidence-timeout', url };
+      await sleep(250);
+    }
+    return last;
+  }
+
+  function isStableConversationUrl(value) {
+    return /^https:\/\/chatgpt\.com\/c\/[^/?#]+/i.test(String(value || ''));
+  }
+
+  async function sanitizePromptContamination(tabId, url) {
+    const guard = globalThis.ChatSentinelTabLaunchGuard;
+    const safeUrl = guard?.safeNewChatUrl?.(url) || 'https://chatgpt.com/';
+    await chrome.tabs.update(tabId, { url: safeUrl }).catch(() => {});
+    await sleep(1000);
   }
 
   async function groupTabs(command) {
@@ -372,7 +474,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
       if (attempt === 2) {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['components/runtime-context-guard/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'project-console.js']
+          files: ['components/runtime-context-guard/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'project-console.js']
         }).catch(() => {});
       }
       await sleep(500);

@@ -60,8 +60,30 @@ function render(kind, id) {
     headScript = `<script>history.replaceState({conversationId:${JSON.stringify(id)}},'')</script>`;
   }
 
-  const composer = `<textarea id="prompt-textarea"></textarea>
-    <button aria-label="Send" onclick="document.body.dataset.sent=document.querySelector('#prompt-textarea').value;document.body.dataset.sendCount=String(Number(document.body.dataset.sendCount||0)+1)">Send</button>`;
+  const composer = `<form id="prompt-form" method="GET" action="/">
+    <textarea id="prompt-textarea" name="prompt-textarea"></textarea>
+    <button id="generic-submit" aria-label="Send" type="submit">Send</button>
+    <button id="verified-send" data-testid="send-button" aria-label="Send prompt" type="button" hidden>Send prompt</button>
+  </form>
+  <script>
+    (()=>{
+      const composer=document.querySelector('#prompt-textarea');
+      const send=document.querySelector('#verified-send');
+      composer.addEventListener('input',()=>{ send.hidden=!composer.value; });
+      send.addEventListener('click',()=>{
+        const value=composer.value;
+        document.body.dataset.sent=value;
+        document.body.dataset.sendCount=String(Number(document.body.dataset.sendCount||0)+1);
+        const turn=document.createElement('article');
+        turn.setAttribute('data-message-author-role','user');
+        turn.setAttribute('data-message-id','sent-'+document.body.dataset.sendCount);
+        turn.innerText=value;
+        document.body.prepend(turn);
+        composer.value='';
+        send.hidden=true;
+      });
+    })();
+  </script>`;
   return `<!doctype html><html${identityAttr}${progress}>
     <head><title>${title}</title>${headScript}</head><body>${state}${composer}</body></html>`;
 }

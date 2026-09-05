@@ -17,18 +17,28 @@
       sendResponse({ ok: true, ...state });
       return;
     }
+    if (message?.type === 'CHATSENTINEL_PROMPT_DELIVERY_STATE') {
+      const delivery = globalThis.ChatSentinelPromptDelivery;
+      sendResponse(delivery?.inspect?.(document, String(message.prompt || ''), location.href) || {
+        ok: false, confirmed: false, reason: 'prompt-delivery-component-unavailable'
+      });
+      return;
+    }
+    if (message?.type === 'CHATSENTINEL_PROMPT_DELIVERY_CONFIRMED') {
+      const commandId = String(message.commandId || '').trim();
+      if (commandId) sessionStorage.setItem(`chatsentinel:command:${commandId}`, 'confirmed');
+      sendResponse({ ok: true, confirmed: Boolean(commandId) });
+      return;
+    }
     if (message?.type === 'CHATSENTINEL_SEND_PROMPT') {
       const commandId = String(message.commandId || '').trim();
       const marker = commandId ? `chatsentinel:command:${commandId}` : '';
-      if (marker && sessionStorage.getItem(marker) === 'sent') {
-        sendResponse({ ok: true, action: 'send-prompt', executed: false, deduplicated: true });
+      if (marker && sessionStorage.getItem(marker) === 'confirmed') {
+        sendResponse({ ok: true, action: 'send-prompt', executed: false, deduplicated: true, deliveryConfirmed: true });
         return;
       }
       Promise.resolve(window.ChatSentinelActuator?.sendPendingPrompt?.(String(message.prompt || '')))
-        .then(result => {
-          if (result?.ok && marker) sessionStorage.setItem(marker, 'sent');
-          sendResponse(result || { ok: false, reason: 'actuator-missing' });
-        })
+        .then(result => sendResponse(result || { ok: false, reason: 'actuator-missing' }))
         .catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
@@ -137,9 +147,9 @@
     const pending = window.ChatSentinelActuator?.consumePendingPrompt?.();
     if (!pending) return;
     let attempts = 0;
-    const trySend = () => {
+    const trySend = async () => {
       attempts += 1;
-      const result = window.ChatSentinelActuator?.sendPendingPrompt?.(pending);
+      const result = await Promise.resolve(window.ChatSentinelActuator?.sendPendingPrompt?.(pending));
       if (result?.ok) return;
       if (attempts < 60) return setTimeout(trySend, 500);
       sessionStorage.setItem('chatsentinel:pendingPrompt', pending);
