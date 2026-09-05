@@ -52,10 +52,6 @@ export function normalizeWorkflow(input = {}) {
     completedStageIds,
     completedAt: String(input.completedAt || '').trim(),
     plannerLane: normalizeLane(input.plannerLane),
-    profileId: String(input.profileId || '').trim(),
-    canonicalSources: Array.isArray(input.canonicalSources) ? input.canonicalSources : [],
-    canonicalTotals: input.canonicalTotals && typeof input.canonicalTotals === 'object' ? input.canonicalTotals : null,
-    derivedFromCanonicalRoadmap: input.derivedFromCanonicalRoadmap === true,
     maxParallelLanes: input.maxParallelLanes === undefined || input.maxParallelLanes === null
       ? null
       : Math.max(1, Math.min(8, Number(input.maxParallelLanes || 2))),

@@ -23,31 +23,31 @@ function laneRow(id, complete = true) {
 test('workflow advances after the current stage but does not confuse stage completion with project completion', () => {
   const workflow = normalizeWorkflow({
     enabled: true,
-    goal: { id: 'g', label: 'PH7 to PH10.5', terminalStageId: 'PH10.5' },
-    currentStageId: 'PH7',
+    goal: { id: 'g', label: 'multi-stage workflow', terminalStageId: 'TERMINAL' },
+    currentStageId: 'STAGE-A',
     stages: [
-      { stageId: 'PH7', lanes: [{ laneId: 'C1' }] },
-      { stageId: 'PH8', lanes: [{ laneId: 'C2' }] },
-      { stageId: 'PH10.5', lanes: [{ laneId: 'C3' }] }
+      { stageId: 'STAGE-A', lanes: [{ laneId: 'C1' }] },
+      { stageId: 'STAGE-B', lanes: [{ laneId: 'C2' }] },
+      { stageId: 'TERMINAL', lanes: [{ laneId: 'C3' }] }
     ]
   });
   const stage = selectCurrentStage(workflow);
-  assert.equal(stage.stageId, 'PH7');
+  assert.equal(stage.stageId, 'STAGE-A');
   const completion = stageCompletion(stage, [laneRow('C1', true)]);
   assert.equal(completion.complete, true);
   const decision = evaluateWorkflow(workflow, stage, completion);
   assert.equal(decision.action, 'ADVANCE');
-  assert.equal(decision.nextStageId, 'PH8');
-  assert.deepEqual(decision.completedStageIds, ['PH7']);
+  assert.equal(decision.nextStageId, 'STAGE-B');
+  assert.deepEqual(decision.completedStageIds, ['STAGE-A']);
 });
 
 test('workflow only completes when the configured terminal stage is complete', () => {
   const workflow = normalizeWorkflow({
     enabled: true,
-    terminalStageId: 'PH10.5',
-    currentStageId: 'PH10.5',
-    completedStageIds: ['PH7', 'PH8', 'PH9', 'PH10'],
-    stages: [{ stageId: 'PH10.5', lanes: [{ laneId: 'FINAL' }] }]
+    terminalStageId: 'TERMINAL',
+    currentStageId: 'TERMINAL',
+    completedStageIds: ['STAGE-A', 'STAGE-B', 'STAGE-C', 'STAGE-D'],
+    stages: [{ stageId: 'TERMINAL', lanes: [{ laneId: 'FINAL' }] }]
   });
   const stage = selectCurrentStage(workflow);
   const decision = evaluateWorkflow(workflow, stage, stageCompletion(stage, [laneRow('FINAL', true)]));
@@ -58,10 +58,10 @@ test('workflow only completes when the configured terminal stage is complete', (
 test('workflow refuses false completion when the manifest ends before the goal', () => {
   const workflow = normalizeWorkflow({
     enabled: true,
-    terminalStageId: 'PH10.5',
-    currentStageId: 'PH8',
+    terminalStageId: 'TERMINAL',
+    currentStageId: 'STAGE-B',
     plannerLane: { laneId: 'PLAN', prompt: 'Reconcile roadmap' },
-    stages: [{ stageId: 'PH8', lanes: [{ laneId: 'C2' }] }]
+    stages: [{ stageId: 'STAGE-B', lanes: [{ laneId: 'C2' }] }]
   });
   const stage = selectCurrentStage(workflow);
   const decision = evaluateWorkflow(workflow, stage, stageCompletion(stage, [laneRow('C2', true)]));
@@ -71,7 +71,7 @@ test('workflow refuses false completion when the manifest ends before the goal',
 
 test('stage integration is part of the completion contract when configured', () => {
   const stage = {
-    stageId: 'PH8',
+    stageId: 'STAGE-B',
     lanes: [{ laneId: 'C1' }],
     integrationLane: { laneId: 'INT' }
   };
@@ -88,11 +88,11 @@ test('workflow manifest is reloaded from the project repo while runtime state is
   await fs.mkdir(path.join(dir, 'control'), { recursive: true });
   await fs.writeFile(path.join(dir, 'control', 'chatsentinel-workflow.json'), JSON.stringify({
     enabled: true,
-    goal: { label: 'PH7 to PH10.5', terminalStageId: 'PH10.5' },
+    goal: { label: 'multi-stage workflow', terminalStageId: 'TERMINAL' },
     stages: [
-      { stageId: 'PH7', lanes: [{ laneId: 'A' }] },
-      { stageId: 'PH8', lanes: [{ laneId: 'B' }] },
-      { stageId: 'PH10.5', lanes: [{ laneId: 'Z' }] }
+      { stageId: 'STAGE-A', lanes: [{ laneId: 'A' }] },
+      { stageId: 'STAGE-B', lanes: [{ laneId: 'B' }] },
+      { stageId: 'TERMINAL', lanes: [{ laneId: 'Z' }] }
     ]
   }), 'utf8');
 
@@ -101,13 +101,13 @@ test('workflow manifest is reloaded from the project repo while runtime state is
     workflow: {
       enabled: true,
       sourcePath: 'control/chatsentinel-workflow.json',
-      currentStageId: 'PH8',
-      completedStageIds: ['PH7']
+      currentStageId: 'STAGE-B',
+      completedStageIds: ['STAGE-A']
     }
   });
   assert.equal(workflow.sourceResolved, true);
-  assert.equal(selectCurrentStage(workflow).stageId, 'PH8');
-  assert.deepEqual(workflow.completedStageIds, ['PH7']);
+  assert.equal(selectCurrentStage(workflow).stageId, 'STAGE-B');
+  assert.deepEqual(workflow.completedStageIds, ['STAGE-A']);
 });
 
 function fakeStore(project) {
@@ -135,36 +135,36 @@ test('workflow advance persists the next stage and enqueues parallel next-stage 
   const store = fakeStore(project);
   const workflow = normalizeWorkflow({
     enabled: true,
-    currentStageId: 'PH7',
+    currentStageId: 'STAGE-A',
     completedStageIds: [],
-    terminalStageId: 'PH10.5',
+    terminalStageId: 'TERMINAL',
     maxParallelLanes: 2,
     stages: [
-      { stageId: 'PH7', lanes: [{ laneId: 'A', prompt: 'a' }] },
+      { stageId: 'STAGE-A', lanes: [{ laneId: 'A', prompt: 'a' }] },
       {
-        stageId: 'PH8',
+        stageId: 'STAGE-B',
         lanes: [
           { laneId: 'B1', laneName: 'B1', prompt: 'b1', branch: 'feat/b1' },
           { laneId: 'B2', laneName: 'B2', prompt: 'b2', branch: 'feat/b2' },
           { laneId: 'B3', laneName: 'B3', prompt: 'b3', branch: 'feat/b3' }
         ]
       },
-      { stageId: 'PH10.5', lanes: [{ laneId: 'Z', prompt: 'z' }] }
+      { stageId: 'TERMINAL', lanes: [{ laneId: 'Z', prompt: 'z' }] }
     ]
   });
   const plan = {
     enabled: true,
     repoPath: 'repo',
-    workflow: { enabled: true, currentStageId: 'PH7', completedStageIds: [] },
+    workflow: { enabled: true, currentStageId: 'STAGE-A', completedStageIds: [] },
     lanes: workflow.stages[0].lanes,
     integrationLane: null
   };
   const emitted = await advanceWorkflow(store, project, plan, workflow, {
-    nextStageId: 'PH8',
-    completedStageIds: ['PH7']
+    nextStageId: 'STAGE-B',
+    completedStageIds: ['STAGE-A']
   });
-  assert.equal(store.project.orchestration.workflow.currentStageId, 'PH8');
-  assert.deepEqual(store.project.orchestration.workflow.completedStageIds, ['PH7']);
+  assert.equal(store.project.orchestration.workflow.currentStageId, 'STAGE-B');
+  assert.deepEqual(store.project.orchestration.workflow.completedStageIds, ['STAGE-A']);
   assert.equal(store.project.orchestration.lanes.length, 3);
   assert.equal(emitted.commands.length, 2);
   assert.deepEqual(emitted.commands.map(row => row.payload.laneId), ['B1', 'B2']);
@@ -175,24 +175,24 @@ test('workflow replan emits a governance lane instead of silently stopping', asy
   const store = fakeStore(project);
   const workflow = normalizeWorkflow({
     enabled: true,
-    goal: { label: 'PH7 to PH10.5', terminalStageId: 'PH10.5' },
+    goal: { label: 'multi-stage workflow', terminalStageId: 'TERMINAL' },
     sourcePath: 'control/chatsentinel-workflow.json',
-    currentStageId: 'PH8',
-    completedStageIds: ['PH7'],
+    currentStageId: 'STAGE-B',
+    completedStageIds: ['STAGE-A'],
     plannerLane: {
       laneId: 'WORKFLOW-PLAN',
       laneName: 'Workflow Review',
       prompt: 'Reconcile roadmap and add the next missing stage.',
       role: 'governance'
     },
-    stages: [{ stageId: 'PH8', lanes: [{ laneId: 'B' }] }]
+    stages: [{ stageId: 'STAGE-B', lanes: [{ laneId: 'B' }] }]
   });
   const emitted = await replanWorkflow(
     store,
     project,
     workflow,
     workflow.stages[0],
-    { reason: 'workflow-goal-incomplete-no-next-stage', completedStageIds: ['PH7', 'PH8'] }
+    { reason: 'workflow-goal-incomplete-no-next-stage', completedStageIds: ['STAGE-A', 'STAGE-B'] }
   );
   assert.equal(emitted.command.type, 'CREATE_LANE_CHAT');
   assert.equal(emitted.command.payload.laneId, 'WORKFLOW-PLAN');
@@ -204,16 +204,16 @@ test('workflow completion is durably recorded only at the terminal contract', as
     projectId: 'project:p3',
     orchestration: {
       enabled: true,
-      workflow: { enabled: true, currentStageId: 'PH10.5', completedStageIds: ['PH7', 'PH8'] }
+      workflow: { enabled: true, currentStageId: 'TERMINAL', completedStageIds: ['STAGE-A', 'STAGE-B'] }
     }
   };
   const store = fakeStore(project);
   const workflow = normalizeWorkflow({
     enabled: true,
-    terminalStageId: 'PH10.5',
-    currentStageId: 'PH10.5',
-    completedStageIds: ['PH7', 'PH8'],
-    stages: [{ stageId: 'PH10.5', lanes: [{ laneId: 'FINAL' }] }]
+    terminalStageId: 'TERMINAL',
+    currentStageId: 'TERMINAL',
+    completedStageIds: ['STAGE-A', 'STAGE-B'],
+    stages: [{ stageId: 'TERMINAL', lanes: [{ laneId: 'FINAL' }] }]
   });
   const result = await completeWorkflow(
     store,
@@ -221,13 +221,13 @@ test('workflow completion is durably recorded only at the terminal contract', as
     project.orchestration,
     workflow,
     workflow.stages[0],
-    { completedStageIds: ['PH7', 'PH8', 'PH10.5'] }
+    { completedStageIds: ['STAGE-A', 'STAGE-B', 'TERMINAL'] }
   );
   assert.equal(result.workflowTransition.action, 'COMPLETE');
   assert.ok(store.project.orchestration.workflow.completedAt);
   assert.deepEqual(
     store.project.orchestration.workflow.completedStageIds,
-    ['PH7', 'PH8', 'PH10.5']
+    ['STAGE-A', 'STAGE-B', 'TERMINAL']
   );
 });
 
@@ -239,23 +239,23 @@ test('orchestration config can derive the active lane set directly from a workfl
     repoPath: 'C:/repo',
     workflow: {
       enabled: true,
-      goal: { terminalStageId: 'PH10.5' },
-      currentStageId: 'PH7',
+      goal: { terminalStageId: 'TERMINAL' },
+      currentStageId: 'STAGE-A',
       stages: [
         {
-          stageId: 'PH7',
+          stageId: 'STAGE-A',
           lanes: [
-            { laneId: 'PH7-A', prompt: 'run A', branch: 'feat/a', baselineSha: 'base-a' },
-            { laneId: 'PH7-B', prompt: 'run B', branch: 'feat/b', baselineSha: 'base-b' }
+            { laneId: 'STAGE-A-A', prompt: 'run A', branch: 'feat/a', baselineSha: 'base-a' },
+            { laneId: 'STAGE-A-B', prompt: 'run B', branch: 'feat/b', baselineSha: 'base-b' }
           ]
         },
-        { stageId: 'PH10.5', lanes: [{ laneId: 'FINAL', prompt: 'final' }] }
+        { stageId: 'TERMINAL', lanes: [{ laneId: 'FINAL', prompt: 'final' }] }
       ]
     }
   });
   assert.equal(result.ok, true);
-  assert.equal(result.orchestration.workflow.currentStageId, 'PH7');
-  assert.deepEqual(result.orchestration.lanes.map(row => row.laneId), ['PH7-A', 'PH7-B']);
+  assert.equal(result.orchestration.workflow.currentStageId, 'STAGE-A');
+  assert.deepEqual(result.orchestration.lanes.map(row => row.laneId), ['STAGE-A-A', 'STAGE-A-B']);
 });
 
 test('workflow advance binds the exact green integration head to every next-stage lane', async () => {
@@ -264,20 +264,20 @@ test('workflow advance binds the exact green integration head to every next-stag
   const store = fakeStore(project);
   const workflow = normalizeWorkflow({
     enabled: true,
-    currentStageId: 'PH7-W01',
-    terminalStageId: 'PH10.5-W01',
+    currentStageId: 'STAGE-A-W01',
+    terminalStageId: 'TERMINAL-W01',
     maxParallelLanes: 8,
     stages: [
-      { stageId: 'PH7-W01', lanes: [{ laneId: 'A', branch: 'feat/a', baselineSha: 'base' }] },
+      { stageId: 'STAGE-A-W01', lanes: [{ laneId: 'A', branch: 'feat/a', baselineSha: 'base' }] },
       {
-        stageId: 'PH8-W01',
+        stageId: 'STAGE-B-W01',
         lanes: [
           { laneId: 'B1', prompt: 'b1', branch: 'feat/b1' },
           { laneId: 'B2', prompt: 'b2', branch: 'feat/b2' }
         ],
         integrationLane: { laneId: 'INT-B', prompt: 'integrate', branch: 'integration/b' }
       },
-      { stageId: 'PH10.5-W01', lanes: [{ laneId: 'Z', prompt: 'z', branch: 'feat/z' }] }
+      { stageId: 'TERMINAL-W01', lanes: [{ laneId: 'Z', prompt: 'z', branch: 'feat/z' }] }
     ]
   });
   const plan = {
@@ -288,11 +288,11 @@ test('workflow advance binds the exact green integration head to every next-stag
     integrationLane: null
   };
   const result = await advanceWorkflow(store, project, plan, workflow, {
-    nextStageId: 'PH8-W01',
+    nextStageId: 'STAGE-B-W01',
     nextBaselineSha: green,
-    completedStageIds: ['PH7-W01']
+    completedStageIds: ['STAGE-A-W01']
   });
-  assert.equal(store.project.orchestration.workflow.stageBaselines['PH8-W01'], green);
+  assert.equal(store.project.orchestration.workflow.stageBaselines['STAGE-B-W01'], green);
   assert.deepEqual(store.project.orchestration.lanes.map(row => row.baselineSha), [green, green]);
   assert.equal(store.project.orchestration.integrationLane.baselineSha, green);
   assert.deepEqual(result.commands.map(row => row.payload.baselineSha), [green, green]);
@@ -306,10 +306,10 @@ test('persisted stage baseline rebinds a source-backed manifest without changing
   await fs.mkdir(path.join(dir, 'control'), { recursive: true });
   const manifest = JSON.stringify({
     enabled: true,
-    terminalStageId: 'PH10.5-W01',
+    terminalStageId: 'TERMINAL-W01',
     stages: [
-      { stageId: 'PH8-W01', lanes: [{ laneId: 'B', branch: 'feat/b', prompt: 'b' }] },
-      { stageId: 'PH10.5-W01', lanes: [{ laneId: 'Z', branch: 'feat/z', prompt: 'z' }] }
+      { stageId: 'STAGE-B-W01', lanes: [{ laneId: 'B', branch: 'feat/b', prompt: 'b' }] },
+      { stageId: 'TERMINAL-W01', lanes: [{ laneId: 'Z', branch: 'feat/z', prompt: 'z' }] }
     ]
   });
   const file = path.join(dir, 'control', 'chatsentinel-workflow.json');
@@ -319,10 +319,23 @@ test('persisted stage baseline rebinds a source-backed manifest without changing
     workflow: {
       enabled: true,
       sourcePath: 'control/chatsentinel-workflow.json',
-      currentStageId: 'PH8-W01',
-      stageBaselines: { 'PH8-W01': green }
+      currentStageId: 'STAGE-B-W01',
+      stageBaselines: { 'STAGE-B-W01': green }
     }
   });
   assert.equal(selectCurrentStage(resolved).lanes[0].baselineSha, green);
   assert.equal(await fs.readFile(file, 'utf8'), manifest);
+});
+
+
+test('orchestration rejects embedded workflow profiles from other repositories', async () => {
+  const project = { projectId: 'project:boundary', projectPath: 'C:/owned-repo' };
+  const store = fakeStore(project);
+  const result = await configureOrchestration(store, project.projectId, {
+    enabled: true,
+    repoPath: 'C:/owned-repo',
+    workflowProfileId: 'external/repository:roadmap:v1'
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'workflow-profile-unsupported-use-project-owned-manifest');
 });

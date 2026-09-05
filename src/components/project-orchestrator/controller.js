@@ -13,29 +13,15 @@ import {
   stageCompletion,
   evaluateWorkflow
 } from '../workflow-continuation/controller.js';
-import { compileCanonicalRoadmap, loadCanonicalWorkflowProfile } from '../workflow-continuation/canonical-roadmap.js';
 
 export async function configureOrchestration(store, projectId, plan) {
   const project = store.getProject(projectId);
   if (!project) return { ok: false, error: 'project-not-found' };
   const repoPath = String(plan?.repoPath || project.projectPath || '').trim();
-  const workflowProfileId = String(plan?.workflowProfileId || '').trim();
-  let workflowInput = plan?.workflow || {};
-  if (workflowProfileId) {
-    try {
-      const contract = await loadCanonicalWorkflowProfile(workflowProfileId);
-      const compiled = await compileCanonicalRoadmap(repoPath, contract, { initialBaselineSha: plan?.initialBaselineSha });
-      workflowInput = {
-        ...compiled, enabled: true,
-        currentStageId: plan?.workflow?.currentStageId || '',
-        completedStageIds: plan?.workflow?.completedStageIds || [],
-        completedAt: plan?.workflow?.completedAt || '',
-        stageBaselines: plan?.workflow?.stageBaselines || {}
-      };
-    } catch (error) {
-      return { ok: false, error: String(error?.message || error) };
-    }
+  if (String(plan?.workflowProfileId || '').trim()) {
+    return { ok: false, error: 'workflow-profile-unsupported-use-project-owned-manifest' };
   }
+  const workflowInput = plan?.workflow || {};
   const workflowConfig = normalizeWorkflow(workflowInput);
   const workflow = workflowConfig.enabled
     ? await resolveWorkflow({ repoPath, workflow: workflowConfig })
@@ -55,7 +41,6 @@ export async function configureOrchestration(store, projectId, plan) {
   const orchestration = {
     enabled: plan.enabled !== false,
     repoPath,
-    workflowProfileId: workflowProfileId || workflowConfig.profileId || '',
     integrationLane: stage?.integrationLane
       ? normalizeLane(stage.integrationLane)
       : (plan.integrationLane ? normalizeLane(plan.integrationLane) : null),

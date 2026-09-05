@@ -1,57 +1,42 @@
 # ChatSentinel Workflow Continuation V1
 
-ChatSentinel projects may define a durable project-level workflow in addition to the currently active lane set. The workflow prevents completion of one parallel wave from being mistaken for completion of the whole project.
+ChatSentinel can supervise a durable multi-stage workflow for any attached project. Project-specific roadmap data belongs to that project's own repository; ChatSentinel owns only the generic continuation engine.
 
 ## Core rule
 
 `all current lanes complete` means **stage complete**, not **project complete**.
 
-A project is complete only when its workflow completion contract is satisfied. The primary completion contract is `terminalStageId`.
+A project is complete only when its declared workflow completion contract is satisfied. The primary contract is `terminalStageId`.
 
-## Recommended source
+## Project-owned source
 
-Store the machine-readable workflow inside the governed project repository:
+The recommended machine-readable manifest is stored by the governed project itself:
 
 `control/chatsentinel-workflow.json`
 
-The watchdog reloads this file on orchestration ticks. This lets a governance/planning lane extend the future workflow without changing ChatSentinel runtime code.
+The watchdog reloads that file on orchestration ticks. ChatSentinel does not embed another repository's phases, components, DAG, branches, SHAs, or roadmap records in its own source tree.
 
 ## Runtime state
 
-ChatSentinel persists only continuation state such as `currentStageId`, `completedStageIds`, and `completedAt`. When `sourcePath` is configured, stage definitions continue to come from the project repository.
-
+ChatSentinel persists continuation state such as `currentStageId`, `completedStageIds`, `stageBaselines`, and `completedAt`. When `sourcePath` is configured, stage definitions remain project-owned.
 ## Transition behavior
 
-When required lanes are incomplete, normal NEXT/FIX/REPLACE recovery continues. If a stage defines an `integrationLane`, that integration lane is part of stage completion and must also become green.
+When required lanes are incomplete, normal NEXT/FIX/REPLACE recovery continues. If a stage defines an `integrationLane`, that lane is part of stage completion and must become green too.
 
 When a stage becomes green:
 
-- If another stage exists, ChatSentinel records the stage as complete, activates the next stage, and immediately queues up to `maxParallelLanes` required lanes from that stage.
-- If the completed stage is `terminalStageId`, ChatSentinel records durable workflow completion.
-- If no next stage exists but the terminal stage has not completed, ChatSentinel must not report project completion.
-- If a `plannerLane` exists in that last case, ChatSentinel creates a workflow-review lane to reconcile canonical roadmap/handoffs and extend the manifest.
-- Without a planner lane, the project becomes `BLOCKED` with explicit `workflow-goal-incomplete-no-next-stage` evidence rather than silently stopping.
-
-## Safety
-
-Workflow source paths must resolve inside the project repository. Runtime execution does not infer missing stages by guessing. Missing workflow materialization is surfaced as a governance gap or delegated to the configured planner lane.
-
-## Canonical roadmap profiles
-
-A project may opt into an explicit canonical roadmap profile through `workflowProfileId` on `/orchestrator/configure`. The profile is compiled read-only from exact immutable Git refs; ChatSentinel never checks out, rewrites, or advances the governed project while compiling the plan.
-
-The compiler validates repository identity, declared pack/component denominators, pack-to-component membership, DAG nodes, DAG edges against `predecessor_components`, per-phase wave counts, total denominators, and the declared terminal phase. Any mismatch fails closed.
-
-The v1.3 profile `rezanory/chat-project:ph7-ph10.5:v1` freezes 49 Packs, 162 Components and 76 topological waves from PH-7 through PH-10.5. Its terminal stage is `PH10.5-W22` and runtime parallel launch is bounded to 8 lanes per transition.
+- if another stage exists, ChatSentinel records the current stage complete and activates the next one;
+- it immediately queues up to `maxParallelLanes` required lanes;
+- unqueued required lanes remain active for later ticks rather than being truncated;
+- only the declared `terminalStageId` may produce durable project completion;
+- if no next stage exists before the terminal contract is met, ChatSentinel returns `REPLAN` when a planner lane exists, otherwise `BLOCKED`.
 
 ## Exact stage baseline chaining
 
-A future wave does not inherit a guessed baseline. After the current implementation lanes and its integration lane are green, ChatSentinel records the exact green integration head in durable `stageBaselines`, binds that SHA to every lane in the next stage, and includes the SHA in `CREATE_LANE_CHAT` command and project-membership metadata.
+A later stage never receives a guessed Git baseline. When the current stage's integration lane is green, its exact remote head is stored in `stageBaselines`, bound to the next stage, and propagated through `CREATE_LANE_CHAT` metadata.
 
-If a workflow is resumed at a stage whose exact baseline evidence is unavailable, the lane contract is incomplete and orchestration is explicitly `BLOCKED`; it must not launch work with an empty or inferred baseline.
+If required baseline evidence is missing, the lane contract remains incomplete and work is not launched as if the baseline were known.
 
-## Parallelism and admission boundaries
+## Safety boundary
 
-Topological waves use only canonical component dependencies. A wave wider than `maxParallelLanes` is not truncated: the bounded subset is queued immediately and remaining required lanes stay active in the stage for later orchestration ticks.
-
-The profile does not infer cross-phase runtime admission from old materialization flags or prose-only predecessor descriptions. Intra-phase DAG parallelism is automatic; any additional cross-phase overlap must be supported by explicit current governance/admission evidence and materialized through the governed workflow/replan path rather than guessed by runtime code.
+Workflow source paths must resolve inside the attached project's own repository. ChatSentinel does not compile or carry a second repository's roadmap. Missing project roadmap materialization is surfaced to the project's planner/governance workflow instead of being invented by ChatSentinel.
