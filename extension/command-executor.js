@@ -1,4 +1,4 @@
-importScripts('components/chat-control/controller.js');
+importScripts('components/chat-control/controller.js', 'components/chat-control/membership-repair.js');
 (() => {
   const ALARM = 'chatsentinel-command-poll';
   const LEASE_MS = 60000;
@@ -281,7 +281,18 @@ importScripts('components/chat-control/controller.js');
       replaceStale: payload => createLaneChat({ ...command, payload }, workerId),
       progress: progress => progressCommand(command, workerId, progress)
     };
-    return control.execute(command, adapter, command.payload?.policy);
+    const result = await control.execute(command, adapter, command.payload?.policy);
+    if (command.type === 'FOCUS_CHAT' && result?.staleRecovered && result?.tabId) {
+      const repair = globalThis.ChatSentinelChatMembershipRepair;
+      if (!repair?.repairStaleFocus) throw new Error('chat-membership-repair-unavailable');
+      return repair.repairStaleFocus({ command, result }, {
+        getProject,
+        getTab: safeGetTab,
+        attach: payload => commandApi('/projects/attach', 'POST', payload),
+        groupProjectTabs
+      });
+    }
+    return result;
   }
 
   async function handleLaunchFailure(command, workerId, tab, detail = {}) {
