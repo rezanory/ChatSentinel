@@ -59,6 +59,8 @@ try {
   EXTENSION_WORKER = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
   assert.ok(EXTENSION_WORKER.url.startsWith(`chrome-extension://${EXPECTED_EXTENSION_ID}/`), `unexpected extension id: ${EXTENSION_WORKER.url}`);
   await sleep(500);
+  await launchGuardSuite();
+  await crashedTabRecoverySuite();
   await detectorSuite();
   await actuatorSuite();
   await conversationWindowSuite();
@@ -72,6 +74,78 @@ try {
   await fs.rm(profile, { recursive: true, force: true }).catch(() => {});
   await fs.rm(testData, { recursive: true, force: true }).catch(() => {});
   await fs.rm(extension, { recursive: true, force: true }).catch(() => {});
+}
+
+async function launchGuardSuite() {
+  const guardReady = await waitWorkerCondition("typeof globalThis.ChatSentinelTabLaunchGuard === 'object'");
+  assert.equal(guardReady, true, 'tab launch guard did not initialize in service worker');
+  const sanitized = await workerValue(`globalThis.ChatSentinelTabLaunchGuard.safeNewChatUrl('https://chatgpt.com/?prompt-textarea=SECRET&foo=bar')`);
+  assert.ok(!/prompt-textarea|SECRET/.test(sanitized), `unsafe launch URL: ${sanitized}`);
+
+  await openPage(fixtureUrl('too-many-requests'));
+  const tab = await waitWorkerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('/too-many-requests'));return t?{id:t.id,url:t.url}:null})()", value => Boolean(value?.id));
+  assert.ok(tab?.id, 'rate-limit fixture tab not found');
+  await waitContentReady(tab.id);
+  const state = await workerValue(`chrome.tabs.sendMessage(${tab.id},{type:'CHATSENTINEL_GET_LAUNCH_STATE'}).catch(()=>null)`);
+  assert.equal(state?.rateLimited, true);
+  assert.equal(state?.reason, 'chatgpt-rate-limited');
+  console.log('tab launch guard sanitization + rate-limit detection: PASS');
+}
+
+async function crashedTabRecoverySuite() {
+  const projectId = `project:${RUN}:crash-recovery`;
+  await postJson('/projects/upsert', {
+    projectId,
+    name: 'Crash Recovery Project',
+    projectPath: cleanProject,
+    operationClass: 'write',
+    autoRecovery: true,
+    groupTabs: false,
+    color: 'orange'
+  });
+
+  const page = await openPage(fixtureUrl('noidentity', { crashseed: '1' }));
+  const tab = await waitWorkerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('crashseed=1'));return t?{id:t.id,url:t.url,title:t.title}:null})()", value => Boolean(value?.id));
+  assert.ok(tab?.id, 'crash recovery seed tab not found');
+  await waitContentReady(tab.id);
+  await postJson('/projects/attach', {
+    projectId,
+    conversationId: `tab:${tab.id}`,
+    tabId: tab.id,
+    title: 'Crash Lane',
+    url: tab.url,
+    laneId: 'CRASH',
+    laneName: 'Crash Recovery Lane',
+    branch: 'feat/crash-recovery',
+    role: 'implementation'
+  });
+
+  const crashOne = fixtureUrl('browser-crash', { cid: `${RUN}-browser-crash-1` });
+  await workerValue(`chrome.tabs.update(${tab.id},{url:${JSON.stringify(crashOne)}})`);
+  const recovered = await waitWorkerValue(`chrome.tabs.get(${tab.id}).then(t=>({id:t.id,url:t.url,title:t.title})).catch(()=>null)`, value => Boolean(value?.url?.includes('command=lane')));
+  assert.equal(recovered?.id, tab.id, 'first crash should recover in the same tab');
+  const recoveredTarget = await waitTarget(row => row.type === 'page' && row.url.includes('command=lane'));
+  await waitEval(recoveredTarget, "String(document.body.dataset.sent||'').includes('browser tab crashed')");
+  console.log('browser crash reload + continue: PASS');
+
+  const crashTwo = fixtureUrl('browser-crash', { cid: `${RUN}-browser-crash-2` });
+  await workerValue(`chrome.tabs.update(${tab.id},{url:${JSON.stringify(crashTwo)}})`);
+  const replacementChat = await waitProjectLaneTab(projectId, 'CRASH', row => Number(row.tabId) !== Number(tab.id));
+  assert.ok(replacementChat?.tabId, 'second crash did not replace the tab');
+  const oldGone = await waitWorkerCondition(`chrome.tabs.get(${tab.id}).then(()=>false).catch(()=>true)`);
+  assert.equal(oldGone, true, 'old crashed tab remained after replacement');
+  const replacementTab = await workerValue(`chrome.tabs.get(${replacementChat.tabId}).then(t=>({id:t.id,url:t.url,title:t.title})).catch(()=>null)`);
+  assert.ok(replacementTab?.url?.includes('command=lane'));
+  const replacementTarget = await waitTarget(row => row.type === 'page' && row.url.includes('command=lane'));
+  await waitEval(replacementTarget, "String(document.body.dataset.sent||'').includes('browser tab crashed')");
+  console.log('browser crash replace + restore + continue: PASS');
+
+  const crashThree = fixtureUrl('browser-crash', { cid: `${RUN}-browser-crash-3` });
+  await workerValue(`chrome.tabs.update(${replacementChat.tabId},{url:${JSON.stringify(crashThree)}})`);
+  await sleep(1500);
+  const afterThird = await waitProjectLaneTab(projectId, 'CRASH', () => true);
+  assert.equal(Number(afterThird.tabId), Number(replacementChat.tabId), 'third crash should halt instead of opening another tab');
+  console.log('browser crash bounded recovery halt: PASS');
 }
 
 async function detectorSuite() {
@@ -239,6 +313,7 @@ async function commandManagerSuite() {
     payload: {
       projectId,
       prompt: seed,
+      url: 'https://chatgpt.com/?prompt-textarea=SHOULD-NOT-LEAK&foo=bar',
       laneId: 'C1',
       laneName: 'Command Lane C1',
       branch: 'feat/e2e-command-c1',
@@ -250,6 +325,8 @@ async function commandManagerSuite() {
   const completed = await waitCommand(queued.command.commandId, 'succeeded');
   assert.ok(completed.result?.tabId, 'command did not create a tab');
   assert.equal(completed.result?.promptSent, true);
+  assert.equal(completed.result?.launchUrlSanitized, true);
+  assert.ok(!/prompt-textarea|SHOULD-NOT-LEAK/.test(completed.result?.launchUrl || ''));
 
   const projects = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
   const project = projects.projects.find(row => row.projectId === projectId);
@@ -259,6 +336,22 @@ async function commandManagerSuite() {
 
   const target = await waitTarget(row => row.type === 'page' && row.url.includes('command=lane'));
   await waitEval(target, `document.body.dataset.sent === ${JSON.stringify(seed)}`);
+
+  const duplicateOwner = await postJson('/commands/enqueue', {
+    type: 'CREATE_LANE_CHAT',
+    idempotencyKey: `lane:${RUN}:C1:duplicate-owner`,
+    payload: { projectId, prompt: seed, laneId: 'C1', laneName: 'Command Lane C1', branch: 'feat/e2e-command-c1', role: 'coding' }
+  });
+  await workerValue('(globalThis.ChatSentinelCommandManager.kick(), true)');
+  const duplicateOwnerDone = await waitCommand(duplicateOwner.command.commandId, 'succeeded');
+  assert.equal(duplicateOwnerDone.result?.deduplicated, true);
+  assert.equal(duplicateOwnerDone.result?.ownerTabId, completed.result.tabId);
+  await sleep(500);
+  const afterDuplicate = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
+  const commandProject = afterDuplicate.projects.find(row => row.projectId === projectId);
+  assert.equal(commandProject.chats.filter(chat => chat.laneId === 'C1').length, 1, 'logical prompt must own exactly one live lane tab');
+  console.log('single-delivery ownership across duplicate create commands: PASS');
+
   const groups = await workerValue("chrome.tabGroups.query({title:'Command Project'})");
   assert.ok(groups.some(group => group.color === 'green'));
   console.log('durable supervisor CREATE_LANE_CHAT: PASS');
@@ -285,6 +378,18 @@ async function waitCommand(commandId, expectedStatus) {
   throw new Error(`command ${commandId} did not reach ${expectedStatus}`);
 }
 
+async function waitProjectLaneTab(projectId, laneId, predicate = () => true, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
+    const project = result.projects?.find(row => row.projectId === projectId);
+    const chat = project?.chats?.find(row => row.laneId === laneId && predicate(row));
+    if (chat) return chat;
+    await sleep(200);
+  }
+  throw new Error(`project ${projectId} lane ${laneId} did not reach expected tab state`);
+}
+
 async function waitProjectChatCount(projectId, count) {
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
@@ -305,6 +410,29 @@ async function waitContentReady(tabId) {
   }
   throw new Error(`content script not ready in tab ${tabId}`);
 }
+async function waitWorkerValue(expression, predicate = Boolean, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const value = await workerValue(expression);
+      if (predicate(value)) return value;
+    } catch {}
+    await sleep(200);
+  }
+  return null;
+}
+
+async function waitWorkerCondition(expression, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      if (await workerValue(expression)) return true;
+    } catch {}
+    await sleep(200);
+  }
+  return false;
+}
+
 async function workerValue(expression) {
   const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
   if (reply?.result?.exceptionDetails) throw new Error(JSON.stringify(reply.result.exceptionDetails));
@@ -481,8 +609,21 @@ async function prepareTestExtension(source, destination) {
   const executorPath = path.join(destination, 'command-executor.js');
   let executor = await fs.readFile(executorPath, 'utf8');
   executor = executor.replaceAll('http://127.0.0.1:4317', `http://127.0.0.1:${TEST_PORT}`);
-  executor = executor.replaceAll('https://chatgpt.com/', `http://127.0.0.1:4320/noidentity?watchdog=${TEST_PORT}&command=lane`);
   await fs.writeFile(executorPath, executor, 'utf8');
+
+  const backgroundPath = path.join(destination, 'background.js');
+  let background = await fs.readFile(backgroundPath, 'utf8');
+  background = background.replaceAll('http://127.0.0.1:4317', `http://127.0.0.1:${TEST_PORT}`);
+  await fs.writeFile(backgroundPath, background, 'utf8');
+
+  const guardPath = path.join(destination, 'components', 'tab-launch-guard', 'controller.js');
+  let guard = await fs.readFile(guardPath, 'utf8');
+  guard = guard.replace(
+    "const CHATGPT_HOME = 'https://chatgpt.com/';",
+    `const CHATGPT_HOME = 'http://127.0.0.1:4320/noidentity?watchdog=${TEST_PORT}&command=lane';`
+  );
+  guard = guard.replace('const DEFAULT_MIN_LAUNCH_GAP_MS = 6000;', 'const DEFAULT_MIN_LAUNCH_GAP_MS = 1000;');
+  await fs.writeFile(guardPath, guard, 'utf8');
 }
 
 async function prepareCleanProject(base) {

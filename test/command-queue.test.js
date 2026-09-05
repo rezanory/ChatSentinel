@@ -27,6 +27,19 @@ test('command queue persists and deduplicates by idempotency key', async t => {
   assert.equal(Object.keys(restored.commands).length, 1);
 });
 
+test('failed or cancelled idempotency key remains terminally deduplicated within retention', async t => {
+  const { dir, store } = await makeStore();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const input = { type: 'GROUP_PROJECT_TABS', payload: { projectId: 'p1' }, idempotencyKey: 'terminal:p1' };
+  const first = await enqueueCommand(store, input);
+  const claimed = await claimCommand(store, { workerId: 'worker-a', leaseMs: 5000 });
+  await completeCommand(store, { commandId: claimed.commandId, outcome: 'failed', error: 'target-tab-not-found' });
+  const second = await enqueueCommand(store, input);
+  assert.equal(second.deduplicated, true);
+  assert.equal(second.command.commandId, first.command.commandId);
+  assert.equal(second.command.status, 'failed');
+});
+
 test('command lease/progress/retry lifecycle is resumable', async t => {
   const { dir, store } = await makeStore();
   t.after(() => fs.rm(dir, { recursive: true, force: true }));

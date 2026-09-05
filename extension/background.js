@@ -4,11 +4,225 @@ const CLIENT_HEADERS = Object.freeze({
   'x-chatsentinel-client': 'extension'
 });
 
+importScripts('components/tab-launch-guard/controller.js', 'command-executor.js');
+
+const crashRecoveryInFlight = new Set();
+const crashRecoveryPending = new Map();
+
 chrome.action.onClicked.addListener(tab => togglePanelInTab(tab));
 chrome.tabs.onRemoved.addListener(tabId => {
-  chrome.storage.local.remove(`pendingProject:${tabId}`).catch(() => {});
-  apiRequest('/projects/detach', 'POST', { conversationId: `tab:${tabId}`, forget: true }).catch(() => {});
+  const guard = globalThis.ChatSentinelTabLaunchGuard;
+  chrome.storage.local.remove([`pendingProject:${tabId}`, guard?.crashRecoveryKey?.(tabId)]).catch(() => {});
+  detachRemovedFallback(tabId).catch(() => {});
 });
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  const guard = globalThis.ChatSentinelTabLaunchGuard;
+  if (!guard) return;
+  const titleFailure = typeof changeInfo.title === 'string'
+    ? guard.classifyTab({ ...tab, title: changeInfo.title })
+    : null;
+  const urlFailure = typeof changeInfo.url === 'string'
+    ? guard.classifyTab({ ...tab, url: changeInfo.url, title: '' })
+    : null;
+  const failure = titleFailure?.crashed ? titleFailure : (urlFailure?.crashed ? urlFailure : null);
+  if (!failure) return;
+  const observed = { ...tab, url: changeInfo.url || tab?.url, title: changeInfo.title || tab?.title };
+  recoverCrashedProjectTab(tabId, observed, failure).catch(error =>
+    console.warn('ChatSentinel crashed-tab recovery failed', error));
+});
+
+async function detachRemovedFallback(tabId) {
+  const conversationId = `tab:${tabId}`;
+  const context = await apiRequest(`/project/context?conversationId=${encodeURIComponent(conversationId)}`).catch(() => null);
+  if (Number(context?.config?.tabId) !== Number(tabId)) return false;
+  await apiRequest('/projects/detach', 'POST', { conversationId, forget: true }).catch(() => {});
+  return true;
+}
+
+async function recoverCrashedProjectTab(tabId, observedTab, failure) {
+  if (crashRecoveryInFlight.has(tabId)) {
+    crashRecoveryPending.set(tabId, { observedTab, failure, queuedAt: Date.now() });
+    return { ok: false, queued: true, reason: 'crash-recovery-in-flight' };
+  }
+  crashRecoveryInFlight.add(tabId);
+  try {
+    const context = await findProjectChatByTab(tabId);
+    if (!context?.project || !context?.chat) return { ok: false, reason: 'crashed-tab-not-project-owned' };
+    if (!context.project.autoRecovery) return { ok: false, reason: 'project-auto-recovery-disabled' };
+
+    const guard = globalThis.ChatSentinelTabLaunchGuard;
+    const key = guard.crashRecoveryKey(tabId);
+    const stored = await chrome.storage.local.get(key);
+    const previous = stored?.[key] || {};
+    const next = guard.nextCrashRecoveryAction(previous);
+    if (next.action === 'halt') {
+      await chrome.storage.local.set({ [key]: { ...previous, status: 'halted', failure, updatedAt: Date.now() } });
+      return { ok: false, reason: 'crash-recovery-budget-exhausted' };
+    }
+
+    const recovery = {
+      ...previous,
+      attempts: next.attempts + 1,
+      action: next.action,
+      status: 'running',
+      failure,
+      conversationId: context.chat.conversationId,
+      projectId: context.project.projectId,
+      safeUrl: guard.safeExistingChatUrl(context.chat.url || observedTab?.url),
+      updatedAt: Date.now()
+    };
+    await chrome.storage.local.set({ [key]: recovery });
+
+    if (next.action === 'reload-and-continue') {
+      const reloaded = await reloadCrashedTab(tabId, context, recovery);
+      if (reloaded.ok) return reloaded;
+      return replaceCrashedTab(tabId, context, { ...recovery, attempts: 2, action: 'replace-and-continue' });
+    }
+    return replaceCrashedTab(tabId, context, recovery);
+  } finally {
+    crashRecoveryInFlight.delete(tabId);
+    if (crashRecoveryPending.has(tabId)) {
+      setTimeout(() => drainPendingCrashRecovery(tabId).catch(error =>
+        console.warn('ChatSentinel pending crash recovery failed', error)), 250);
+    }
+  }
+}
+
+async function drainPendingCrashRecovery(tabId) {
+  const pending = crashRecoveryPending.get(tabId);
+  if (!pending || crashRecoveryInFlight.has(tabId)) return false;
+  crashRecoveryPending.delete(tabId);
+  const current = await chrome.tabs.get(tabId).catch(() => null);
+  if (!current) return false;
+  const guard = globalThis.ChatSentinelTabLaunchGuard;
+  const currentFailure = guard.classifyTab(current);
+  if (!currentFailure.crashed) return false;
+  await recoverCrashedProjectTab(tabId, current, currentFailure);
+  return true;
+}
+
+async function reloadCrashedTab(tabId, context, recovery) {
+  const guard = globalThis.ChatSentinelTabLaunchGuard;
+  await guard.acquireLaunchSlot(chrome.storage.local, sleep);
+  await chrome.tabs.update(tabId, { url: recovery.safeUrl }).catch(() => null);
+  const ready = await waitForRecoveryContent(tabId, 15000, recovery.safeUrl);
+  if (!ready) return { ok: false, reason: 'crash-reload-content-not-ready' };
+  const sent = await sendCrashContinuation(tabId, context, recovery);
+  if (!sent.ok) return sent;
+  await chrome.storage.local.set({
+    [guard.crashRecoveryKey(tabId)]: { ...recovery, status: 'continued-after-reload', continuationSent: true, updatedAt: Date.now() }
+  });
+  return { ok: true, action: 'reload-and-continue', tabId };
+}
+
+async function replaceCrashedTab(oldTabId, context, recovery) {
+  const guard = globalThis.ChatSentinelTabLaunchGuard;
+  await guard.acquireLaunchSlot(chrome.storage.local, sleep);
+  const oldTab = await chrome.tabs.get(oldTabId).catch(() => null);
+  const newTab = await chrome.tabs.create({
+    url: recovery.safeUrl,
+    active: false,
+    ...(oldTab?.windowId ? { windowId: oldTab.windowId } : {})
+  });
+  await chrome.storage.local.set({
+    [guard.crashRecoveryKey(newTab.id)]: { ...recovery, attempts: 2, status: 'replacement-created', parentTabId: oldTabId, updatedAt: Date.now() }
+  });
+
+  const ready = await waitForRecoveryContent(newTab.id, 20000, recovery.safeUrl);
+  if (!ready) {
+    await chrome.tabs.remove(newTab.id).catch(() => {});
+    return { ok: false, reason: 'crash-replacement-content-not-ready' };
+  }
+  const replacementConversationId = String(context.chat.conversationId || '').startsWith('tab:')
+    ? `tab:${newTab.id}`
+    : context.chat.conversationId;
+  const attach = await apiRequest('/projects/attach', 'POST', {
+    projectId: context.project.projectId,
+    conversationId: replacementConversationId,
+    tabId: newTab.id,
+    title: context.chat.title,
+    url: recovery.safeUrl,
+    laneId: context.chat.laneId,
+    laneName: context.chat.laneName,
+    branch: context.chat.branch,
+    role: context.chat.role
+  }).catch(() => null);
+  if (!attach?.ok) {
+    await chrome.tabs.remove(newTab.id).catch(() => {});
+    return { ok: false, reason: 'crash-replacement-attach-failed' };
+  }
+
+  const replacementContext = { ...context, chat: { ...context.chat, conversationId: replacementConversationId, tabId: newTab.id } };
+  const sent = await sendCrashContinuation(newTab.id, replacementContext, recovery);
+  if (!sent.ok) {
+    await chrome.storage.local.set({
+      [guard.crashRecoveryKey(newTab.id)]: { ...recovery, attempts: 2, status: 'replacement-continuation-pending', updatedAt: Date.now() }
+    });
+  } else {
+    await chrome.storage.local.set({
+      [guard.crashRecoveryKey(newTab.id)]: { ...recovery, attempts: 2, status: 'continued-after-replace', continuationSent: true, updatedAt: Date.now() }
+    });
+  }
+
+  const refreshed = await apiRequest('/projects').catch(() => null);
+  const project = refreshed?.projects?.find(row => row.projectId === context.project.projectId);
+  if (project?.groupTabs !== false) await groupProjectTabs(project).catch(() => {});
+  await chrome.tabs.remove(oldTabId).catch(() => {});
+  return { ok: true, action: 'replace-and-continue', oldTabId, tabId: newTab.id, continuationSent: Boolean(sent.ok) };
+}
+
+async function sendCrashContinuation(tabId, context, recovery) {
+  const guard = globalThis.ChatSentinelTabLaunchGuard;
+  const prompt = guard.buildCrashContinuationPrompt({ branch: context.chat.branch });
+  const commandId = `crash-recovery:${context.chat.conversationId}:${String(recovery.updatedAt || Date.now())}`;
+  let last = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    last = await chrome.tabs.sendMessage(tabId, {
+      type: 'CHATSENTINEL_SEND_PROMPT',
+      commandId,
+      prompt
+    }).catch(error => ({ ok: false, error: String(error) }));
+    if (last?.ok) return last;
+    await sleep(2000);
+  }
+  return last || { ok: false, reason: 'crash-continuation-send-failed' };
+}
+
+async function waitForRecoveryContent(tabId, timeoutMs, expectedUrl) {
+  const deadline = Date.now() + Math.max(1000, Number(timeoutMs || 15000));
+  while (Date.now() < deadline) {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (tab && sameRecoveryLocation(tab.url, expectedUrl)) {
+      const reply = await chrome.tabs.sendMessage(tabId, { type: 'CHATSENTINEL_GET_IDENTITY' }).catch(() => null);
+      if (reply?.ok) {
+        await sleep(750);
+        const confirmed = await chrome.tabs.get(tabId).catch(() => null);
+        if (confirmed && sameRecoveryLocation(confirmed.url, expectedUrl)) return true;
+      }
+    }
+    await sleep(500);
+  }
+  return false;
+}
+
+function sameRecoveryLocation(actual, expected) {
+  try {
+    const a = new URL(String(actual || ''));
+    const e = new URL(String(expected || ''));
+    return a.origin === e.origin && a.pathname === e.pathname;
+  } catch {
+    return false;
+  }
+}
+
+async function findProjectChatByTab(tabId) {
+  const response = await apiRequest('/projects').catch(() => null);
+  for (const project of response?.projects || []) {
+    const chat = (project.chats || []).find(row => Number(row.tabId) === Number(tabId));
+    if (chat) return { project, chat };
+  }
+  return null;
+}
 
 async function togglePanelInTab(tab) {
   if (!tab?.id || !isChatGptUrl(tab.url)) return { ok: false, error: 'chatgpt-tab-required' };
@@ -16,7 +230,7 @@ async function togglePanelInTab(tab) {
   if (response?.ok) return response;
   await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    files: ['components/message-delivery-recovery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'project-console.js']
+    files: ['components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'project-console.js']
   });
   response = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_TOGGLE_PANEL' }).catch(error => ({ ok: false, error: String(error) }));
   return response || { ok: false, error: 'panel-toggle-failed' };
@@ -125,8 +339,12 @@ async function migrateTabIdentity(tabId, conversationId, signal) {
         projectId,
         conversationId,
         tabId,
-        title: signal.title,
-        url: signal.url
+        title: signal.title || fallback.config.title,
+        url: signal.url || fallback.config.url,
+        laneId: fallback.config.laneId,
+        laneName: fallback.config.laneName,
+        branch: fallback.config.branch,
+        role: fallback.config.role
       });
     }
     await apiRequest('/projects/detach', 'POST', { conversationId: fallbackId, forget: true });
@@ -190,10 +408,34 @@ async function focusTab(tabId, fallbackUrl) {
     } catch {}
   }
   if (typeof fallbackUrl === 'string' && /^https:\/\/chatgpt\.com\//i.test(fallbackUrl)) {
-    const tab = await chrome.tabs.create({ url: fallbackUrl, active: true });
+    const tab = await createPacedTab({ url: fallbackUrl, active: true, newChat: false });
     return { ok: true, tabId: tab.id, reused: false };
   }
   return { ok: false, error: 'chat-tab-unavailable' };
+}
+
+async function createPacedTab({ url, active = false, windowId, newChat = false } = {}) {
+  const guard = globalThis.ChatSentinelTabLaunchGuard;
+  if (!guard) throw new Error('tab-launch-guard-unavailable');
+  const safeUrl = newChat ? guard.safeNewChatUrl(url) : guard.safeExistingChatUrl(url);
+  await guard.acquireLaunchSlot(chrome.storage.local, sleep);
+  const tab = await chrome.tabs.create({
+    url: safeUrl,
+    active,
+    ...(Number.isInteger(Number(windowId)) ? { windowId: Number(windowId) } : {})
+  });
+  await sleep(guard.DEFAULT_PAGE_SETTLE_MS);
+  const current = await chrome.tabs.get(tab.id).catch(() => tab);
+  const state = guard.classifyTab(current);
+  if (!state.healthy) {
+    await chrome.tabs.remove(tab.id).catch(() => {});
+    throw new Error(state.reason || 'tab-launch-failed');
+  }
+  return current;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // Tab grouping pattern adapted from GoogleChrome/chrome-extensions-samples
@@ -228,10 +470,11 @@ async function groupProjectTabs(project) {
 
 async function newProjectChat(project, sourceTab) {
   if (!project?.projectId) return { ok: false, error: 'project-required' };
-  const tab = await chrome.tabs.create({
+  const tab = await createPacedTab({
     url: 'https://chatgpt.com/',
     active: true,
-    windowId: sourceTab?.windowId
+    windowId: sourceTab?.windowId,
+    newChat: true
   });
   await chrome.storage.local.set({ [`pendingProject:${tab.id}`]: project.projectId });
   if (project.groupTabs !== false) {
@@ -273,5 +516,3 @@ function fixtureNewChatUrl(url, conversationId) {
 function isChatGptUrl(url) {
   return /^https:\/\/chatgpt\.com\//i.test(url || '');
 }
-
-importScripts('command-executor.js');

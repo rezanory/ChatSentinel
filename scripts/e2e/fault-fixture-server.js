@@ -26,6 +26,7 @@ function render(kind, id) {
   let progress = '';
   let identityAttr = ` data-chatsentinel-conversation-id="${id}"`;
   let headScript = '';
+  let title = kind;
 
   if (kind === 'running') state = '<button aria-label="Stop generating">Stop generating</button>';
   if (kind === 'retry') state = '<button id="retry" onclick="document.body.dataset.retryClicked=\'1\';this.textContent=\'Retried\'">Retry</button>';
@@ -40,6 +41,11 @@ function render(kind, id) {
     <div role="alert" data-message-id="delivery-old-timeout">Message delivery timed out. Please try again.<button aria-label="Retry">Retry</button></div>
     <article data-message-author-role="assistant" data-message-id="delivery-later-assistant">Later completed answer</article>
   </main>`;
+  if (kind === 'too-many-requests') state = `<main><div role="dialog"><h2>Too many requests</h2><p>You're making requests too quickly. We've temporarily limited access to your conversations to protect your data.</p><p>Please wait a few minutes before trying again.</p><button>Got it</button></div></main>`;
+  if (kind === 'browser-crash') {
+    title = 'This page is having a problem';
+    state = '<main>This page is having a problem</main>';
+  }
   if (kind === 'interrupt') state = `<main><article data-message-author-role="assistant" data-message-id="active-partial">Partial answer</article><div role="alert">Connection interrupted. Waiting for the complete answer</div></main>`;
   if (kind === 'interrupt-history') state = `<main>
     <article data-message-author-role="assistant" data-message-id="old-interrupt">Connection interrupted. Waiting for the complete answer</article>
@@ -57,7 +63,7 @@ function render(kind, id) {
   const composer = `<textarea id="prompt-textarea"></textarea>
     <button aria-label="Send" onclick="document.body.dataset.sent=document.querySelector('#prompt-textarea').value;document.body.dataset.sendCount=String(Number(document.body.dataset.sendCount||0)+1)">Send</button>`;
   return `<!doctype html><html${identityAttr}${progress}>
-    <head><title>${kind}</title>${headScript}</head><body>${state}${composer}</body></html>`;
+    <head><title>${title}</title>${headScript}</head><body>${state}${composer}</body></html>`;
 }
 
 

@@ -7,6 +7,12 @@
       sendResponse({ ok: true, identity: currentIdentity() });
       return;
     }
+    if (message?.type === 'CHATSENTINEL_GET_LAUNCH_STATE') {
+      const guard = globalThis.ChatSentinelTabLaunchGuard;
+      const state = guard?.inspectPage?.(document) || { healthy: false, rateLimited: false, crashed: false, reason: 'launch-guard-unavailable' };
+      sendResponse({ ok: true, ...state });
+      return;
+    }
     if (message?.type === 'CHATSENTINEL_SEND_PROMPT') {
       const commandId = String(message.commandId || '').trim();
       const marker = commandId ? `chatsentinel:command:${commandId}` : '';
