@@ -10,7 +10,8 @@ import { authorizeRequest, createRateLimiter, requestId, setCors } from './http-
 import { validateCommandClaim, validateCommandComplete, validateCommandEnqueue, validateCommandProgress, validateConversationConfig, validateProject, validateProjectAttach, validateReconcileRequest, validateSignal } from './validation.js';
 import { cancelCommand, claimCommand, completeCommand, enqueueCommand, listCommands, updateCommandProgress } from './command-queue.js';
 import { configureOrchestration, tickProjectOrchestration } from './components/project-orchestrator/controller.js';
-
+import { searchProjectChats } from './project-search.js';
+import { applyPortableImport, createPortableBundle, previewPortableImport } from './portable-bundle.js';
 export async function createWatchdogServer(config) {
   const logger = createLogger({ dir: config.logDir });
   const store = new StateStore({
@@ -326,6 +327,36 @@ async function route(req, res, ctx) {
     const projectPath = parsed.value.projectPath || project?.projectPath || current.projectPath;
     const reconciliation = await reconcileProject(projectPath);
     return json(res, reconciliation.ok ? 200 : 422, { ok: reconciliation.ok, reconciliation });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/search') {
+    const result = searchProjectChats(store, Object.fromEntries(url.searchParams.entries()));
+    return json(res, result.ok ? 200 : 400, result);
+  }
+
+  if (req.method === 'GET' && url.pathname === '/portable/export') {
+    const projectIds = url.searchParams.getAll('projectId');
+    const bundle = createPortableBundle(store, {
+      projectIds,
+      includeRecoverySnapshots: url.searchParams.get('includeRecoverySnapshots') !== 'false'
+    });
+    return json(res, 200, { ok: true, bundle });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/portable/import/preview') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const result = previewPortableImport(store, body?.bundle);
+    return json(res, result.ok ? 200 : 400, result);
+  }
+
+  if (req.method === 'POST' && url.pathname === '/portable/import/apply') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const result = await applyPortableImport(store, body?.bundle, {
+      previewToken: body?.previewToken,
+      applyRecoverySnapshots: body?.applyRecoverySnapshots === true
+    });
+    if (result.ok) logger.info('portable-import-applied', result.applied);
+    return json(res, result.ok ? 200 : 400, result);
   }
 
   if (req.method === 'POST' && url.pathname === '/signal') {

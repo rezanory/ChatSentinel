@@ -17,7 +17,10 @@
     conversationId: null,
     context: null,
     projects: [],
-    selectedProjectId: null
+    selectedProjectId: null,
+    searchResults: [],
+    importBundle: null,
+    importPreview: null
   };
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -100,6 +103,7 @@
           </div>
           <div class="card" id="projectEditor"></div>
           <div class="card" id="chatGroup"></div>
+          <div class="card" id="searchPortable"></div>
         </div>
         <div class="footer">v1.1 · local-first project watchdog</div>
       </div>`;
@@ -137,6 +141,7 @@
     renderProjects();
     renderProjectEditor(selectedProject());
     renderChatGroup(selectedProject());
+    renderSearchPortable();
   }
 
   function renderCurrent() {
@@ -318,6 +323,106 @@
       });
       list.append(row);
     }
+  }
+
+  function renderSearchPortable() {
+    const card = shadow.getElementById('searchPortable');
+    const preview = state.importPreview?.preview;
+    card.innerHTML = `
+      <h3>Search · Export · Import</h3>
+      <div class="row">
+        <input id="searchQuery" placeholder="Search projects and chats">
+        <select id="searchState"><option value="">Any state</option><option>RUNNING</option><option>STALLED</option><option>INTERRUPTED</option><option>DEAD</option><option>COMPLETE</option></select>
+        <button id="runSearch">Search</button>
+      </div>
+      <div id="searchResults" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:10px">
+        <button id="exportProject">Export selected project</button>
+        <button id="importProject">Import bundle</button>
+        <input id="importFile" type="file" accept="application/json,.json" style="display:none">
+      </div>
+      <div id="importStatus" class="muted" style="margin-top:8px">${preview ? escapeHtml(`Preview: +${preview.projectsCreate} projects, ${preview.projectsUpdate} updates, +${preview.configsCreate} chats, ${preview.conflicts.length} conflicts`) : 'Import is previewed before any changes are applied.'}</div>
+      ${preview ? '<div class="row" style="margin-top:8px"><label><input id="applySnapshots" type="checkbox" style="width:auto"> Apply recovery snapshots</label><button class="primary" id="applyImport">Apply reviewed import</button></div>' : ''}`;
+    shadow.getElementById('runSearch').addEventListener('click', runSearch);
+    shadow.getElementById('exportProject').addEventListener('click', exportProject);
+    shadow.getElementById('importProject').addEventListener('click', () => shadow.getElementById('importFile').click());
+    shadow.getElementById('importFile').addEventListener('change', previewImportFile);
+    shadow.getElementById('applyImport')?.addEventListener('click', applyReviewedImport);
+    renderSearchResults();
+  }
+
+  async function runSearch() {
+    const query = shadow.getElementById('searchQuery').value.trim();
+    const searchState = shadow.getElementById('searchState').value;
+    const params = new URLSearchParams({ query, state: searchState });
+    const project = selectedProject();
+    if (project?.projectId) params.set('projectId', project.projectId);
+    const result = await api(`/search?${params}`);
+    state.searchResults = result.ok ? result.results : [];
+    renderSearchResults();
+  }
+
+  function renderSearchResults() {
+    const list = shadow.getElementById('searchResults');
+    if (!list) return;
+    if (!state.searchResults.length) {
+      list.innerHTML = '<div class="muted">No search results yet.</div>';
+      return;
+    }
+    list.replaceChildren();
+    for (const result of state.searchResults.slice(0, 50)) {
+      const row = document.createElement('div');
+      row.className = 'chat';
+      row.innerHTML = `<div><div class="chat-title">${escapeHtml(result.title || result.conversationId)}</div><div class="decision">${escapeHtml(`${result.projectName || 'Unassigned'} · ${result.state} · ${result.action || '—'}`)}</div></div><button ${result.tabId ? '' : 'disabled'}>Open</button>`;
+      row.querySelector('button').addEventListener('click', () => runtime({ type: 'CHATSENTINEL_FOCUS_TAB', tabId: result.tabId, url: result.url }));
+      list.append(row);
+    }
+  }
+
+  async function exportProject() {
+    const project = selectedProject();
+    const suffix = project?.projectId ? `?projectId=${encodeURIComponent(project.projectId)}` : '';
+    const result = await api(`/portable/export${suffix}`);
+    if (!result.ok) return;
+    const blob = new Blob([JSON.stringify(result.bundle, null, 2)], { type: 'application/json' });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `chatsentinel-${project?.name || 'projects'}-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(href);
+  }
+
+  async function previewImportFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      state.importBundle = JSON.parse(await file.text());
+      const result = await api('/portable/import/preview', 'POST', { bundle: state.importBundle });
+      state.importPreview = result.ok ? result : null;
+      renderSearchPortable();
+      if (!result.ok) shadow.getElementById('importStatus').textContent = result.error || 'Import validation failed';
+    } catch {
+      state.importBundle = null;
+      state.importPreview = null;
+      shadow.getElementById('importStatus').textContent = 'Invalid JSON import file';
+    }
+  }
+
+  async function applyReviewedImport() {
+    if (!state.importBundle || !state.importPreview?.previewToken) return;
+    const result = await api('/portable/import/apply', 'POST', {
+      bundle: state.importBundle,
+      previewToken: state.importPreview.previewToken,
+      applyRecoverySnapshots: Boolean(shadow.getElementById('applySnapshots')?.checked)
+    });
+    if (!result.ok) {
+      shadow.getElementById('importStatus').textContent = result.error || 'Import failed';
+      return;
+    }
+    state.importBundle = null;
+    state.importPreview = null;
+    await refresh();
   }
 
   function selectedProject() {
