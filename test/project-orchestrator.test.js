@@ -81,3 +81,19 @@ test('idle lane replaces chat after fix budget is exhausted', () => {
   assert.equal(result.action, OrchestratorAction.REPLACE);
   assert.equal(result.reason, 'fix-budget-exhausted');
 });
+
+test('missing exact lane contract blocks instead of launching with an unknown baseline', () => {
+  const completion = detectLaneCompletion({
+    lane: { laneId: 'C2', branch: 'feat/c2', baselineSha: '' },
+    session: {},
+    git: {}
+  });
+  assert.equal(completion.reason, 'lane-contract-incomplete');
+  const decision = decideLaneAction({
+    lane: { laneId: 'C2', branch: 'feat/c2', baselineSha: '' },
+    session: {},
+    completion
+  });
+  assert.equal(decision.action, OrchestratorAction.BLOCKED);
+  assert.equal(decision.reason, 'lane-contract-incomplete');
+});

@@ -94,6 +94,7 @@ export function validateProjectAttach(body) {
     laneId: body.laneId === undefined ? undefined : cleanString(body.laneId, 100),
     laneName: body.laneName === undefined ? undefined : cleanString(body.laneName, 160),
     branch: body.branch === undefined ? undefined : cleanString(body.branch, 240),
+    baselineSha: body.baselineSha === undefined ? undefined : cleanString(body.baselineSha, 40),
     role: body.role === undefined ? undefined : cleanString(body.role, 120)
   } };
 }
@@ -169,6 +170,7 @@ function validateCommandPayload(type, payload) {
     laneId: payload.laneId === undefined ? undefined : cleanString(payload.laneId, 100),
     laneName: payload.laneName === undefined ? undefined : cleanString(payload.laneName, 160),
     branch: payload.branch === undefined ? undefined : cleanString(payload.branch, 240),
+    baselineSha: payload.baselineSha === undefined ? undefined : cleanString(payload.baselineSha, 40),
     role: payload.role === undefined ? undefined : cleanString(payload.role, 120),
     closeOld: Boolean(payload.closeOld)
   } };

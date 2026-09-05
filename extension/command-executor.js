@@ -140,6 +140,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
         laneId: payload.laneId,
         laneName: payload.laneName,
         branch: payload.branch,
+        baselineSha: payload.baselineSha,
         role: payload.role
       });
       if (!attached?.ok) throw new Error(attached?.error || 'project-attach-failed');
@@ -171,6 +172,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
           tabId: delivery.ownerTabId,
           laneId: payload.laneId,
           branch: payload.branch,
+          baselineSha: payload.baselineSha,
           promptSent: Boolean(delivery.promptSent),
           deliveryConfirmed: Boolean(delivery.deliveryConfirmed),
           deduplicated: true,
@@ -191,6 +193,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
         laneId: payload.laneId,
         laneName: payload.laneName,
         branch: payload.branch,
+        baselineSha: payload.baselineSha,
         role: payload.role
       });
       if (stableAttach?.ok) {
@@ -205,6 +208,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
       conversationId: identity || fallbackId,
       laneId: payload.laneId,
       branch: payload.branch,
+      baselineSha: payload.baselineSha,
       promptSent: true,
       deliveryConfirmed: Boolean(command.progress?.deliveryConfirmed),
       deliveryEvidence: command.progress?.deliveryEvidence,

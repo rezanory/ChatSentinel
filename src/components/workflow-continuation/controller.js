@@ -30,6 +30,8 @@ export function normalizeWorkflow(input = {}) {
   const stages = Array.isArray(input.stages)
     ? input.stages.map(normalizeStage).filter(Boolean)
     : [];
+  const stageBaselines = normalizeStageBaselines(input.stageBaselines);
+  const boundStages = stages.map(stage => bindStageBaseline(stage, stageBaselines[stage.stageId]));
   const completedStageIds = [...new Set(
     (Array.isArray(input.completedStageIds) ? input.completedStageIds : [])
       .map(value => String(value || '').trim())
@@ -41,7 +43,7 @@ export function normalizeWorkflow(input = {}) {
   const currentStageId = String(input.currentStageId || '').trim();
   return {
     enabled,
-    valid: !enabled || stages.length > 0 || Boolean(input.sourcePath),
+    valid: !enabled || boundStages.length > 0 || Boolean(input.sourcePath),
     goal: String(input.goal?.label || input.goal || '').trim(),
     goalId: String(input.goal?.id || input.goalId || '').trim(),
     terminalStageId,
@@ -50,10 +52,15 @@ export function normalizeWorkflow(input = {}) {
     completedStageIds,
     completedAt: String(input.completedAt || '').trim(),
     plannerLane: normalizeLane(input.plannerLane),
+    profileId: String(input.profileId || '').trim(),
+    canonicalSources: Array.isArray(input.canonicalSources) ? input.canonicalSources : [],
+    canonicalTotals: input.canonicalTotals && typeof input.canonicalTotals === 'object' ? input.canonicalTotals : null,
+    derivedFromCanonicalRoadmap: input.derivedFromCanonicalRoadmap === true,
     maxParallelLanes: input.maxParallelLanes === undefined || input.maxParallelLanes === null
       ? null
       : Math.max(1, Math.min(8, Number(input.maxParallelLanes || 2))),
-    stages
+    stageBaselines,
+    stages: boundStages
   };
 }
 
@@ -117,7 +124,8 @@ export function applyWorkflowState(workflow, update = {}) {
   return normalizeWorkflow({
     ...workflow,
     currentStageId: update.currentStageId ?? workflow.currentStageId,
-    completedStageIds: update.completedStageIds ?? workflow.completedStageIds
+    completedStageIds: update.completedStageIds ?? workflow.completedStageIds,
+    stageBaselines: update.stageBaselines ?? workflow.stageBaselines
   });
 }
 
@@ -129,16 +137,36 @@ function mergeWorkflowState(manifest, configured, file) {
       : manifest.completedStageIds,
     plannerLane: configured.plannerLane || manifest.plannerLane,
     maxParallelLanes: configured.maxParallelLanes || manifest.maxParallelLanes || 2,
-    completedAt: configured.completedAt || manifest.completedAt || ''
+    completedAt: configured.completedAt || manifest.completedAt || '',
+    stageBaselines: { ...(manifest.stageBaselines || {}), ...(configured.stageBaselines || {}) }
   };
   return {
     ...manifest,
     ...state,
+    stages: manifest.stages.map(stage => bindStageBaseline(stage, state.stageBaselines[stage.stageId])),
     enabled: true,
     sourcePath: configured.sourcePath,
     sourceFile: file,
     sourceResolved: true,
     valid: manifest.valid && manifest.stages.length > 0
+  };
+}
+
+function normalizeStageBaselines(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  return Object.fromEntries(Object.entries(input)
+    .map(([stageId, value]) => [String(stageId || '').trim(), String(value || '').trim().toLowerCase()])
+    .filter(([stageId, value]) => stageId && /^[0-9a-f]{40}$/.test(value)));
+}
+
+function bindStageBaseline(stage, baselineSha) {
+  const baseline = String(baselineSha || '').trim().toLowerCase();
+  if (!stage || !/^[0-9a-f]{40}$/.test(baseline)) return stage;
+  return {
+    ...stage,
+    baselineSha: baseline,
+    lanes: (stage.lanes || []).map(lane => ({ ...lane, baselineSha: baseline })),
+    integrationLane: stage.integrationLane ? { ...stage.integrationLane, baselineSha: baseline } : null
   };
 }
 

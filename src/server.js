@@ -514,6 +514,7 @@ function projectRows(store) {
             laneId: config.laneId,
             laneName: config.laneName,
             branch: config.branch,
+            baselineSha: config.baselineSha,
             role: config.role,
             attachedAt: config.attachedAt,
             state: session.state,

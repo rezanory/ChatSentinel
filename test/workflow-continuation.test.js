@@ -257,3 +257,72 @@ test('orchestration config can derive the active lane set directly from a workfl
   assert.equal(result.orchestration.workflow.currentStageId, 'PH7');
   assert.deepEqual(result.orchestration.lanes.map(row => row.laneId), ['PH7-A', 'PH7-B']);
 });
+
+test('workflow advance binds the exact green integration head to every next-stage lane', async () => {
+  const green = 'cccccccccccccccccccccccccccccccccccccccc';
+  const project = { projectId: 'project:baseline', orchestration: { enabled: true } };
+  const store = fakeStore(project);
+  const workflow = normalizeWorkflow({
+    enabled: true,
+    currentStageId: 'PH7-W01',
+    terminalStageId: 'PH10.5-W01',
+    maxParallelLanes: 8,
+    stages: [
+      { stageId: 'PH7-W01', lanes: [{ laneId: 'A', branch: 'feat/a', baselineSha: 'base' }] },
+      {
+        stageId: 'PH8-W01',
+        lanes: [
+          { laneId: 'B1', prompt: 'b1', branch: 'feat/b1' },
+          { laneId: 'B2', prompt: 'b2', branch: 'feat/b2' }
+        ],
+        integrationLane: { laneId: 'INT-B', prompt: 'integrate', branch: 'integration/b' }
+      },
+      { stageId: 'PH10.5-W01', lanes: [{ laneId: 'Z', prompt: 'z', branch: 'feat/z' }] }
+    ]
+  });
+  const plan = {
+    enabled: true,
+    repoPath: 'repo',
+    workflow,
+    lanes: workflow.stages[0].lanes,
+    integrationLane: null
+  };
+  const result = await advanceWorkflow(store, project, plan, workflow, {
+    nextStageId: 'PH8-W01',
+    nextBaselineSha: green,
+    completedStageIds: ['PH7-W01']
+  });
+  assert.equal(store.project.orchestration.workflow.stageBaselines['PH8-W01'], green);
+  assert.deepEqual(store.project.orchestration.lanes.map(row => row.baselineSha), [green, green]);
+  assert.equal(store.project.orchestration.integrationLane.baselineSha, green);
+  assert.deepEqual(result.commands.map(row => row.payload.baselineSha), [green, green]);
+  assert.equal(result.workflowTransition.baselineSha, green);
+});
+
+test('persisted stage baseline rebinds a source-backed manifest without changing its source file', async t => {
+  const green = 'dddddddddddddddddddddddddddddddddddddddd';
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'chatsentinel-baseline-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
+  await fs.mkdir(path.join(dir, 'control'), { recursive: true });
+  const manifest = JSON.stringify({
+    enabled: true,
+    terminalStageId: 'PH10.5-W01',
+    stages: [
+      { stageId: 'PH8-W01', lanes: [{ laneId: 'B', branch: 'feat/b', prompt: 'b' }] },
+      { stageId: 'PH10.5-W01', lanes: [{ laneId: 'Z', branch: 'feat/z', prompt: 'z' }] }
+    ]
+  });
+  const file = path.join(dir, 'control', 'chatsentinel-workflow.json');
+  await fs.writeFile(file, manifest, 'utf8');
+  const resolved = await resolveWorkflow({
+    repoPath: dir,
+    workflow: {
+      enabled: true,
+      sourcePath: 'control/chatsentinel-workflow.json',
+      currentStageId: 'PH8-W01',
+      stageBaselines: { 'PH8-W01': green }
+    }
+  });
+  assert.equal(selectCurrentStage(resolved).lanes[0].baselineSha, green);
+  assert.equal(await fs.readFile(file, 'utf8'), manifest);
+});

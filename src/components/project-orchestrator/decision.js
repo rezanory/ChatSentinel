@@ -23,6 +23,7 @@ export function detectLaneCompletion({ lane = {}, session = {}, git = {} } = {})
 }
 export function decideLaneAction({ lane = {}, session = {}, completion = {}, activeCommand = null, lastCommand = null } = {}) {
   if (completion.complete) return { action: OrchestratorAction.WAIT, reason: 'lane-complete' };
+  if (completion.reason === 'lane-contract-incomplete') return { action: OrchestratorAction.BLOCKED, reason: 'lane-contract-incomplete' };
   if (activeCommand && ['pending', 'running'].includes(activeCommand.status)) {
     return { action: OrchestratorAction.WAIT, reason: 'command-in-flight' };
   }

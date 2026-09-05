@@ -55,6 +55,9 @@ test('activation creates and attaches a deterministic project from known project
   assert.equal(result.orchestrationActivation.configure.route, '/orchestrator/configure');
   assert.equal(result.orchestrationActivation.configure.client, 'local-process');
   assert.equal(result.orchestrationActivation.laneCommand, 'CREATE_LANE_CHAT');
+  assert.equal(result.orchestrationActivation.workflowProfileParameter, 'workflowProfileId');
+  assert.equal(result.orchestrationActivation.canonicalWorkflowCompilation, true);
+  assert.equal(result.orchestrationActivation.stageBaselinePolicy, 'PREVIOUS_GREEN_INTEGRATION_HEAD');
   assert.deepEqual(result.orchestrationActivation.laneContract, ['laneId', 'branch', 'baselineSha', 'prompt']);
   assert.equal(result.orchestrationActivation.independentLanesOnly, true);
 });

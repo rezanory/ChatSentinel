@@ -1,0 +1,89 @@
+{
+    "schemaVersion":  1,
+    "workflowId":  "rezanory/chat-project:ph7-ph10.5:v1",
+    "repository":  "rezanory/chat-project",
+    "goal":  {
+                 "id":  "PH7-PH10.5",
+                 "label":  "Complete rezanory/chat-project from PH-7 through PH-10.5",
+                 "terminalPhase":  "PH-10.5"
+             },
+    "stagePolicy":  "TOPOLOGICAL_WAVES",
+    "baselinePolicy":  "PREVIOUS_GREEN_INTEGRATION_HEAD",
+    "maxParallelLanes":  8,
+    "plannerLane":  {
+                        "laneId":  "CHAT-PROJECT-WORKFLOW-REPLAN",
+                        "laneName":  "Canonical workflow reconciliation",
+                        "role":  "governance",
+                        "branch":  "governance/chatsentinel-workflow-replan-v1",
+                        "prompt":  "Reconcile only canonical roadmap, materialization, contract-freeze and acceptance handoffs for rezanory/chat-project. Extend or repair the workflow evidence without guessing missing lanes, widening runtime authority, merging main or activating production."
+                    },
+    "phases":  [
+                   {
+                       "phase":  "PH-7",
+                       "branchPrefix":  "ph7",
+                       "sourceRef":  "a51c8508dca00c7a00413234ba342a1af3844676",
+                       "packPlanPath":  "control/phase_7/materialization/PH07_PACK_PLAN_V1.json",
+                       "componentRegistryPath":  "control/phase_7/materialization/PH07_COMPONENT_REGISTRY_V1.json",
+                       "dependencyDagPath":  "control/phase_7/materialization/PH07_DEPENDENCY_DAG_V1.json",
+                       "contractRoot":  "control/phase_7/contracts/v1",
+                       "expectedPacks":  8,
+                       "expectedComponents":  24,
+                       "expectedWaves":  13
+                   },
+                   {
+                       "phase":  "PH-8",
+                       "branchPrefix":  "ph8",
+                       "sourceRef":  "b070f605bc0571846251a601fba26e15ff307acd",
+                       "packPlanPath":  "control/phase_8/materialization/PH08_PACK_PLAN_V1.json",
+                       "componentRegistryPath":  "control/phase_8/materialization/PH08_COMPONENT_REGISTRY_V1.json",
+                       "dependencyDagPath":  "control/phase_8/materialization/PH08_DEPENDENCY_DAG_V1.json",
+                       "contractRoot":  "control/phase_8/contracts/v1",
+                       "expectedPacks":  8,
+                       "expectedComponents":  24,
+                       "expectedWaves":  13
+                   },
+                   {
+                       "phase":  "PH-9",
+                       "branchPrefix":  "ph9",
+                       "sourceRef":  "24f983bd4912b585deff2b6c8a132c08a66b40a0",
+                       "packPlanPath":  "control/phase_9/materialization/PH09_PACK_PLAN_V1.json",
+                       "componentRegistryPath":  "control/phase_9/materialization/PH09_COMPONENT_REGISTRY_V1.json",
+                       "dependencyDagPath":  "control/phase_9/materialization/PH09_DEPENDENCY_DAG_V1.json",
+                       "contractRoot":  "control/phase_9/contracts/v1",
+                       "expectedPacks":  7,
+                       "expectedComponents":  18,
+                       "expectedWaves":  15
+                   },
+                   {
+                       "phase":  "PH-10",
+                       "branchPrefix":  "ph10",
+                       "sourceRef":  "7292326cf6163a56add42b4bb0fdeab3242d7694",
+                       "packPlanPath":  "control/phase_10/materialization/PH10_PACK_PLAN_V1.json",
+                       "componentRegistryPath":  "control/phase_10/materialization/PH10_COMPONENT_REGISTRY_V1.json",
+                       "dependencyDagPath":  "control/phase_10/materialization/PH10_DEPENDENCY_DAG_V1.json",
+                       "contractRoot":  "control/phase_10/contracts/v1/ph10",
+                       "expectedPacks":  14,
+                       "expectedComponents":  42,
+                       "expectedWaves":  13
+                   },
+                   {
+                       "phase":  "PH-10.5",
+                       "branchPrefix":  "ph10-5",
+                       "sourceRef":  "7292326cf6163a56add42b4bb0fdeab3242d7694",
+                       "packPlanPath":  "control/phase_10/materialization/PH10_5_PACK_PLAN_V1.json",
+                       "componentRegistryPath":  "control/phase_10/materialization/PH10_5_COMPONENT_REGISTRY_V1.json",
+                       "dependencyDagPath":  "control/phase_10/materialization/PH10_5_DEPENDENCY_DAG_V1.json",
+                       "contractRoot":  "control/phase_10/contracts/v1/ph10_5",
+                       "expectedPacks":  12,
+                       "expectedComponents":  54,
+                       "expectedWaves":  22
+                   }
+               ],
+    "laneBranchPolicy":  "DETERMINISTIC_COMPONENT_BRANCH_V1",
+    "integrationBranchPolicy":  "DETERMINISTIC_WAVE_INTEGRATION_V1",
+    "expectedTotals":  {
+                           "packs":  49,
+                           "components":  162,
+                           "waves":  76
+                       }
+}

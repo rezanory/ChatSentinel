@@ -117,6 +117,9 @@ export function buildOrchestrationActivationPath(project = {}, profile = {}) {
     projectId: project.projectId,
     repoPath: project.projectPath,
     laneCommand: 'CREATE_LANE_CHAT',
+    workflowProfileParameter: 'workflowProfileId',
+    canonicalWorkflowCompilation: true,
+    stageBaselinePolicy: 'PREVIOUS_GREEN_INTEGRATION_HEAD',
     laneContract: ['laneId', 'branch', 'baselineSha', 'prompt'],
     independentLanesOnly: Boolean(profile.componentFirst && profile.parallelLanes),
     integrationController: Boolean(profile.integrationController)

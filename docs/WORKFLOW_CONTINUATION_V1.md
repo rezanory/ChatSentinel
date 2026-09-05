@@ -35,3 +35,23 @@ When a stage becomes green:
 ## Safety
 
 Workflow source paths must resolve inside the project repository. Runtime execution does not infer missing stages by guessing. Missing workflow materialization is surfaced as a governance gap or delegated to the configured planner lane.
+
+## Canonical roadmap profiles
+
+A project may opt into an explicit canonical roadmap profile through `workflowProfileId` on `/orchestrator/configure`. The profile is compiled read-only from exact immutable Git refs; ChatSentinel never checks out, rewrites, or advances the governed project while compiling the plan.
+
+The compiler validates repository identity, declared pack/component denominators, pack-to-component membership, DAG nodes, DAG edges against `predecessor_components`, per-phase wave counts, total denominators, and the declared terminal phase. Any mismatch fails closed.
+
+The v1.3 profile `rezanory/chat-project:ph7-ph10.5:v1` freezes 49 Packs, 162 Components and 76 topological waves from PH-7 through PH-10.5. Its terminal stage is `PH10.5-W22` and runtime parallel launch is bounded to 8 lanes per transition.
+
+## Exact stage baseline chaining
+
+A future wave does not inherit a guessed baseline. After the current implementation lanes and its integration lane are green, ChatSentinel records the exact green integration head in durable `stageBaselines`, binds that SHA to every lane in the next stage, and includes the SHA in `CREATE_LANE_CHAT` command and project-membership metadata.
+
+If a workflow is resumed at a stage whose exact baseline evidence is unavailable, the lane contract is incomplete and orchestration is explicitly `BLOCKED`; it must not launch work with an empty or inferred baseline.
+
+## Parallelism and admission boundaries
+
+Topological waves use only canonical component dependencies. A wave wider than `maxParallelLanes` is not truncated: the bounded subset is queued immediately and remaining required lanes stay active in the stage for later orchestration ticks.
+
+The profile does not infer cross-phase runtime admission from old materialization flags or prose-only predecessor descriptions. Intra-phase DAG parallelism is automatic; any additional cross-phase overlap must be supported by explicit current governance/admission evidence and materialized through the governed workflow/replan path rather than guessed by runtime code.

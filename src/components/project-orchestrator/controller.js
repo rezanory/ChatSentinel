@@ -13,12 +13,30 @@ import {
   stageCompletion,
   evaluateWorkflow
 } from '../workflow-continuation/controller.js';
+import { compileCanonicalRoadmap, loadCanonicalWorkflowProfile } from '../workflow-continuation/canonical-roadmap.js';
 
 export async function configureOrchestration(store, projectId, plan) {
   const project = store.getProject(projectId);
   if (!project) return { ok: false, error: 'project-not-found' };
   const repoPath = String(plan?.repoPath || project.projectPath || '').trim();
-  const workflowConfig = normalizeWorkflow(plan?.workflow || {});
+  const workflowProfileId = String(plan?.workflowProfileId || '').trim();
+  let workflowInput = plan?.workflow || {};
+  if (workflowProfileId) {
+    try {
+      const contract = await loadCanonicalWorkflowProfile(workflowProfileId);
+      const compiled = await compileCanonicalRoadmap(repoPath, contract, { initialBaselineSha: plan?.initialBaselineSha });
+      workflowInput = {
+        ...compiled, enabled: true,
+        currentStageId: plan?.workflow?.currentStageId || '',
+        completedStageIds: plan?.workflow?.completedStageIds || [],
+        completedAt: plan?.workflow?.completedAt || '',
+        stageBaselines: plan?.workflow?.stageBaselines || {}
+      };
+    } catch (error) {
+      return { ok: false, error: String(error?.message || error) };
+    }
+  }
+  const workflowConfig = normalizeWorkflow(workflowInput);
   const workflow = workflowConfig.enabled
     ? await resolveWorkflow({ repoPath, workflow: workflowConfig })
     : workflowConfig;
@@ -37,6 +55,7 @@ export async function configureOrchestration(store, projectId, plan) {
   const orchestration = {
     enabled: plan.enabled !== false,
     repoPath,
+    workflowProfileId: workflowProfileId || workflowConfig.profileId || '',
     integrationLane: stage?.integrationLane
       ? normalizeLane(stage.integrationLane)
       : (plan.integrationLane ? normalizeLane(plan.integrationLane) : null),
@@ -206,7 +225,8 @@ async function materializeDecision(store, project, plan, rows, decision, context
     return completeWorkflow(store, project, plan, context.workflow, context.stage, decision);
   }
   if (decision.action === OrchestratorAction.ADVANCE) {
-    return advanceWorkflow(store, project, plan, context.workflow, decision);
+    const nextBaselineSha = completedIntegrationHead(rows, context.stage);
+    return advanceWorkflow(store, project, plan, context.workflow, { ...decision, nextBaselineSha });
   }
   if (decision.action === OrchestratorAction.REPLAN) {
     return replanWorkflow(store, project, context.workflow, context.stage, decision);
@@ -223,6 +243,7 @@ async function materializeDecision(store, project, plan, rows, decision, context
         laneId: lane.laneId,
         laneName: lane.laneName,
         branch: lane.branch,
+        baselineSha: lane.baselineSha,
         role: lane.role
       }
     });
@@ -235,6 +256,7 @@ async function materializeDecision(store, project, plan, rows, decision, context
     laneId: lane.laneId,
     laneName: lane.laneName,
     branch: lane.branch,
+    baselineSha: lane.baselineSha,
     role: lane.role
   };
   if (decision.action === OrchestratorAction.NEXT) {
@@ -277,14 +299,22 @@ async function materializeDecision(store, project, plan, rows, decision, context
 }
 
 export async function advanceWorkflow(store, project, plan, workflow, decision) {
-  const nextStage = workflow.stages.find(stage => stage.stageId === decision.nextStageId);
+  let nextStage = workflow.stages.find(stage => stage.stageId === decision.nextStageId);
   if (!nextStage) return null;
+  const nextBaselineSha = exactSha(decision.nextBaselineSha);
+  if (nextBaselineSha) nextStage = bindRuntimeStageBaseline(nextStage, nextBaselineSha);
+  const stageBaselines = { ...(workflow.stageBaselines || {}) };
+  if (nextBaselineSha) stageBaselines[nextStage.stageId] = nextBaselineSha;
+  const nextStages = (workflow.stages || []).map(stage =>
+    stage.stageId === nextStage.stageId ? nextStage : stage);
   const workflowState = {
     ...(plan.workflow || {}),
     enabled: true,
     currentStageId: nextStage.stageId,
     completedStageIds: decision.completedStageIds || workflow.completedStageIds || [],
-    completedAt: null
+    completedAt: null,
+    stageBaselines,
+    ...(plan.workflow?.sourcePath ? {} : { stages: nextStages })
   };
   const nextPlan = {
     ...plan,
@@ -313,6 +343,7 @@ export async function advanceWorkflow(store, project, plan, workflow, decision) 
         laneId: lane.laneId,
         laneName: lane.laneName,
         branch: lane.branch,
+        baselineSha: lane.baselineSha,
         role: lane.role
       }
     });
@@ -325,6 +356,7 @@ export async function advanceWorkflow(store, project, plan, workflow, decision) 
       action: 'ADVANCE',
       fromStageId: workflow.currentStageId,
       toStageId: nextStage.stageId,
+      baselineSha: nextBaselineSha || undefined,
       completedStageIds: workflowState.completedStageIds
     }
   };
@@ -371,6 +403,7 @@ export async function replanWorkflow(store, project, workflow, stage, decision) 
       laneId: planner.laneId,
       laneName: planner.laneName || 'Workflow Continuation Review',
       branch: planner.branch,
+      baselineSha: planner.baselineSha,
       role: planner.role || 'governance'
     }
   });
@@ -467,4 +500,28 @@ function summarizeWorkflow(workflow = {}) {
     sourceResolved: workflow.sourceResolved,
     error: workflow.error
   };
+}
+
+function completedIntegrationHead(rows = [], stage = null) {
+  const laneId = stage?.integrationLane?.laneId;
+  if (!laneId) return '';
+  const row = rows.find(item => item?.lane?.laneId === laneId);
+  if (!row?.completion?.complete) return '';
+  return exactSha(row.completion.head || row.git?.remoteHead);
+}
+
+function bindRuntimeStageBaseline(stage, baselineSha) {
+  const baseline = exactSha(baselineSha);
+  if (!stage || !baseline) return stage;
+  return {
+    ...stage,
+    baselineSha: baseline,
+    lanes: (stage.lanes || []).map(lane => ({ ...lane, baselineSha: baseline })),
+    integrationLane: stage.integrationLane ? { ...stage.integrationLane, baselineSha: baseline } : null
+  };
+}
+
+function exactSha(value) {
+  const sha = String(value || '').trim().toLowerCase();
+  return /^[0-9a-f]{40}$/.test(sha) ? sha : '';
 }
