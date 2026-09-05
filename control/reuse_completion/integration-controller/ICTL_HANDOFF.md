@@ -75,3 +75,9 @@ At handoff time `C:\ChatSentinel` is clean and reconciled on `integration/reuse-
 Issue #3 remains OPEN. This lane does not authorize a `main` merge, Production tag, or independent-gate self-certification.
 
 The integration lane may consume exact implementation candidate `964b28de914a08023481b7133ce2346f38e3202b` only after its own fresh GitHub/local reconciliation, then run the complete integration gates without fail-fast and record its own independent evidence.
+
+## Project-level follow-up outside ICTL scope
+
+Track and resolve the user-observed recovery failure: `Connection interrupted. Waiting for the complete answer`.
+
+This is intentionally **not** implemented inside the standalone Integration Controller lane. It belongs to the recovery/continuation path and must remain visible in canonical project handoffs/backlog until a dedicated in-scope fix is implemented and independently validated.
