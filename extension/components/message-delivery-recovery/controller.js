@@ -1,15 +1,19 @@
 (() => {
   const DELIVERY_TIMEOUT_TEXTS = Object.freeze([
     'Message delivery timed out. Please try again.',
-    'Message delivery timed out'
+    'Message delivery timed out',
   ]);
   const ATTEMPT_PREFIX = 'chatsentinel:message-delivery:';
   const DEFAULT_COOLDOWN_MS = 5000;
   const MAX_ATTEMPTS = 2;
+  const MAX_MARKER_TEXT_LENGTH = 700;
+  const MAX_ASSOCIATION_REGION_TEXT_LENGTH = 1400;
+  const MAX_ASSOCIATION_DEPTH = 8;
+  const MAX_FALLBACK_ELEMENTS = 5000;
 
   function containsDeliveryTimeout(text) {
-    const value = String(text || '');
-    return DELIVERY_TIMEOUT_TEXTS.some(marker => value.includes(marker));
+    const value = normalizeText(text).toLowerCase();
+    return DELIVERY_TIMEOUT_TEXTS.some((marker) => value.includes(normalizeText(marker).toLowerCase()));
   }
 
   function inspect(root = globalThis.document) {
@@ -18,7 +22,7 @@
     if (!marker) return inactive('marker-missing');
 
     const turnNodes = [...(root.querySelectorAll?.('[data-message-author-role]') || [])];
-    const superseded = turnNodes.some(node => isConversationTurn(node) && follows(marker.node, node));
+    const superseded = turnNodes.some((node) => isConversationTurn(node) && follows(marker.node, node));
     if (superseded) return inactive('historical-marker', { markerText: marker.text, timeoutMarkerPresent: true });
 
     const retryButton = findAssociatedRetryButton(root, marker.node);
@@ -31,7 +35,7 @@
       markerText: marker.text,
       incidentKey,
       retryVisible: true,
-      retryButton
+      retryButton,
     };
   }
 
@@ -54,10 +58,13 @@
   function markAttempt(ticket, storage = safeSessionStorage(), now = Date.now()) {
     if (!ticket?.key || !storage?.setItem) return false;
     const current = readAttemptState(storage, ticket.key);
-    storage.setItem(ticket.key, JSON.stringify({
-      count: current.count + 1,
-      lastAt: now
-    }));
+    storage.setItem(
+      ticket.key,
+      JSON.stringify({
+        count: current.count + 1,
+        lastAt: now,
+      }),
+    );
     return true;
   }
 
@@ -67,38 +74,108 @@
   }
 
   function isMessageDeliveryDecision(decision = {}) {
-    return decision?.action === 'RETRY_MESSAGE_DELIVERY' ||
-      String(decision?.reason || '').startsWith('message-delivery-timeout-');
+    return (
+      decision?.action === 'RETRY_MESSAGE_DELIVERY' ||
+      String(decision?.reason || '').startsWith('message-delivery-timeout-')
+    );
   }
 
   function findMarker(root) {
-    const nodes = [...(root.querySelectorAll?.('[role="alert"], [data-testid], main div, main p, main span, main') || [])];
-    const matches = nodes
-      .map(node => ({ node, text: visibleText(node).trim() }))
-      .filter(row => row.text && row.text.length <= 700 && containsDeliveryTimeout(row.text))
+    const fastNodes = [
+      ...(root.querySelectorAll?.('[role="alert"], [data-testid], main div, main p, main span, main') || []),
+    ];
+    const fastMatch = bestMarker(fastNodes);
+    if (fastMatch) return fastMatch;
+
+    const searchRoot = root.body || root.documentElement || root;
+    if (!containsDeliveryTimeout(visibleText(searchRoot))) return null;
+
+    const textMatch = markerFromTextNodes(root, searchRoot);
+    if (textMatch) return textMatch;
+
+    const fallbackNodes = [...(searchRoot.querySelectorAll?.('div, p, span, section') || [])].slice(
+      0,
+      MAX_FALLBACK_ELEMENTS,
+    );
+    return bestMarker(fallbackNodes);
+  }
+
+  function markerFromTextNodes(root, searchRoot) {
+    const documentLike =
+      typeof root?.createTreeWalker === 'function'
+        ? root
+        : root?.ownerDocument || searchRoot?.ownerDocument || globalThis.document;
+    if (typeof documentLike?.createTreeWalker !== 'function') return null;
+
+    let walker;
+    try {
+      walker = documentLike.createTreeWalker(searchRoot, 4);
+    } catch {
+      return null;
+    }
+
+    const matches = [];
+    let current;
+    let scanned = 0;
+    while ((current = walker.nextNode()) && scanned < MAX_FALLBACK_ELEMENTS * 4) {
+      scanned += 1;
+      if (!containsDeliveryTimeout(current.nodeValue || current.textContent || '')) continue;
+      const parent = current.parentElement || current.parentNode;
+      if (parent) matches.push(parent);
+    }
+    return bestMarker(matches);
+  }
+
+  function bestMarker(nodes) {
+    const matches = [...new Set(nodes)]
+      .map((node) => ({ node, text: normalizeText(visibleText(node)) }))
+      .filter((row) => row.text && row.text.length <= MAX_MARKER_TEXT_LENGTH && containsDeliveryTimeout(row.text))
       .sort((a, b) => a.text.length - b.text.length);
     return matches[0] || null;
   }
+
   function findAssociatedRetryButton(root, markerNode) {
-    const candidates = [...(root.querySelectorAll?.('button') || [])]
-      .filter(button => isRetryButton(button) && !button.disabled);
+    const candidates = [...(root.querySelectorAll?.('button') || [])].filter(isActionableRetryButton);
     if (!candidates.length) return null;
 
     if (typeof markerNode?.querySelectorAll === 'function') {
-      const nested = [...markerNode.querySelectorAll('button')]
-        .find(button => isRetryButton(button) && !button.disabled);
+      const nested = [...markerNode.querySelectorAll('button')].find(isActionableRetryButton);
       if (nested) return nested;
     }
 
-    let ancestor = markerNode?.parentElement;
-    for (let depth = 0; ancestor && depth < 5; depth += 1, ancestor = ancestor.parentElement) {
-      if (!containsDeliveryTimeout(visibleText(ancestor))) continue;
-      const nested = [...(ancestor.querySelectorAll?.('button') || [])]
-        .find(button => isRetryButton(button) && !button.disabled);
-      if (nested) return nested;
+    const associated = candidates
+      .map((button) => ({ button, score: associationScore(markerNode, button) }))
+      .filter((row) => Number.isFinite(row.score))
+      .sort((a, b) => a.score - b.score);
+    if (associated.length) return associated[0].button;
+
+    return candidates.find((button) => sameAlertRegion(markerNode, button)) || null;
+  }
+
+  function associationScore(markerNode, button) {
+    if (!markerNode || !button) return Number.POSITIVE_INFINITY;
+    const markerAncestors = new Map();
+    let current = markerNode;
+    for (let depth = 0; current && depth <= MAX_ASSOCIATION_DEPTH; depth += 1, current = current.parentElement) {
+      markerAncestors.set(current, depth);
     }
 
-    return candidates.find(button => sameAlertRegion(markerNode, button)) || null;
+    current = button;
+    for (
+      let buttonDepth = 0;
+      current && buttonDepth <= MAX_ASSOCIATION_DEPTH;
+      buttonDepth += 1, current = current.parentElement
+    ) {
+      if (!markerAncestors.has(current)) continue;
+      const markerDepth = markerAncestors.get(current);
+      const distance = markerDepth + buttonDepth;
+      if (distance > MAX_ASSOCIATION_DEPTH) return Number.POSITIVE_INFINITY;
+      const regionText = normalizeText(visibleText(current));
+      if (!containsDeliveryTimeout(regionText)) return Number.POSITIVE_INFINITY;
+      if (regionText.length > MAX_ASSOCIATION_REGION_TEXT_LENGTH) return Number.POSITIVE_INFINITY;
+      return distance;
+    }
+    return Number.POSITIVE_INFINITY;
   }
 
   function sameAlertRegion(markerNode, button) {
@@ -108,15 +185,40 @@
     if (markerAlert && buttonAlert) return markerAlert === buttonAlert;
     return false;
   }
+
+  function isActionableRetryButton(button) {
+    if (!isRetryButton(button) || button?.disabled) return false;
+    if (String(button?.getAttribute?.('aria-disabled') || '').toLowerCase() === 'true') return false;
+    if (String(button?.getAttribute?.('aria-hidden') || '').toLowerCase() === 'true') return false;
+    if (button?.hidden === true || button?.hasAttribute?.('hidden')) return false;
+
+    try {
+      const style = globalThis.getComputedStyle?.(button);
+      if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
+    } catch {}
+
+    try {
+      if (
+        typeof button?.getClientRects === 'function' &&
+        button.isConnected !== false &&
+        button.getClientRects().length === 0
+      )
+        return false;
+    } catch {}
+    return true;
+  }
+
   function isRetryButton(button) {
-    const label = String(button?.innerText || button?.getAttribute?.('aria-label') || '').trim();
-    return /^(retry|try again)$/i.test(label);
+    const labels = [button?.innerText, button?.textContent, button?.getAttribute?.('aria-label')]
+      .map(normalizeText)
+      .filter(Boolean);
+    return labels.some((label) => /^(retry|try again)$/i.test(label));
   }
 
   function incidentKeyFor(markerNode, markerText, turnNodes) {
     const id = messageId(markerNode);
     if (id) return 'message:' + id;
-    const precedingUser = [...turnNodes].reverse().find(node => {
+    const precedingUser = [...turnNodes].reverse().find((node) => {
       const role = String(node?.getAttribute?.('data-message-author-role') || '').toLowerCase();
       return role === 'user' && !follows(markerNode, node);
     });
@@ -136,12 +238,13 @@
       const parsed = JSON.parse(storage?.getItem?.(key) || '{}');
       return {
         count: Math.max(0, Number(parsed.count || 0)),
-        lastAt: Math.max(0, Number(parsed.lastAt || 0))
+        lastAt: Math.max(0, Number(parsed.lastAt || 0)),
       };
     } catch {
       return { count: 0, lastAt: 0 };
     }
   }
+
   function isConversationTurn(node) {
     const role = String(node?.getAttribute?.('data-message-author-role') || '').toLowerCase();
     return role === 'user' || role === 'assistant';
@@ -155,14 +258,20 @@
   function messageId(node) {
     return String(
       node?.getAttribute?.('data-message-id') ||
-      node?.id ||
-      node?.closest?.('[data-message-id]')?.getAttribute?.('data-message-id') ||
-      ''
+        node?.id ||
+        node?.closest?.('[data-message-id]')?.getAttribute?.('data-message-id') ||
+        '',
     );
   }
 
   function visibleText(node) {
     return String(node?.innerText ?? node?.textContent ?? '');
+  }
+
+  function normalizeText(value) {
+    return String(value || '')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   function simpleHash(value) {
@@ -173,6 +282,7 @@
     }
     return (hash >>> 0).toString(36);
   }
+
   function inactive(reason, detail = {}) {
     return {
       active: false,
@@ -181,12 +291,16 @@
       incidentKey: '',
       retryButton: null,
       reason,
-      ...detail
+      ...detail,
     };
   }
 
   function safeSessionStorage() {
-    try { return globalThis.sessionStorage; } catch { return null; }
+    try {
+      return globalThis.sessionStorage;
+    } catch {
+      return null;
+    }
   }
 
   globalThis.ChatSentinelMessageDeliveryRecovery = Object.freeze({
@@ -197,6 +311,6 @@
     prepareAttempt,
     markAttempt,
     retryCount,
-    isMessageDeliveryDecision
+    isMessageDeliveryDecision,
   });
 })();

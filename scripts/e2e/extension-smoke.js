@@ -3,14 +3,16 @@ import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import assert from 'node:assert/strict';
 import { findBrowserExecutable } from './browser-paths.js';
 
 const ROOT = path.resolve('.');
 const execFileAsync = promisify(execFile);
-const TEST_PORT = Number(process.env.CHATSENTINEL_E2E_PORT || (45000 + (process.pid % 9000)));
-const FIXTURE_PORT = Number(process.env.CHATSENTINEL_E2E_FIXTURE_PORT || (55000 + (process.pid % 9000)));
+const TEST_PORT = Number(process.env.CHATSENTINEL_E2E_WATCHDOG_PORT || process.env.CHATSENTINEL_E2E_PORT || await freePort());
+const FIXTURE_PORT = Number(process.env.CHATSENTINEL_E2E_FIXTURE_PORT || await freePort(new Set([TEST_PORT])));
 const EXPECTED_EXTENSION_ID = 'pcidbmcahljjpbmaecjmfmpbpfnpoepc';
+const E2E_WAIT_MS = Math.max(10000, Number(process.env.CHATSENTINEL_E2E_WAIT_MS || 90000));
 const WATCHDOG = `http://127.0.0.1:${TEST_PORT}`;
 const FIXTURE = `http://127.0.0.1:${FIXTURE_PORT}`;
 const CHROME = process.env.CHROME_BIN || await findBrowserExecutable();
@@ -452,7 +454,7 @@ async function commandManagerSuite() {
 
 async function waitCommand(commandId, expectedStatus) {
   // Command polling is backed by a 30s MV3 alarm; allow one full alarm interval plus bounded execution time.
-  const deadline = Date.now() + 45000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const data = await fetch(`${WATCHDOG}/commands?limit=200`).then(r => r.json());
     const command = data.commands?.find(row => row.commandId === commandId);
@@ -463,7 +465,7 @@ async function waitCommand(commandId, expectedStatus) {
   throw new Error(`command ${commandId} did not reach ${expectedStatus}`);
 }
 
-async function waitProjectLaneTab(projectId, laneId, predicate = () => true, timeoutMs = 10000) {
+async function waitProjectLaneTab(projectId, laneId, predicate = () => true, timeoutMs = E2E_WAIT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const result = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
@@ -476,7 +478,7 @@ async function waitProjectLaneTab(projectId, laneId, predicate = () => true, tim
 }
 
 async function waitProjectChatCount(projectId, count) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const result = await fetch(`${WATCHDOG}/projects`).then(r=>r.json());
     const project = result.projects?.find(row=>row.projectId===projectId);
@@ -487,7 +489,7 @@ async function waitProjectChatCount(projectId, count) {
 }
 
 async function waitProjectExactChatCount(projectId, count) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const result = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
     const project = result.projects?.find(row => row.projectId === projectId);
@@ -498,7 +500,7 @@ async function waitProjectExactChatCount(projectId, count) {
 }
 
 async function waitContentReady(tabId) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const reply = await workerValue(`chrome.tabs.sendMessage(${tabId},{type:'CHATSENTINEL_GET_IDENTITY'}).catch(()=>null)`);
     if (reply?.ok) return reply;
@@ -506,7 +508,7 @@ async function waitContentReady(tabId) {
   }
   throw new Error(`content script not ready in tab ${tabId}`);
 }
-async function waitWorkerValue(expression, predicate = Boolean, timeoutMs = 10000) {
+async function waitWorkerValue(expression, predicate = Boolean, timeoutMs = E2E_WAIT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -518,7 +520,7 @@ async function waitWorkerValue(expression, predicate = Boolean, timeoutMs = 1000
   return null;
 }
 
-async function waitWorkerCondition(expression, timeoutMs = 10000) {
+async function waitWorkerCondition(expression, timeoutMs = E2E_WAIT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -530,10 +532,10 @@ async function waitWorkerCondition(expression, timeoutMs = 10000) {
 }
 
 async function workerValue(expression) {
-  let lastError;
+  let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      if (!EXTENSION_WORKER?.webSocketDebuggerUrl) {
+      if (!EXTENSION_WORKER?.webSocketDebuggerUrl || attempt > 0) {
         EXTENSION_WORKER = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
       }
       const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
@@ -545,14 +547,14 @@ async function workerValue(expression) {
       await sleep(100);
     }
   }
-  throw lastError;
+  throw lastError || new Error('extension service worker unavailable');
 }
 
 async function verifyTabFallback() {
   const before = await fetch(`${WATCHDOG}/supervisor`).then(r => r.json());
   const known = new Set((before.sessions || []).map(row => row.id));
   await openPage(fixtureUrl('noidentity'));
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const state = await fetch(`${WATCHDOG}/supervisor`).then(r => r.json());
     const row = (state.sessions || []).find(item => /^tab:\d+$/.test(item.id) && !known.has(item.id));
@@ -591,7 +593,7 @@ async function openPage(url) {
 }
 
 async function waitForSession(id) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const state = await fetch(`${WATCHDOG}/supervisor`).then(r => r.json());
     const row = state.sessions?.find(item => item.id === id);
@@ -615,7 +617,7 @@ async function postJson(route, body) {
 }
 
 async function waitTarget(predicate) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const targets = await waitJson(`${DEVTOOLS}/json/list`);
     const target = targets.find(predicate);
@@ -626,7 +628,7 @@ async function waitTarget(predicate) {
 }
 
 async function waitEval(target, expression) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     if (await evalValue(target, expression)) return true;
     await sleep(200);
@@ -668,7 +670,7 @@ async function cdp(target, method, params = {}) {
 
 async function waitDevToolsPort(profileDir) {
   const file = path.join(profileDir, 'DevToolsActivePort');
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     try {
       const [port] = (await fs.readFile(file, 'utf8')).trim().split(/\r?\n/);
@@ -680,7 +682,7 @@ async function waitDevToolsPort(profileDir) {
 }
 
 async function waitJson(url) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     try {
       const res = await fetch(url);
@@ -692,7 +694,7 @@ async function waitJson(url) {
 }
 
 async function waitUrl(url) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     try {
       const res = await fetch(url);
@@ -762,4 +764,19 @@ async function prepareCleanProject(base) {
   await execFileAsync('git', ['remote', 'add', 'origin', remote], { cwd: project });
   await execFileAsync('git', ['push', '-u', 'origin', 'main'], { cwd: project });
   return project;
+}
+
+async function freePort(excluded = new Set()) {
+  while (true) {
+    const port = await new Promise((resolve, reject) => {
+      const server = net.createServer();
+      server.unref();
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => {
+        const value = server.address()?.port;
+        server.close(error => error ? reject(error) : resolve(value));
+      });
+    });
+    if (port && !excluded.has(port)) return port;
+  }
 }
