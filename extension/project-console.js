@@ -112,7 +112,7 @@
           <div class="card" id="searchPortable"></div>
           <div class="card" id="historyCard"></div>
         </div>
-        <div class="footer">v1.1 · local-first project watchdog</div>
+        <div class="footer" id="footerVersion">local-first project watchdog</div>
       </div>`;
   }
 
@@ -147,6 +147,8 @@
     const healthEl = shadow.getElementById('health');
     healthEl.textContent = health.ok ? `v${health.version} online` : 'offline';
     healthEl.className = health.ok ? 'badge ok' : 'badge bad';
+    const footerVersion = shadow.getElementById('footerVersion');
+    if (footerVersion) footerVersion.textContent = health.ok ? `v${health.version} · local-first project watchdog` : 'local-first project watchdog';
 
     renderCurrent();
     renderProjects();

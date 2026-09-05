@@ -254,6 +254,7 @@ async function projectConsoleSuite() {
   assert.equal(toggle?.ok, true, `panel toggle failed: ${JSON.stringify(toggle)}`);
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.style.display === 'block'");
   await waitEval(pageA, "Boolean(document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('newProject'))");
+  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('footerVersion')?.textContent.includes('v1.2.0')");
   console.log('in-page project console: PASS');
 
   const projectPath = cleanProject;
