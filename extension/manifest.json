@@ -51,6 +51,7 @@
         "actuator.js",
         "content.js",
         "components/project-chat-lifecycle/controller.js",
+        "components/full-project-mode/controller.js",
         "project-console.js"
       ],
       "run_at": "document_idle"
