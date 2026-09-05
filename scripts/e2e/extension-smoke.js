@@ -362,6 +362,8 @@ async function commandManagerSuite() {
   const completed = await waitCommand(queued.command.commandId, 'succeeded');
   assert.ok(completed.result?.tabId, 'command did not create a tab');
   assert.equal(completed.result?.promptSent, true);
+  assert.equal(completed.result?.deliveryConfirmed, true, 'command must not succeed before prompt delivery evidence');
+  assert.equal(completed.result?.deliveryEvidence, 'user-turn');
   assert.equal(completed.result?.launchUrlSanitized, true);
   assert.ok(!/prompt-textarea|SHOULD-NOT-LEAK/.test(completed.result?.launchUrl || ''));
 
@@ -373,6 +375,10 @@ async function commandManagerSuite() {
 
   const target = await waitTarget(row => row.type === 'page' && row.url.includes('command=lane'));
   await waitEval(target, `document.body.dataset.sent === ${JSON.stringify(seed)}`);
+  const deliveredUrl = await evalValue(target, 'location.href');
+  assert.ok(!/[?&]prompt-textarea=/i.test(deliveredUrl), `prompt leaked into URL: ${deliveredUrl}`);
+  assert.equal(await evalValue(target, `document.querySelector('[data-message-author-role="user"]')?.innerText`), seed);
+  console.log('verified prompt delivery rejects GET-form URL contamination: PASS');
 
   const duplicateOwner = await postJson('/commands/enqueue', {
     type: 'CREATE_LANE_CHAT',
