@@ -8,9 +8,11 @@ import { findBrowserExecutable } from './browser-paths.js';
 
 const ROOT = path.resolve('.');
 const execFileAsync = promisify(execFile);
-const TEST_PORT = 4318;
+const TEST_PORT = Number(process.env.CHATSENTINEL_E2E_PORT || (45000 + (process.pid % 9000)));
+const FIXTURE_PORT = Number(process.env.CHATSENTINEL_E2E_FIXTURE_PORT || (55000 + (process.pid % 9000)));
 const EXPECTED_EXTENSION_ID = 'pcidbmcahljjpbmaecjmfmpbpfnpoepc';
 const WATCHDOG = `http://127.0.0.1:${TEST_PORT}`;
+const FIXTURE = `http://127.0.0.1:${FIXTURE_PORT}`;
 const CHROME = process.env.CHROME_BIN || await findBrowserExecutable();
 if (!CHROME) throw new Error('Chrome/Chromium executable not found; install Chrome or set CHROME_BIN');
 const sourceExtension = path.join(ROOT, 'extension');
@@ -22,7 +24,8 @@ await prepareTestExtension(sourceExtension, extension);
 const cleanProject = await prepareCleanProject(testData);
 const fixture = spawn(process.execPath, ['scripts/e2e/fault-fixture-server.js'], {
   cwd: ROOT,
-  stdio: 'ignore'
+  stdio: 'ignore',
+  env: { ...process.env, CHATSENTINEL_FIXTURE_PORT: String(FIXTURE_PORT) }
 });
 const watchdog = spawn(process.execPath, ['src/local-watchdog.js'], {
   cwd: ROOT,
@@ -39,7 +42,7 @@ let DEVTOOLS;
 let EXTENSION_WORKER;
 
 try {
-  await waitUrl('http://127.0.0.1:4320/idle');
+  await waitUrl(`${FIXTURE}/idle`);
   const health = await waitJson(`${WATCHDOG}/health`);
   assert.equal(health.version, '1.3.0', 'v1.3.0 watchdog must be running');
 
@@ -80,6 +83,10 @@ try {
 
 async function launchGuardSuite() {
   const guardReady = await waitWorkerCondition("typeof globalThis.ChatSentinelTabLaunchGuard === 'object'");
+  if (!guardReady) {
+    const debug = await workerValue(`({href:globalThis.location?.href,guard:typeof globalThis.ChatSentinelTabLaunchGuard,command:typeof globalThis.ChatSentinelCommandManager,snapshot:typeof globalThis.ChatSentinelSessionSnapshots,restore:typeof globalThis.ChatSentinelSessionRestore})`).catch(error => ({ error: String(error) }));
+    console.error('tab launch guard worker debug:', JSON.stringify(debug));
+  }
   assert.equal(guardReady, true, 'tab launch guard did not initialize in service worker');
   const sanitized = await workerValue(`globalThis.ChatSentinelTabLaunchGuard.safeNewChatUrl('https://chatgpt.com/?prompt-textarea=SECRET&foo=bar')`);
   assert.ok(!/prompt-textarea|SECRET/.test(sanitized), `unsafe launch URL: ${sanitized}`);
@@ -252,8 +259,12 @@ async function projectConsoleSuite() {
   assert.ok(tabA?.id, 'console tab A not found');
   await waitContentReady(tabA.id);
   await waitEval(pageA, "document.documentElement.dataset.chatsentinelConsoleReady === '1'");
-  const toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'}).catch(e=>({ok:false,error:String(e)}))`);
+  let toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'}).catch(e=>({ok:false,error:String(e)}))`);
+  if (toggle?.ok && toggle.open !== true) {
+    toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'}).catch(e=>({ok:false,error:String(e)}))`);
+  }
   assert.equal(toggle?.ok, true, `panel toggle failed: ${JSON.stringify(toggle)}`);
+  assert.equal(toggle?.open, true, `panel did not become open: ${JSON.stringify(toggle)}`);
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.style.display === 'block'");
   await waitEval(pageA, "Boolean(document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('newProject'))");
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('footerVersion')?.textContent.includes('v1.3.0')");
@@ -269,15 +280,45 @@ async function projectConsoleSuite() {
   const setupTab = await workerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('/setup.html'));return t?{id:t.id}:null})()");
   if (setupTab?.id) await workerValue(`chrome.tabs.remove(${setupTab.id}).then(()=>true).catch(()=>false)`);
   console.log('Setup Assistant extension page: PASS');
-  await evalValue(pageA, "(()=>{const c=document.querySelector('#prompt-textarea');c.value='Build feature X';c.dispatchEvent(new Event('input',{bubbles:true}));const s=document.getElementById('chatsentinel-project-console-host').shadowRoot;s.getElementById('insertFullProjectMode').click();return true})()");
+  const projectPath = cleanProject;
+  const fullModeProjectPath = path.join(cleanProject, 'full-mode-e2e');
+  await fs.mkdir(fullModeProjectPath, { recursive: true });
+  await evalValue(pageA, `(()=>{const s=document.getElementById('chatsentinel-project-console-host').shadowRoot;s.getElementById('newProject').click();s.getElementById('pName').value='Full Mode E2E';s.getElementById('pPath').value=${JSON.stringify(fullModeProjectPath)};s.getElementById('pPolicy').value='read_only';s.getElementById('pColor').value='cyan';const c=document.querySelector('#prompt-textarea');c.value='Build feature X';c.dispatchEvent(new Event('input',{bubbles:true}));s.getElementById('insertFullProjectMode').click();return true})()`);
+  await waitEval(pageA, "(()=>{const text=document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('fullProjectModeStatus').textContent;return Boolean(text)&&!text.startsWith('Activating')})()");
+  const fullModeStatus = await evalValue(pageA, "document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('fullProjectModeStatus').textContent");
+  assert.match(fullModeStatus, /Active/, `Full Project Mode activation status: ${fullModeStatus}`);
   await waitEval(pageA, "document.querySelector('#prompt-textarea').value.startsWith('CHATSENTINEL FULL PROJECT MODE') && document.querySelector('#prompt-textarea').value.includes('Build feature X')");
-  assert.equal(await evalValue(pageA, 'Number(document.body.dataset.sendCount || 0)'), 0, 'Full Project Mode insert must not auto-send');
+  assert.equal(await evalValue(pageA, 'Number(document.body.dataset.sendCount || 0)'), 0, 'Full Project Mode activation must not auto-send');
+
+  const fullProjects = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
+  const fullProject = fullProjects.projects.find(project => project.name === 'Full Mode E2E');
+  assert.ok(fullProject?.projectId, 'Full Project Mode did not create a project from the editor path');
+  assert.equal(fullProject.autoRecovery, true);
+  assert.equal(fullProject.groupTabs, true);
+  assert.equal(fullProject.capabilityProfile?.profileId, 'full');
+  assert.equal(fullProject.capabilityProfile?.sessionSnapshots, true);
+  assert.equal(fullProject.capabilityProfile?.conversationDomCompaction, true);
+  assert.equal(fullProject.capabilityProfile?.searchExportImport, true);
+  assert.equal(fullProject.capabilityProfile?.runnerOnDemand, true);
+  assert.equal(fullProject.fullProjectMode?.active, true);
+  assert.equal(fullProject.fullProjectMode?.orchestrationActivation?.configure?.route, '/orchestrator/configure');
+  assert.equal(fullProject.fullProjectMode?.orchestrationActivation?.configure?.client, 'local-process');
+  assert.equal(fullProject.fullProjectMode?.orchestrationActivation?.laneCommand, 'CREATE_LANE_CHAT');
+  assert.ok(fullProject.chats.some(chat => Number(chat.tabId) === Number(tabA.id)), 'current chat was not attached by Full Project Mode');
+
+  const fullGroups = await waitWorkerValue("chrome.tabGroups.query({title:'Full Mode E2E'})", value => Array.isArray(value) && value.some(group => group.color === 'cyan'));
+  assert.ok(fullGroups.some(group => group.color === 'cyan'), 'Full Project Mode did not group the attached chat');
+  const snapshots = await waitWorkerValue(`sessionRestoreController.listSnapshots(${JSON.stringify(fullProject.projectId)})`, value => Array.isArray(value) && value.length > 0);
+  assert.ok(snapshots.length > 0, 'Full Project Mode did not capture an activation snapshot');
+
   await evalValue(pageA, "document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('insertFullProjectMode').click()");
-  assert.equal(await evalValue(pageA, "document.querySelector('#prompt-textarea').value.split('CHATSENTINEL FULL PROJECT MODE').length - 1"), 1, 'Full Project Mode insert must be idempotent');
-  console.log('Full Project Mode one-click prompt prepend: PASS');
+  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('fullProjectModeStatus').textContent.includes('Active')");
+  assert.equal(await evalValue(pageA, "document.querySelector('#prompt-textarea').value.split('CHATSENTINEL FULL PROJECT MODE').length - 1"), 1, 'Full Project Mode prepend must remain idempotent');
+  const fullProjectsAfter = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
+  assert.equal(fullProjectsAfter.projects.filter(project => project.projectId === fullProject.projectId).length, 1, 'Full Project Mode must not create duplicate project authorities');
+  console.log('Full Project Mode real create/attach/profile/group/snapshot activation: PASS');
   console.log('in-page project console: PASS');
 
-  const projectPath = cleanProject;
   await evalValue(pageA, `(()=>{const s=document.getElementById('chatsentinel-project-console-host').shadowRoot;s.getElementById('newProject').click();s.getElementById('pName').value='E2E Project';s.getElementById('pPath').value=${JSON.stringify(projectPath)};s.getElementById('pPolicy').value='read_only';s.getElementById('pAuto').checked=true;s.getElementById('pGroup').checked=true;s.getElementById('pColor').value='purple';s.getElementById('saveProject').click();return true})()`);
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('projectList').textContent.includes('E2E Project')");
   let projects = await fetch(`${WATCHDOG}/projects`).then(r=>r.json());
@@ -410,7 +451,8 @@ async function commandManagerSuite() {
 }
 
 async function waitCommand(commandId, expectedStatus) {
-  const deadline = Date.now() + 15000;
+  // Command polling is backed by a 30s MV3 alarm; allow one full alarm interval plus bounded execution time.
+  const deadline = Date.now() + 45000;
   while (Date.now() < deadline) {
     const data = await fetch(`${WATCHDOG}/commands?limit=200`).then(r => r.json());
     const command = data.commands?.find(row => row.commandId === commandId);
@@ -488,9 +530,22 @@ async function waitWorkerCondition(expression, timeoutMs = 10000) {
 }
 
 async function workerValue(expression) {
-  const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
-  if (reply?.result?.exceptionDetails) throw new Error(JSON.stringify(reply.result.exceptionDetails));
-  return reply?.result?.result?.value;
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      if (!EXTENSION_WORKER?.webSocketDebuggerUrl) {
+        EXTENSION_WORKER = await waitTarget(target => target.type === 'service_worker' && target.url.endsWith('/background.js'));
+      }
+      const reply = await cdp(EXTENSION_WORKER, 'Runtime.evaluate', { expression, returnByValue:true, awaitPromise:true });
+      if (reply?.result?.exceptionDetails) throw new Error(JSON.stringify(reply.result.exceptionDetails));
+      return reply?.result?.result?.value;
+    } catch (error) {
+      lastError = error;
+      EXTENSION_WORKER = null;
+      await sleep(100);
+    }
+  }
+  throw lastError;
 }
 
 async function verifyTabFallback() {
@@ -523,9 +578,9 @@ function fixtureUrl(kind, extra = {}) {
   const params = new URLSearchParams({ watchdog: String(TEST_PORT), ...extra });
   if (kind === 'rootidentity' || kind === 'noidentity') {
     params.set('kind', kind);
-    return `http://127.0.0.1:4320/?${params}`;
+    return `${FIXTURE}/?${params}`;
   }
-  return `http://127.0.0.1:4320/${kind}?${params}`;
+  return `${FIXTURE}/${kind}?${params}`;
 }
 
 async function openPage(url) {
@@ -668,6 +723,7 @@ async function prepareTestExtension(source, destination) {
   const backgroundPath = path.join(destination, 'background.js');
   let background = await fs.readFile(backgroundPath, 'utf8');
   background = background.replaceAll('http://127.0.0.1:4317', `http://127.0.0.1:${TEST_PORT}`);
+  background = background.replaceAll('http://127.0.0.1:4320', `http://127.0.0.1:${FIXTURE_PORT}`);
   await fs.writeFile(backgroundPath, background, 'utf8');
 
   const setupPath = path.join(destination, 'setup.js');
@@ -675,11 +731,18 @@ async function prepareTestExtension(source, destination) {
   setup = setup.replaceAll('http://127.0.0.1:4317', `http://127.0.0.1:${TEST_PORT}`);
   await fs.writeFile(setupPath, setup, 'utf8');
 
+  for (const relative of ['identity.js', 'content.js']) {
+    const fixturePath = path.join(destination, relative);
+    let fixtureSource = await fs.readFile(fixturePath, 'utf8');
+    fixtureSource = fixtureSource.replaceAll("'4320'", `'${FIXTURE_PORT}'`);
+    await fs.writeFile(fixturePath, fixtureSource, 'utf8');
+  }
+
   const guardPath = path.join(destination, 'components', 'tab-launch-guard', 'controller.js');
   let guard = await fs.readFile(guardPath, 'utf8');
   guard = guard.replace(
     "const CHATGPT_HOME = 'https://chatgpt.com/';",
-    `const CHATGPT_HOME = 'http://127.0.0.1:4320/noidentity?watchdog=${TEST_PORT}&command=lane';`
+    `const CHATGPT_HOME = 'http://127.0.0.1:${FIXTURE_PORT}/noidentity?watchdog=${TEST_PORT}&command=lane';`
   );
   guard = guard.replace('const DEFAULT_MIN_LAUNCH_GAP_MS = 6000;', 'const DEFAULT_MIN_LAUNCH_GAP_MS = 1000;');
   await fs.writeFile(guardPath, guard, 'utf8');

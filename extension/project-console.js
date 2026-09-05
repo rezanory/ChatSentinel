@@ -8,7 +8,6 @@
   const HOST_ID = 'chatsentinel-project-console-host';
   const MIN_WIDTH = 330;
   const MAX_WIDTH = 680;
-  const FULL_PROJECT_MODE = 'CHATSENTINEL FULL PROJECT MODE';
   let host;
   let shadow;
   let state = {
@@ -150,7 +149,8 @@
     state.projectTree = treeResult.tree || null;
     const historyResult = await api('/audit/history?limit=100');
     state.history = historyResult.events || [];
-    if (!state.selectedProjectId) state.selectedProjectId = context.project?.projectId || state.projects[0]?.projectId || null;
+    if (!state.selectedProjectId && context.project?.projectId) state.selectedProjectId = context.project.projectId;
+    else if (state.selectedProjectId && !state.projects.some(project => project.projectId === state.selectedProjectId)) state.selectedProjectId = context.project?.projectId || null;
 
     state.setupPlan = await api('/setup/plan?service=1');
     const health = await api('/health');
@@ -185,7 +185,7 @@
         <label><input id="globalAuto" type="checkbox" style="width:auto"> Global auto-recovery master</label>
       </div>
       <div class="row" style="margin-top:8px">
-        <button class="primary" id="insertFullProjectMode">Insert Full Project Mode</button>
+        <button class="primary" id="insertFullProjectMode">Activate Full Project Mode</button>
         <span class="muted" id="fullProjectModeStatus"></span>
       </div>`;
     chrome.storage.local.get(['autoRecoveryEnabled']).then(values => {
@@ -194,14 +194,38 @@
       checkbox.checked = Boolean(values.autoRecoveryEnabled);
       checkbox.addEventListener('change', () => chrome.storage.local.set({ autoRecoveryEnabled: checkbox.checked }));
     });
-    shadow.getElementById('insertFullProjectMode')?.addEventListener('click', () => {
+    const modeStatus = shadow.getElementById('fullProjectModeStatus');
+    if (project?.fullProjectMode?.active && modeStatus) {
+      const pathState = project.fullProjectMode.orchestrationActivation?.state || 'ready-for-plan';
+      modeStatus.textContent = `Active - orchestration ${pathState}`;
+      modeStatus.className = 'ok';
+    }
+    shadow.getElementById('insertFullProjectMode')?.addEventListener('click', async () => {
       const status = shadow.getElementById('fullProjectModeStatus');
-      const result = window.ChatSentinelActuator?.prependPromptText?.(FULL_PROJECT_MODE)
-        || { ok: false, reason: 'actuator-missing' };
-      if (status) {
-        status.textContent = result.ok ? (result.deduplicated ? 'Already added' : 'Added to prompt') : (result.reason || 'Insert failed');
-        status.className = result.ok ? 'ok' : 'bad';
+      if (status) { status.textContent = 'Activating...'; status.className = 'muted'; }
+      const controller = window.ChatSentinelFullProjectMode;
+      const result = await controller?.activate?.({
+        conversationId: state.conversationId,
+        selectedProjectId: state.context?.project?.projectId || state.selectedProjectId || undefined,
+        projectDraft: controller?.draftFromEditor?.(shadow),
+        tab: state.tab
+      }, {
+        api,
+        groupTabs: projectRow => runtime({ type: 'CHATSENTINEL_GROUP_PROJECT_TABS', project: projectRow }),
+        captureSnapshot: projectId => runtime({ type: 'CHATSENTINEL_CAPTURE_SESSION_SNAPSHOT', projectId, reason: 'full-project-mode-activation' }),
+        prependPrompt: text => window.ChatSentinelActuator?.prependPromptText?.(text) || { ok: false, reason: 'actuator-missing' }
+      }) || { ok: false, error: 'full-project-mode-controller-missing' };
+      if (!result.ok) {
+        if (status) {
+          status.textContent = result.error === 'project-selection-required'
+            ? 'Select a project or enter a local project path first'
+            : (result.error || 'Activation failed');
+          status.className = 'bad';
+        }
+        return;
       }
+      state.selectedProjectId = result.project?.projectId || state.selectedProjectId;
+      await refresh();
     });
   }
 

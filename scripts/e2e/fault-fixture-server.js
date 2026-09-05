@@ -1,6 +1,6 @@
 import http from 'node:http';
 
-const PORT = 4320;
+const PORT = Number(process.env.CHATSENTINEL_FIXTURE_PORT || 4320);
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
   if (/^\/backend-api\/(?:conversation|shared_conversation)\/[^/]+\/?$/.test(url.pathname)) {

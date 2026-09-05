@@ -10,6 +10,7 @@ import { authorizeRequest, createRateLimiter, requestId, setCors } from './http-
 import { validateCommandClaim, validateCommandComplete, validateCommandEnqueue, validateCommandProgress, validateConversationConfig, validateProject, validateProjectAttach, validateReconcileRequest, validateSignal } from './validation.js';
 import { cancelCommand, claimCommand, completeCommand, enqueueCommand, listCommands, updateCommandProgress } from './command-queue.js';
 import { configureOrchestration, tickProjectOrchestration } from './components/project-orchestrator/controller.js';
+import { activateFullProjectMode } from './components/full-project-mode/activation.js';
 import { searchProjectChats } from './project-search.js';
 import { applyPortableImport, createPortableBundle, previewPortableImport } from './portable-bundle.js';
 import { appendAuditEvent, listAuditEvents } from './audit-history.js';
@@ -209,6 +210,16 @@ async function route(req, res, ctx) {
     await store.saveNow();
     logger.warn('extension-pairing-reset', { requestId: id });
     return json(res, 200, { ok: true, paired: false });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/full-project-mode/activate') {
+    const body = await readJson(req, config.maxBodyBytes);
+    const result = await activateFullProjectMode(store, body);
+    if (result.ok) {
+      appendAuditEvent(store, { type: 'action', action: 'FULL_PROJECT_MODE_ACTIVATED', outcome: 'success', projectId: result.project.projectId, projectName: result.project.name, conversationId: result.config?.conversationId || body?.conversationId });
+      logger.info('full-project-mode-activated', { projectId: result.project.projectId, conversationId: body?.conversationId, created: result.created });
+    }
+    return json(res, result.ok ? 200 : 400, result);
   }
 
   if (req.method === 'POST' && url.pathname === '/orchestrator/configure') {

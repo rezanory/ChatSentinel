@@ -246,7 +246,7 @@ async function togglePanelInTab(tab) {
   if (response?.ok) return response;
   await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    files: ['components/runtime-context-guard/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'project-console.js']
+    files: ['components/runtime-context-guard/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js']
   });
   response = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_TOGGLE_PANEL' }).catch(error => ({ ok: false, error: String(error) }));
   return response || { ok: false, error: 'panel-toggle-failed' };
@@ -264,7 +264,7 @@ async function handleMessage(message, sender) {
   if (message.type === 'CHATSENTINEL_SIGNAL') return forwardSignal(message, sender.tab);
   if (message.type === 'CHATSENTINEL_API') {
     const result = await apiRequest(message.route, message.method, message.body, watchdogBase(message.pageUrl));
-    if (result?.ok && /^\/projects\/(?:upsert|attach|detach|delete)$/.test(message.route || '')) sessionRestoreController.scheduleCaptureAll('project-change');
+    if (result?.ok && /^(?:\/projects\/(?:upsert|attach|detach|delete)|\/full-project-mode\/activate)$/.test(message.route || '')) sessionRestoreController.scheduleCaptureAll('project-change');
     return result;
   }
   if (message.type === 'CHATSENTINEL_TAB_CONTEXT') return tabContext(sender.tab);
