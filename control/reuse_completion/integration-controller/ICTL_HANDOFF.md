@@ -81,3 +81,18 @@ The integration lane may consume exact implementation candidate `964b28de914a080
 Track and resolve the user-observed recovery failure: `Connection interrupted. Waiting for the complete answer`.
 
 This is intentionally **not** implemented inside the standalone Integration Controller lane. It belongs to the recovery/continuation path and must remain visible in canonical project handoffs/backlog until a dedicated in-scope fix is implemented and independently validated.
+
+## Fresh reconciliation / revalidation -- 2026-09-05
+
+A fresh GitHub/local reconciliation was performed before closing this lane iteration.
+
+- lane branch local HEAD = remote HEAD: `9dce6aa7578ebafb1b010ddef335328197bbf463` before this evidence update;
+- immutable implementation candidate remains `964b28de914a08023481b7133ce2346f38e3202b` (tree `bcc25b615d58b581e4847f9a6e41bb99cb8e330e`);
+- current remote integration spine observed at `e59d980a4e08a8b2435ba603726086c1e36b2cf5`; integration owner must reconcile again immediately before consumption;
+- focused Integration Controller suite: 11/11 PASS;
+- full `npm test`: 52/52 PASS;
+- syntax/check, security policy, browser E2E, production smoke, npm audit (0 vulnerabilities), diff whitespace check: PASS;
+- PowerShell parser suite: 6/6 PASS;
+- collect-all validation completed without fail-fast and all 10 executed gates passed.
+
+Issue #3 remains OPEN, so this handoff still authorizes no `main` merge and no Production tag.
