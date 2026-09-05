@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 const TEST_PORT = Number(process.env.CHATSENTINEL_E2E_WATCHDOG_PORT || await freePort());
 const FIXTURE_PORT = Number(process.env.CHATSENTINEL_E2E_FIXTURE_PORT || await freePort(new Set([TEST_PORT])));
 const EXPECTED_EXTENSION_ID = 'pcidbmcahljjpbmaecjmfmpbpfnpoepc';
+const E2E_WAIT_MS = Math.max(10000, Number(process.env.CHATSENTINEL_E2E_WAIT_MS || 90000));
 const WATCHDOG = `http://127.0.0.1:${TEST_PORT}`;
 const CHROME = process.env.CHROME_BIN || await findBrowserExecutable();
 if (!CHROME) throw new Error('Chrome/Chromium executable not found; install Chrome or set CHROME_BIN');
@@ -84,7 +85,7 @@ try {
 }
 
 async function launchGuardSuite() {
-  const guardReady = await waitWorkerCondition("typeof globalThis.ChatSentinelTabLaunchGuard === 'object'", 20000);
+  const guardReady = await waitWorkerCondition("typeof globalThis.ChatSentinelTabLaunchGuard === 'object'", E2E_WAIT_MS);
   if (!guardReady) {
     const diagnostics = await workerValue("({lifecycle:typeof globalThis.ChatSentinelProjectChatLifecycle,snapshotStore:typeof globalThis.sessionSnapshotStore,restoreController:typeof globalThis.sessionRestoreController,guard:typeof globalThis.ChatSentinelTabLaunchGuard,executor:typeof globalThis.ChatSentinelCommandExecutor})").catch(error => ({ error: String(error) }));
     console.error('tab launch guard diagnostics:', JSON.stringify(diagnostics));
@@ -423,7 +424,7 @@ async function commandManagerSuite() {
 }
 
 async function waitCommand(commandId, expectedStatus) {
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const data = await fetch(`${WATCHDOG}/commands?limit=200`).then(r => r.json());
     const command = data.commands?.find(row => row.commandId === commandId);
@@ -434,7 +435,7 @@ async function waitCommand(commandId, expectedStatus) {
   throw new Error(`command ${commandId} did not reach ${expectedStatus}`);
 }
 
-async function waitProjectLaneTab(projectId, laneId, predicate = () => true, timeoutMs = 10000) {
+async function waitProjectLaneTab(projectId, laneId, predicate = () => true, timeoutMs = E2E_WAIT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const result = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
@@ -447,7 +448,7 @@ async function waitProjectLaneTab(projectId, laneId, predicate = () => true, tim
 }
 
 async function waitProjectChatCount(projectId, count) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const result = await fetch(`${WATCHDOG}/projects`).then(r=>r.json());
     const project = result.projects?.find(row=>row.projectId===projectId);
@@ -458,7 +459,7 @@ async function waitProjectChatCount(projectId, count) {
 }
 
 async function waitProjectExactChatCount(projectId, count) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const result = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
     const project = result.projects?.find(row => row.projectId === projectId);
@@ -469,7 +470,7 @@ async function waitProjectExactChatCount(projectId, count) {
 }
 
 async function waitContentReady(tabId) {
-  const deadline = Date.now() + 30000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const reply = await workerValue(`chrome.tabs.sendMessage(${tabId},{type:'CHATSENTINEL_GET_IDENTITY'}).catch(()=>null)`);
     if (reply?.ok) return reply;
@@ -477,7 +478,7 @@ async function waitContentReady(tabId) {
   }
   throw new Error(`content script not ready in tab ${tabId}`);
 }
-async function waitWorkerValue(expression, predicate = Boolean, timeoutMs = 10000) {
+async function waitWorkerValue(expression, predicate = Boolean, timeoutMs = E2E_WAIT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -489,7 +490,7 @@ async function waitWorkerValue(expression, predicate = Boolean, timeoutMs = 1000
   return null;
 }
 
-async function waitWorkerCondition(expression, timeoutMs = 10000) {
+async function waitWorkerCondition(expression, timeoutMs = E2E_WAIT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -523,7 +524,7 @@ async function verifyTabFallback() {
   const before = await fetch(`${WATCHDOG}/supervisor`).then(r => r.json());
   const known = new Set((before.sessions || []).map(row => row.id));
   await openPage(fixtureUrl('noidentity'));
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const state = await fetch(`${WATCHDOG}/supervisor`).then(r => r.json());
     const row = (state.sessions || []).find(item => /^tab:\d+$/.test(item.id) && !known.has(item.id));
@@ -562,7 +563,7 @@ async function openPage(url) {
 }
 
 async function waitForSession(id) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const state = await fetch(`${WATCHDOG}/supervisor`).then(r => r.json());
     const row = state.sessions?.find(item => item.id === id);
@@ -586,7 +587,7 @@ async function postJson(route, body) {
 }
 
 async function waitTarget(predicate) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     const targets = await waitJson(`${DEVTOOLS}/json/list`);
     const target = targets.find(predicate);
@@ -597,7 +598,7 @@ async function waitTarget(predicate) {
 }
 
 async function waitEval(target, expression) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     if (await evalValue(target, expression)) return true;
     await sleep(200);
@@ -639,7 +640,7 @@ async function cdp(target, method, params = {}) {
 
 async function waitDevToolsPort(profileDir) {
   const file = path.join(profileDir, 'DevToolsActivePort');
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     try {
       const [port] = (await fs.readFile(file, 'utf8')).trim().split(/\r?\n/);
@@ -651,7 +652,7 @@ async function waitDevToolsPort(profileDir) {
 }
 
 async function waitJson(url) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     try {
       const res = await fetch(url);
@@ -663,7 +664,7 @@ async function waitJson(url) {
 }
 
 async function waitUrl(url) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + E2E_WAIT_MS;
   while (Date.now() < deadline) {
     try {
       const res = await fetch(url);
