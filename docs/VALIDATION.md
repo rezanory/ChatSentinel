@@ -74,3 +74,7 @@ Shipping manifest is copied to a temporary test extension and only that temporar
 The v1.1 sequence above is historical. Final v1.3.0 accepted implementation `a65c436462d0a4fe3ac6524ae5374112b84a83bc` (tree `fb1288bf52f7bcdcb4de9da0049226dc0e65a809`) passes the complete Windows collect-all release gates: 179/179 unit/integration tests, version consistency, syntax/check, security policy, shell parsing, complete browser E2E, production smoke, npm audit with 0 vulnerabilities, diff check, Windows PowerShell parser 7/7, and repository-boundary scan 0.
 
 macOS 15 ARM64 live run `33980902560` on the same exact main SHA passes release validation, setup inspection, launchd install, live `/health` version 1.3.0, deliberate KeepAlive restart to a new PID, and cleanup. The documentation-only final acceptance binding must itself be independently revalidated before the Production tag/release is created.
+
+## v1.3.1 adaptive request-throttle acceptance
+
+The release E2E now includes a deterministic `Too many requests` fixture that verifies the active modal acknowledgement is auto-clicked, adaptive cooldown is persisted, request-making commands are gated, fixture state is isolated/reset, and subsequent durable command-manager scenarios still complete. Exact implementation `cc7d3eefe10cabe0be46dda324b02a6294037f5c` passed 184/184 tests and the complete Windows release-validation command. macOS Live Acceptance run `33992650575` passed the same release validation plus launchd health/restart checks.

@@ -1,0 +1,52 @@
+{
+  "product": "ChatSentinel",
+  "version": "1.3.1",
+  "status": "IMPLEMENTATION_ACCEPTED_PENDING_DOCS_BOUND_FINAL",
+  "accepted_implementation_sha": "cc7d3eefe10cabe0be46dda324b02a6294037f5c",
+  "accepted_implementation_tree": "9fbe4acef491de4b967a3385c65f960be9d4c723",
+  "baseline_sha": "b8c7b18c8cf0cdaf08e29c54b835da5ecfc0a426",
+  "feature": {
+    "failure_mode": "chatgpt-too-many-requests",
+    "dismissal": "Auto-click visible Got it/OK/Dismiss/Close/Understood control on the active rate-limit modal.",
+    "adaptive_levels": 4,
+    "cooldowns_ms": [
+      0,
+      120000,
+      240000,
+      480000,
+      900000
+    ],
+    "minimum_request_gaps_ms": [
+      0,
+      10000,
+      20000,
+      30000,
+      45000
+    ],
+    "batch_limits": "normal=6, level1<=2, level2+=1",
+    "anti_blocker": "While request-making commands cool down, local GROUP/FOCUS/CLOSE work remains claimable; blocked request commands do not consume attempts.",
+    "separation": "Distinct from Connection interrupted, message-delivery timeout, and browser renderer/tab crash recovery."
+  },
+  "windows": {
+    "release_validate": "PASS",
+    "tests": "184/184 PASS",
+    "browser_e2e": "PASS including Too many requests auto-dismiss + adaptive pacing",
+    "production_smoke": "PASS",
+    "npm_audit": "0 vulnerabilities",
+    "powershell_parser": "7/7 PASS",
+    "repository_boundary_matches": 0
+  },
+  "macos": {
+    "workflow": "macOS Live Acceptance",
+    "run_id": 33992650575,
+    "head_sha": "cc7d3eefe10cabe0be46dda324b02a6294037f5c",
+    "conclusion": "success",
+    "release_validation": "PASS",
+    "initial_health_pid": 19466,
+    "restart_health_pid": 19790,
+    "health_version": "1.3.1",
+    "keepalive_restart": "PASS: SIGKILL recovered to a new PID",
+    "cleanup": "PASS"
+  },
+  "next_gate": "Create docs-bound final commit, repeat exact Windows release validation and macOS Live Acceptance, then archive/tag/release/deploy and reload the unpacked production extension."
+}

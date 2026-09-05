@@ -141,3 +141,11 @@ GitHub-hosted macOS 15 ARM64 run `33980902560` is fully green on that exact SHA:
 Rollback v1.2.1 remains preserved at `C:\ChatSentinel-worktrees\ChatSentinel-versions\ChatSentinel-1.2.1`; its manifest SHA/tree and source/extension/bundle SHA256 values were independently rechecked unchanged. Canonical final acceptance evidence is `control/v1_3/FINAL_CROSS_PLATFORM_ACCEPTANCE_RECEIPT.json` plus `control/v1_3/FINAL_CROSS_PLATFORM_ACCEPTANCE_HANDOFF.md`.
 
 This section is documentation-only relative to the accepted implementation identity. Before Production tagging, the exact docs-bound commit must receive the complete independent gate set, promotion to `main` must remain ancestry-safe, exact main must receive macOS Live Acceptance again, and the exact v1.3.0 source/extension/Git-bundle archive must be checksum-verified.
+
+## v1.3.1 Adaptive request-throttle acceptance — 2026-09-06
+
+The `Too many requests` ChatGPT limit is now a distinct bounded recovery mode. Accepted implementation `cc7d3eefe10cabe0be46dda324b02a6294037f5c` (tree `9fbe4acef491de4b967a3385c65f960be9d4c723`) auto-dismisses the active acknowledgement modal, persists escalating cooldown/minimum-gap state, reduces request batch size, and prevents prompt-side effects while throttled. Rate-sensitive queue entries are skipped without consuming attempts, so independent local control work can continue.
+
+Exact Windows acceptance is green at 184/184 tests plus release validation, browser E2E with real modal auto-dismiss evidence, production smoke, zero-vulnerability audit, 7/7 PowerShell parser and 0 repository-boundary matches. macOS Live Acceptance run `33992650575` is SUCCESS on the same SHA, including live 1.3.1 health and launchd KeepAlive restart from PID 19466 to 19790. Canonical evidence is `control/v1_3_1/ADAPTIVE_RATE_LIMIT_ACCEPTANCE_RECEIPT.json` and `control/v1_3_1/ADAPTIVE_RATE_LIMIT_ACCEPTANCE_HANDOFF.md`.
+
+The docs-bound final commit must repeat exact release validation before ancestry-safe promotion/deployment. The production extension must then be actually reloaded from `C:\ChatSentinel\extension`; copying source files alone is not acceptance.

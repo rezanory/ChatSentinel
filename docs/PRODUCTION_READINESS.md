@@ -79,3 +79,7 @@ The v1.1 material above is historical. ChatSentinel v1.3.0 has now completed the
 GitHub-hosted macOS 15 ARM64 run `33980902560` is fully green on the same exact main SHA through release validation, setup inspection, launchd installation, live health 1.3.0, KeepAlive restart to a new PID, and cleanup. Rollback 1.2.1 remains checksum-verified and separately installable.
 
 Production tagging remains fail-closed until the documentation-bound exact SHA repeats all independent gates, exact main repeats macOS Live Acceptance, and the exact v1.3.0 archive is checksum-verified. When those gates pass, the Full Project Mode prohibition on Production tagging is satisfied for v1.3.0.
+
+## v1.3.1 adaptive request-throttle status — 2026-09-06
+
+Implementation `cc7d3eefe10cabe0be46dda324b02a6294037f5c` adds bounded automatic dismissal and adaptive backoff for ChatGPT `Too many requests`, while keeping unrelated local control commands admissible. Windows release validation is fully green at 184/184 and macOS Live Acceptance run `33992650575` is SUCCESS with live 1.3.1 health and KeepAlive restart. Production promotion remains fail-closed until the docs-bound final SHA is revalidated, archived/checksummed, deployed, Watchdog-restarted, and the user's unpacked Chrome extension is actually reloaded and verified at 1.3.1.
