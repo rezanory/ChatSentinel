@@ -246,7 +246,7 @@ async function conversationWindowSuite() {
 
 async function projectConsoleSuite() {
   const pageA = await openPage(fixtureUrl('noidentity', { console: 'a' }));
-  const tabA = await workerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('console=a'));return t?{id:t.id,url:t.url,title:t.title}:null})()");
+  const tabA = await waitWorkerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('console=a'));return t?{id:t.id,url:t.url,title:t.title}:null})()", value => Boolean(value?.id));
   assert.ok(tabA?.id, 'console tab A not found');
   await waitContentReady(tabA.id);
   await waitEval(pageA, "document.documentElement.dataset.chatsentinelConsoleReady === '1'");
@@ -272,7 +272,7 @@ async function projectConsoleSuite() {
   console.log('attach current chat from in-page console: PASS');
 
   await openPage(fixtureUrl('noidentity', { console: 'b' }));
-  const tabB = await workerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('console=b'));return t?{id:t.id,url:t.url,title:t.title}:null})()");
+  const tabB = await waitWorkerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('console=b'));return t?{id:t.id,url:t.url,title:t.title}:null})()", value => Boolean(value?.id));
   assert.ok(tabB?.id, 'console tab B not found');
   await postJson('/projects/attach',{projectId:project.projectId,conversationId:`tab:${tabB.id}`,tabId:tabB.id,title:'E2E lane B',url:tabB.url});
   current = await waitProjectChatCount(project.projectId, 2);
