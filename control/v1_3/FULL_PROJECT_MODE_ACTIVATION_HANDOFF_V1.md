@@ -71,3 +71,11 @@ A later exact-candidate E2E run exposed another pre-Full-Mode harness race: the 
 Panel readiness harness fix-forward SHA: `3e6ff8f440629fb22568f213ca98e560c41873f6`
 
 The complete browser E2E passed after this fix, including the real Full Project Mode activation path. The handoff-bound tip containing this note requires the final complete gate run before push.
+
+## Final durable-command E2E timing fix-forward
+
+The final browser revalidation exposed a pre-existing harness mismatch: `waitCommand` allowed 15 seconds, while the production MV3 command executor has a 30-second fallback alarm. If the immediate idempotent `kick()` coincides with an already-running poll, a valid durable command can legitimately wait for the next alarm and exceed the old test deadline. The harness now allows one complete alarm interval plus bounded execution time (45 seconds); command identity, ownership, receipts and production polling cadence are unchanged.
+
+Durable-command timing harness fix-forward SHA: `c0d04bc589f489bcb11bfb79973db309f3f87fe0`
+
+The complete browser E2E passed after this correction, including real Full Project Mode activation and durable `CREATE_LANE_CHAT` ownership/idempotency. The next handoff-bound tip is the final candidate and must pass the complete independent gate set before push.
