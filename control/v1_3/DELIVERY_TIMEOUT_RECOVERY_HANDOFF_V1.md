@@ -86,3 +86,7 @@ Final full validation on exact candidate `8d7329365161e07d061507023f55a10dc4b5ab
 No runtime source outside the delivery-timeout component was changed. The only non-component code changes are the browser fixture/E2E surfaces required by this lane.
 
 The next docs-only receipt commit must pass the same complete gate set before push. The exact pushed SHA is the canonical lane handoff.
+
+## Final integrated acceptance closure — 2026-09-05
+
+The delivery-timeout component and its dynamic-port/high-load browser harness are included in integrated validation basis `bd2271f033db44ded8b8f285639bc437720875c7`. The exact candidate passed the complete browser E2E path, aggregate 175/175 unit suite, version/syntax/policy/shell/smoke/audit/diff gates, cross-repository-boundary check, and Windows PowerShell parser 7/7.

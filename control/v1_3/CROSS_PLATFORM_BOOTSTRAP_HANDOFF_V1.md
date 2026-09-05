@@ -62,3 +62,9 @@ Live Windows Setup sanity-check correctly detected the existing GitHub Runner bu
 ## Final Windows harness stabilization
 
 The exact pre-final candidate exposed one teardown-only Windows `EBUSY` while deleting a temporary integration-test directory. No product assertion failed and all other gates continued green. Cleanup now retries only the known transient Windows filesystem codes with a bounded backoff. `test/server.integration.test.js` then completed three consecutive 10/10 green runs. A new exact final SHA and complete independent revalidation are required before push.
+
+## Final integrated v1.3 Windows acceptance — 2026-09-05
+
+The earlier notes requiring a new exact final revalidation are superseded by the pushed integrated candidate lineage. Exact docs-bound validation basis `bd2271f033db44ded8b8f285639bc437720875c7` passed 175/175 unit tests plus version, syntax/check, security policy, shell parser, browser E2E, production smoke, zero-vulnerability audit, diff, cross-repository-boundary, and Windows PowerShell parser 7/7 gates.
+
+Windows code/runtime acceptance is green. macOS code-level parser/unit coverage remains green, but macOS live-device deployment acceptance is still explicitly pending because no Mac device is connected; this must not be represented as a failed Windows or source-development gate.

@@ -125,3 +125,9 @@ A final Windows test-harness flake was also isolated: temporary server-directory
 ChatSentinel workflow continuation is now repository-agnostic. The superseding source candidate `460363e016c01757ac99cac2cb635a78e99468d0` removes the embedded external-roadmap profile/compiler and explicitly rejects `workflowProfileId`; attached projects must own their own `control/chatsentinel-workflow.json` manifest.
 
 The exact source candidate passed 175/175 unit tests plus version, syntax, policy, shell, browser E2E, production smoke, zero-vulnerability audit, diff and 7/7 PowerShell parser gates. Stable v1.2.1 remains untouched. The docs-bound branch tip must pass the same complete gate set before push and remains separate from `main`/production promotion.
+
+## v1.3 Integrated candidate closure — 2026-09-05
+
+GitHub Issue #3 (Production reuse completion) is now CLOSED / completed with final acceptance evidence. The integrated docs-bound validation basis is `bd2271f033db44ded8b8f285639bc437720875c7` (tree `40e237963eedaea499481969a080a845a733a9e4`), with 175/175 unit tests and all independent version, syntax, policy, shell, browser E2E, production smoke, zero-vulnerability audit, diff, cross-repository-boundary and 7/7 PowerShell parser gates green.
+
+ChatSentinel and every attached project remain repository-separated. Stable v1.2.1 is untouched. The only remaining non-source boundary is macOS live-device deployment validation because no Mac device is connected; Windows/source development acceptance is complete.

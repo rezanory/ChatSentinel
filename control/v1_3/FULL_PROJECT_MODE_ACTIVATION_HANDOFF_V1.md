@@ -79,3 +79,7 @@ The final browser revalidation exposed a pre-existing harness mismatch: `waitCom
 Durable-command timing harness fix-forward SHA: `c0d04bc589f489bcb11bfb79973db309f3f87fe0`
 
 The complete browser E2E passed after this correction, including real Full Project Mode activation and durable `CREATE_LANE_CHAT` ownership/idempotency. The next handoff-bound tip is the final candidate and must pass the complete independent gate set before push.
+
+## Final integrated acceptance closure — 2026-09-05
+
+The service-worker, panel-readiness, and durable-command timing notes above are historical fix-forward checkpoints and are superseded by integrated validation basis `bd2271f033db44ded8b8f285639bc437720875c7`. Full Project Mode passed the complete browser E2E path plus the aggregate 175/175 unit suite and all independent release gates on that exact candidate.
