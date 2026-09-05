@@ -20,7 +20,9 @@ try {
   } else if (command === 'apply') {
     const plan = await planSetup({ root, includeRecommended: true, includeWatchdogService: Boolean(flags.service) });
     const approvedStepIds = String(flags.approve || '').split(',').map(value => value.trim()).filter(Boolean);
-    print(await applySetup({ plan, root, approvedStepIds, dryRun: !flags.execute }));
+    const result = await applySetup({ plan, root, approvedStepIds, dryRun: !flags.execute });
+    print(result);
+    if (!result.ok) process.exitCode = 1;
   } else if (command === 'repair-plan' || command === 'uninstall-plan') {
     const action = command === 'repair-plan' ? 'repair' : 'uninstall';
     print(await planMaintenance({ root, action, includeRecommended: flags.recommended !== 'false' }));
@@ -28,7 +30,9 @@ try {
     const action = flags.action === 'uninstall' ? 'uninstall' : 'repair';
     const plan = await planMaintenance({ root, action, includeRecommended: true });
     const approvedStepIds = String(flags.approve || '').split(',').map(value => value.trim()).filter(Boolean);
-    print(await applyMaintenance({ plan, root, approvedStepIds, dryRun: !flags.execute }));
+    const result = await applyMaintenance({ plan, root, approvedStepIds, dryRun: !flags.execute });
+    print(result);
+    if (!result.ok) process.exitCode = 1;
   } else if (command === 'runner-plan') {
     if (!flags.repo) throw new Error('--repo owner/repo is required');
     print(await planRunner({ root, repo: flags.repo, name: flags.name, labels: splitCsv(flags.labels) }));

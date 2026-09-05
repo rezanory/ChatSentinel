@@ -39,8 +39,24 @@ if (-not $scheduled) {
   Set-Content -Path $launcher -Value $vbs -Encoding ASCII
   Write-Host "[ChatSentinel] Scheduled Task unavailable; Startup launcher installed: $launcher"
 }
-# Upgrade-aware recycle: if the old listener is healthy, stop only that node process.
-# The existing named-mutex supervisor (if any) will restart it from the new files.
+# Upgrade-aware supervisor handoff: retire supervisors rooted at an older installation.
+$currentRunner = [IO.Path]::GetFullPath($runner)
+$supervisors = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object {
+  $_.ProcessId -ne $PID -and $_.CommandLine -match '(?i)ChatSentinel' -and $_.CommandLine -match '(?i)run-watchdog\.ps1'
+})
+foreach ($supervisor in $supervisors) {
+  $match = [regex]::Match([string]$supervisor.CommandLine, '(?i)-File\s+(?:"([^"]*run-watchdog\.ps1)"|([^\s]*run-watchdog\.ps1))')
+  if (-not $match.Success) { continue }
+  $supervisorRunner = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
+  try { $supervisorRunner = [IO.Path]::GetFullPath($supervisorRunner) } catch { continue }
+  if (-not [string]::Equals($supervisorRunner, $currentRunner, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Host "[ChatSentinel] retiring stale supervisor PID $($supervisor.ProcessId): $supervisorRunner"
+    Stop-Process -Id $supervisor.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+}
+
+# Upgrade-aware recycle: once stale supervisors are retired, stop the old listener.
+# A supervisor already rooted at this installation may restart it; otherwise a new one is started below.
 try {
   $currentHealth = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 2
   if ($currentHealth.ok -and $currentHealth.version -ne $targetVersion) {

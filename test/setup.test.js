@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { defaultDataDir, deviceProfile } from '../src/components/setup/device-profile.js';
 import { detectPrerequisites, versionAtLeast } from '../src/components/setup/prerequisite-detector.js';
 import { buildSetupPlan, applySetupPlan, requirementAction } from '../src/components/setup/install-plan.js';
@@ -145,4 +146,21 @@ test('Windows prerequisite detector can recognize an authorized Remote Desktop C
   const report = detectPrerequisites({ profile, run, exists, env: {} });
   assert.equal(report.prerequisites.remoteBridge.installed, true);
   assert.equal(report.prerequisites.remoteBridge.source, 'process');
+});
+
+
+test('Windows upgrade installer retires a supervisor rooted at an older installation before listener recycle', async () => {
+  const source = await fs.readFile(new URL('../scripts/install-autostart.ps1', import.meta.url), 'utf8');
+  const handoff = source.indexOf('retiring stale supervisor PID');
+  const recycle = source.indexOf('upgrading listener from v');
+  assert.ok(handoff >= 0, 'stale supervisor handoff must be explicit');
+  assert.ok(recycle > handoff, 'stale supervisor must be retired before listener recycle');
+  assert.match(source, /Get-CimInstance Win32_Process/);
+  assert.match(source, /run-watchdog\\\.ps1/);
+});
+
+test('setup CLI returns a failing process status when an approved apply result is not ok', async () => {
+  const source = await fs.readFile(new URL('../scripts/setup-cli.mjs', import.meta.url), 'utf8');
+  const matches = source.match(/if \(!result\.ok\) process\.exitCode = 1;/g) || [];
+  assert.equal(matches.length, 2);
 });
