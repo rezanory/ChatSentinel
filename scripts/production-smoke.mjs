@@ -36,7 +36,7 @@ try {
   await waitExit(child);
   child = startWatchdog();
   const health = await waitHealth();
-  assert.equal(health.version, '1.1.1');
+  assert.equal(health.version, '1.2.0');
   const supervisor = await fetch(`${BASE}/supervisor`).then(r => r.json());
   assert.equal(supervisor.sessions.some(row => row.id === 'prod-smoke'), true);
   const projects = await fetch(`${BASE}/projects`).then(r => r.json());

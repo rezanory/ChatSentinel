@@ -1,6 +1,6 @@
 {
   "name": "chatsentinel",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "Production watchdog and recovery controller for long-running ChatGPT project work",

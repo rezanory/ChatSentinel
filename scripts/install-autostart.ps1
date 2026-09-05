@@ -3,7 +3,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $runner = Join-Path $PSScriptRoot 'run-watchdog.ps1'
 $taskName = 'ChatSentinelWatchdog'
 $dataRoot = if ($env:CHATSENTINEL_DATA_DIR) { $env:CHATSENTINEL_DATA_DIR } else { Join-Path $env:LOCALAPPDATA 'ChatSentinel' }
-$targetVersion = '1.1.1'
+$targetVersion = '1.2.0'
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw 'Node.js is required but was not found in PATH.'

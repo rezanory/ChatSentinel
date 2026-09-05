@@ -39,7 +39,7 @@ let EXTENSION_WORKER;
 try {
   await waitUrl('http://127.0.0.1:4320/idle');
   const health = await waitJson(`${WATCHDOG}/health`);
-  assert.equal(health.version, '1.1.1', 'v1.1.1 watchdog must be running');
+  assert.equal(health.version, '1.2.0', 'v1.2.0 watchdog must be running');
 
   chrome = spawn(CHROME, [
     `--user-data-dir=${profile}`,

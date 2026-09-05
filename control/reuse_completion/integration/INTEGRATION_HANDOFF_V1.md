@@ -78,3 +78,11 @@ The exact docs-bound SHA after this evidence update must still pass the same com
 ## Final E2E harness stabilization
 
 A Chrome registration timing flake was eliminated in test scope by `d3b624e5a279bd1ddc4ef6bdb48048bcca515d15`: Project Console tab A/B discovery now uses the existing bounded worker wait instead of an immediate one-shot query. Two consecutive isolated browser E2E executions completed fully green after the change. No production runtime behavior was altered by this commit.
+
+## Final live acceptance and release version
+
+After the user reloaded the pushed `438f1b4a633021f92192a4a96dda84275810eed7` candidate, an isolated temporary-project acceptance completed `LIVE_ACCEPTANCE_PASS`: the MV3 worker claimed the stale Focus command, recovered a replacement tab, returned `staleRecovered:true` and `membershipRepaired:true`, updated the durable registry from the seeded stale tab ID to the new live tab ID, then closed the temporary tab and removed the temporary project.
+
+The release line is v1.2, so active release surfaces were normalized from `1.1.1` to `1.2.0`: package metadata, Chrome manifest, watchdog runtime version, installer target, production smoke expectation, and browser E2E expectation. No active package/extension/src/scripts release surface retains `1.1.1`.
+
+The v1.2.0 version-normalized candidate passed 120/120 unit tests, syntax/check, security policy, complete browser E2E, production smoke, npm audit with zero vulnerabilities, all six PowerShell parser checks, and diff-check. `main`, Issue #3 state, and Production tags remain protected until explicit promotion.
