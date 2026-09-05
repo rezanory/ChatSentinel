@@ -99,3 +99,9 @@ Final validation also hardened the browser E2E harness against Chrome tab-regist
 ## v1.2.0 Release Version Binding — 2026-09-05
 
 Post-reload isolated live acceptance of the stale-focus membership-repair path passed end-to-end using only a temporary project/tab and cleaned up afterward. The v1.2 reuse-completion release surfaces are now versioned `1.2.0` instead of the legacy `1.1.1` label. Full independent gates on the version-normalized candidate are green; formal `main` promotion, Issue #3 closure and Production tagging remain separate protected actions.
+
+## v1.2 Active Parallel Chats lifecycle correction
+
+Live UI review found that Project counts and Parallel Chats reflected raw attached conversation membership rather than active work. This is superseded by `a2c78497a87fc6d4c3fbab4dc194905b30e6596f`: Active Parallel Chats now use real tab/activity and fresh lifecycle evidence, terminal/stale rows are excluded from the active projection, and stable memberships detach on actual tab close. Historical/raw state is not destructively erased by the projection.
+
+Pre-handoff gates are fully green: 125/125 unit, syntax, policy, browser E2E (including completed-live-tab exclusion and stable closed-tab cleanup), production smoke, npm audit 0 vulnerabilities, PowerShell parser 6/6 and diff-check.

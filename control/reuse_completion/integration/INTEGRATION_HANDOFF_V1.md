@@ -86,3 +86,13 @@ After the user reloaded the pushed `438f1b4a633021f92192a4a96dda84275810eed7` ca
 The release line is v1.2, so active release surfaces were normalized from `1.1.1` to `1.2.0`: package metadata, Chrome manifest, watchdog runtime version, installer target, production smoke expectation, and browser E2E expectation. No active package/extension/src/scripts release surface retains `1.1.1`.
 
 The v1.2.0 version-normalized candidate passed 120/120 unit tests, syntax/check, security policy, complete browser E2E, production smoke, npm audit with zero vulnerabilities, all six PowerShell parser checks, and diff-check. `main`, Issue #3 state, and Production tags remain protected until explicit promotion.
+
+## Active Parallel Chat lifecycle fix
+
+User live acceptance exposed that project `chatCount` and Parallel Chats were based on raw attached membership, so completed/stale chats remained visible indefinitely. Implementation `a2c78497a87fc6d4c3fbab4dc194905b30e6596f` adds standalone `ChatSentinelProjectChatLifecycle` and changes only composition surfaces.
+
+Active projection now requires a real browser tab plus current DOM activity, a fresh actionable/running session, or a short recent-attachment grace period; `COMPLETE`/`DEAD` and stale idle records are excluded from the active count/view. Raw membership remains available to server/history surfaces.
+
+`chrome.tabs.onRemoved` now detaches every project membership bound to the closed tabId, including stable conversation IDs; fallback `tab:<id>` memberships are forgotten while stable memberships are detached attribution-safely. Window-closing behavior remains protected for session restore.
+
+Focused lifecycle/server tests: 14/14 PASS. Aggregate pre-handoff validation: 125/125 unit PASS, syntax PASS, security policy PASS, browser E2E PASS including completed-live-tab exclusion and stable closed-tab cleanup, production smoke PASS, npm audit 0 vulnerabilities, PowerShell parser 6/6 PASS, diff-check PASS.

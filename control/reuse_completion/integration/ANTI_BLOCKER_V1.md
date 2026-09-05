@@ -34,3 +34,7 @@ Release anti-blocker: the extension must be Reloaded once after this fix is push
 ## E2E tab-registration timing flake — resolved
 
 The final docs-bound validation exposed Chrome test-harness timing where `openPage` succeeded but an immediate `chrome.tabs.query()` occasionally could not yet see project-console tab A/B. This is not a runtime product failure; the harness now uses bounded `waitWorkerValue` registration waits in `d3b624e5a279bd1ddc4ef6bdb48048bcca515d15`. Two consecutive isolated full browser E2E runs passed after this change.
+
+## Active-chat registry anti-blocker
+
+Raw project membership is no longer treated as proof of active parallel work. UI projection checks browser tab existence/activity plus fresh session/attachment evidence, while terminal/stale rows are hidden without deleting historical state. Stable conversation memberships are detached automatically on real tab close so raw registry growth does not recur.
