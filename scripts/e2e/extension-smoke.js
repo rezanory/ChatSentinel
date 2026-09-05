@@ -97,10 +97,16 @@ async function launchGuardSuite() {
   const tab = await waitWorkerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('/too-many-requests'));return t?{id:t.id,url:t.url}:null})()", value => Boolean(value?.id));
   assert.ok(tab?.id, 'rate-limit fixture tab not found');
   await waitContentReady(tab.id);
-  const state = await workerValue(`chrome.tabs.sendMessage(${tab.id},{type:'CHATSENTINEL_GET_LAUNCH_STATE'}).catch(()=>null)`);
-  assert.equal(state?.rateLimited, true);
-  assert.equal(state?.reason, 'chatgpt-rate-limited');
-  console.log('tab launch guard sanitization + rate-limit detection: PASS');
+  const dismissed = await waitWorkerValue(`chrome.scripting.executeScript({target:{tabId:${tab.id}},func:()=>document.body?.dataset?.rateLimitDismissed==='1'}).then(r=>r?.[0]?.result).catch(()=>false)`, Boolean);
+  assert.equal(dismissed, true, 'Too many requests modal Got it button was not auto-clicked');
+  const adaptive = await waitWorkerValue(`chrome.storage.local.get(globalThis.ChatSentinelRequestRateLimit.STATE_KEY).then(r=>r[globalThis.ChatSentinelRequestRateLimit.STATE_KEY]||null)`, value => Number(value?.level || 0) >= 1);
+  assert.ok(Number(adaptive?.level || 0) >= 1, 'adaptive request pacing was not activated');
+  const gate = await workerValue(`globalThis.ChatSentinelRequestRateLimit.gate(chrome.storage.local)`);
+  assert.equal(gate?.allowed, false, 'adaptive rate gate must cool down request-making commands');
+  await workerValue(`chrome.tabs.remove(${tab.id}).catch(()=>{}); chrome.storage.local.remove([globalThis.ChatSentinelRequestRateLimit.STATE_KEY,globalThis.ChatSentinelRequestRateLimit.LAST_REQUEST_KEY]).then(()=>true)`);
+  const resetGate = await workerValue(`globalThis.ChatSentinelRequestRateLimit.gate(chrome.storage.local)`);
+  assert.equal(resetGate?.allowed, true, 'rate-limit fixture state must not leak into later E2E suites');
+  console.log('tab launch guard sanitization + Too many requests auto-dismiss + adaptive pacing: PASS');
 }
 
 async function crashedTabRecoverySuite() {

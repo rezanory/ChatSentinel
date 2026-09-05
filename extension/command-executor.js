@@ -139,6 +139,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     if (command.progress?.launchFailureReason) {
       await progressCommand(command, workerId, { step: 'launch-healthy', launchFailureReason: null });
     }
+    await enforceRequestRateGate();
 
     const fallbackId = `tab:${tab.id}`;
     if (!command.progress?.attached) {
@@ -238,6 +239,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     const preSendState = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_GET_LAUNCH_STATE' }).catch(() => null);
     if (preSendState?.rateLimited) await handleRateLimitedLaunch(command, workerId, tab, preSendState);
     if (preSendState?.crashed) await handleLaunchFailure(command, workerId, tab, preSendState);
+    await enforceRequestRateGate();
     if (!command.progress?.promptSent) {
       const delivery = await sendPromptWithVerification(command, workerId, tab, payload);
       if (delivery.deduplicated) {
@@ -451,6 +453,13 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
 
   function isRateSensitiveCommand(type) {
     return RATE_SENSITIVE_TYPES.includes(String(type || ''));
+  }
+
+  async function enforceRequestRateGate() {
+    const requestRate = globalThis.ChatSentinelRequestRateLimit;
+    const gate = await requestRate?.gate?.(chrome.storage.local) || { allowed: true, waitMs: 0 };
+    if (gate.allowed) return gate;
+    throw retryableError('request-rate-limit-cooldown', Math.min(60_000, Math.max(1000, Number(gate.waitMs || 0))));
   }
 
   function retryableError(message, retryAfterMs, terminal = false) {

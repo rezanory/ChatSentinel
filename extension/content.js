@@ -15,11 +15,14 @@
       const guard = globalThis.ChatSentinelTabLaunchGuard;
       const requestRate = globalThis.ChatSentinelRequestRateLimit;
       const rateObservation = requestRate?.inspect?.(document) || { active: false, incidentKey: '' };
-      const rateDismissal = rateObservation.active ? requestRate?.dismiss?.(document) : null;
       const state = guard?.inspectPage?.(document) || { healthy: false, rateLimited: false, crashed: false, reason: 'launch-guard-unavailable' };
+      const rateDismissal = rateObservation.active ? requestRate?.dismiss?.(document) : null;
       sendResponse({
         ok: true,
         ...state,
+        healthy: rateObservation.active ? false : state.healthy,
+        rateLimited: rateObservation.active || state.rateLimited,
+        reason: rateObservation.active ? 'chatgpt-rate-limited' : state.reason,
         requestRateLimitIncidentKey: rateObservation.incidentKey || '',
         requestRateLimitDismissed: Boolean(rateDismissal?.dismissed)
       });

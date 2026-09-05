@@ -50,7 +50,7 @@ function render(kind, id) {
     <div role="alert" data-message-id="delivery-old-timeout">Message delivery timed out. Please try again.<button aria-label="Retry">Retry</button></div>
     <article data-message-author-role="assistant" data-message-id="delivery-later-assistant">Later completed answer</article>
   </main>`;
-  if (kind === 'too-many-requests') state = `<main><div role="dialog"><h2>Too many requests</h2><p>You're making requests too quickly. We've temporarily limited access to your conversations to protect your data.</p><p>Please wait a few minutes before trying again.</p><button>Got it</button></div></main>`;
+  if (kind === 'too-many-requests') state = `<main><div role="dialog"><h2>Too many requests</h2><p>You're making requests too quickly. We've temporarily limited access to your conversations to protect your data.</p><p>Please wait a few minutes before trying again.</p><button onclick="document.body.dataset.rateLimitDismissed='1';this.closest('[role=dialog]').remove()">Got it</button></div></main>`;
   if (kind === 'browser-crash') {
     title = 'This page is having a problem';
     state = '<main>This page is having a problem</main>';
