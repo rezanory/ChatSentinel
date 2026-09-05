@@ -1,10 +1,10 @@
-# RCR Handoff � Response Completion Recovery
+# RCR Handoff — Response Completion Recovery
 
 Status: **GREEN / EXACT IMPLEMENTATION CANDIDATE PUSHED**
 
-Repository: ezanory/ChatSentinel
+Repository: rezanory/ChatSentinel
 Worktree: C:\ChatSentinel-worktrees\response-recovery
-Branch: eat/response-completion-recovery-v1
+Branch: feat/response-completion-recovery-v1
 Baseline / integration parent: e59d980a4e08a8b2435ba603726086c1e36b2cf5
 
 ## Exact implementation candidate
@@ -17,17 +17,17 @@ Baseline / integration parent: e59d980a4e08a8b2435ba603726086c1e36b2cf5
 
 ## Problem resolved
 
-The failure mode Connection interrupted. Waiting for the complete answer is no longer handled as a generic stale/error text that can reload-loop or repeatedly retrigger from historical DOM content.
+The failure mode “Connection interrupted. Waiting for the complete answer” is no longer handled as generic stale/error text that can reload-loop or repeatedly retrigger from historical DOM content.
 
 The standalone Response Completion Recovery component now:
-- distinguishes an active interruption from historical error text using the message timeline;
+- distinguishes active interruption from historical error text using message chronology;
 - detects interruption banners rendered outside the assistant turn while respecting DOM order;
 - continues in the same chat even when the checkpoint is not initially fresh, requiring durable reconciliation before unfinished side effects resume;
 - asks explicitly to continue exactly where the response stopped and deliver the complete remaining/final answer;
 - forbids restarting, summarizing, or repeating text already delivered;
 - deduplicates one active interruption incident during a cooldown while allowing a later genuinely new interruption to recover independently.
 
-## Component/reuse boundary
+## Component / reuse boundary
 
 Owned component:
 - extension/components/response-completion-recovery/controller.js
@@ -47,21 +47,17 @@ No runtime package/dependency or third-party service was added.
 ## Validation on exact implementation SHA
 
 - focused response-completion + recovery-engine suite: **16/16 PASS**;
-- full 
-pm test: **58/58 PASS**;
-- 
-pm run check: PASS;
+- full npm test: **58/58 PASS**;
+- npm run check: PASS;
 - security policy: PASS, zero runtime dependencies;
 - browser E2E: PASS;
-  - active external interruption banner ? CONTINUE_SAME_CHAT;
-  - historical interruption ? WAIT;
-  - complete-answer continuation prompt ? PASS;
-  - one incident emits exactly one continuation prompt during cooldown ? PASS;
+  - active external interruption banner -> CONTINUE_SAME_CHAT;
+  - historical interruption -> WAIT;
+  - complete-answer continuation prompt -> PASS;
+  - one incident emits exactly one continuation prompt during cooldown -> PASS;
   - existing retry/new-chat/conversation-window/project-console/grouping/command gates remain PASS;
-- 
-pm run prod-smoke: PASS;
-- 
-pm audit --omit=dev: **0 vulnerabilities**;
+- npm run prod-smoke: PASS;
+- npm audit --omit=dev: **0 vulnerabilities**;
 - exact commit diff check: PASS;
 - PowerShell parser: **6/6 PASS**.
 
@@ -73,6 +69,6 @@ The extension code must be reloaded after integration before live ChatGPT tabs c
 
 ## Exact next action
 
-On integration/reuse-completion-v1, reconcile GitHub/local first, then consume exact implementation commit 21bbab6743b38195a113f16a46413aa6f8837764, run the complete integration gate set without fail-fast, push only an exact green integration candidate, recycle the watchdog, reload the unpacked extension, and verify the component is active without deliberately manufacturing a network interruption.
+On integration/reuse-completion-v1, reconcile GitHub/local first, consume exact implementation commit 21bbab6743b38195a113f16a46413aa6f8837764, run the complete integration gate set without fail-fast, push only an exact green integration candidate, recycle the watchdog, reload the unpacked extension, and verify the component is active without deliberately manufacturing a network interruption.
 
 C1 and C3 are still incomplete execution lanes and their tabs must remain open until their own Git/handoff candidates are green. Completed Git-verified lane tabs may continue to be closed through durable CLOSE_CHAT and stale registration cleanup.
