@@ -293,6 +293,22 @@ async function projectConsoleSuite() {
   const active = await workerValue("chrome.tabs.query({active:true,currentWindow:true})");
   assert.equal(active[0]?.id, tabB.id);
   console.log('project chat focus/open: PASS');
+
+  await openPage(fixtureUrl('noidentity', { console: 'completed' }));
+  const tabC = await waitWorkerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('console=completed'));return t?{id:t.id,url:t.url,title:t.title}:null})()", value => Boolean(value?.id));
+  const completedId = `WEB:${RUN}-completed`;
+  await postJson('/projects/attach', { projectId: project.projectId, conversationId: completedId, tabId: tabC.id, title: 'E2E completed chat', url: tabC.url });
+  await postJson('/signal', { conversationId: completedId, tabId: tabC.id, state: 'COMPLETE', checkpointFresh: true });
+  await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'})`);
+  await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'})`);
+  await waitEval(pageA, "[...document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('projectList').querySelectorAll('button')].some(button => button.textContent.includes('E2E Project') && button.textContent.trim().endsWith('2'))");
+  await waitEval(pageA, "!document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('chatList').textContent.includes('E2E completed chat')");
+  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('chatGroup').textContent.includes('1 inactive / stale registered chat hidden')");
+  console.log('active parallel chat projection excludes completed live tabs: PASS');
+
+  await workerValue(`chrome.tabs.remove(${tabC.id})`);
+  await waitProjectExactChatCount(project.projectId, 2);
+  console.log('closed stable chat membership cleanup: PASS');
 }
 
 async function commandManagerSuite() {
@@ -400,6 +416,17 @@ async function waitProjectChatCount(projectId, count) {
     await sleep(200);
   }
   throw new Error(`project ${projectId} did not reach ${count} chats`);
+}
+
+async function waitProjectExactChatCount(projectId, count) {
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    const result = await fetch(`${WATCHDOG}/projects`).then(r => r.json());
+    const project = result.projects?.find(row => row.projectId === projectId);
+    if (project?.chatCount === count) return project;
+    await sleep(200);
+  }
+  throw new Error(`project ${projectId} did not settle at ${count} registered chats`);
 }
 
 async function waitContentReady(tabId) {

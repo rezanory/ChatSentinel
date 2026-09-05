@@ -1,4 +1,4 @@
-importScripts('session-snapshot-store.js', 'session-restore-controller.js');
+importScripts('components/project-chat-lifecycle/controller.js', 'session-snapshot-store.js', 'session-restore-controller.js');
 
 const DEFAULT_WATCHDOG = 'http://127.0.0.1:4317';
 const CLIENT_HEADERS = Object.freeze({
@@ -22,7 +22,7 @@ chrome.action.onClicked.addListener(tab => togglePanelInTab(tab));
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   const guard = globalThis.ChatSentinelTabLaunchGuard;
   chrome.storage.local.remove([`pendingProject:${tabId}`, guard?.crashRecoveryKey?.(tabId)]).catch(() => {});
-  if (!removeInfo?.isWindowClosing) detachRemovedFallback(tabId).catch(() => {});
+  if (!removeInfo?.isWindowClosing) detachRemovedProjectMemberships(tabId).catch(() => {});
   sessionRestoreController.scheduleCaptureAll(removeInfo?.isWindowClosing ? 'window-closing' : 'tab-removed');
 });
 chrome.runtime.onStartup.addListener(() => sessionRestoreController.restoreAfterBrowserRestart()
@@ -44,12 +44,15 @@ chrome.tabGroups.onCreated.addListener(() => sessionRestoreController.scheduleCa
 chrome.tabGroups.onUpdated.addListener(() => sessionRestoreController.scheduleCaptureAll('group-updated'));
 chrome.tabGroups.onMoved.addListener(() => sessionRestoreController.scheduleCaptureAll('group-moved'));
 
-async function detachRemovedFallback(tabId) {
-  const conversationId = `tab:${tabId}`;
-  const context = await apiRequest(`/project/context?conversationId=${encodeURIComponent(conversationId)}`).catch(() => null);
-  if (Number(context?.config?.tabId) !== Number(tabId)) return false;
-  await apiRequest('/projects/detach', 'POST', { conversationId, forget: true }).catch(() => {});
-  return true;
+async function detachRemovedProjectMemberships(tabId) {
+  const projects = await apiRequest('/projects').catch(() => null);
+  const lifecycle = globalThis.ChatSentinelProjectChatLifecycle;
+  const rows = lifecycle?.membershipsForClosedTab?.(projects?.projects || [], tabId) || [];
+  for (const row of rows) {
+    const forget = row.conversationId === `tab:${tabId}`;
+    await apiRequest('/projects/detach', 'POST', { conversationId: row.conversationId, forget }).catch(() => {});
+  }
+  return rows.length;
 }
 
 async function recoverCrashedProjectTab(tabId, observedTab, failure) {
@@ -243,7 +246,7 @@ async function togglePanelInTab(tab) {
   if (response?.ok) return response;
   await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    files: ['components/runtime-context-guard/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'project-console.js']
+    files: ['components/runtime-context-guard/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'project-console.js']
   });
   response = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_TOGGLE_PANEL' }).catch(error => ({ ok: false, error: String(error) }));
   return response || { ok: false, error: 'panel-toggle-failed' };
@@ -265,6 +268,7 @@ async function handleMessage(message, sender) {
     return result;
   }
   if (message.type === 'CHATSENTINEL_TAB_CONTEXT') return tabContext(sender.tab);
+  if (message.type === 'CHATSENTINEL_LIVE_TAB_IDS') return liveTabIds(message.tabIds);
   if (message.type === 'CHATSENTINEL_FOCUS_TAB') return focusTab(message.tabId, message.url);
   if (message.type === 'CHATSENTINEL_GROUP_PROJECT_TABS') return groupProjectTabs(message.project);
   if (message.type === 'CHATSENTINEL_NEW_PROJECT_CHAT') return newProjectChat(message.project, sender.tab);
@@ -273,6 +277,34 @@ async function handleMessage(message, sender) {
   if (message.type === 'CHATSENTINEL_RESTORE_SESSION_SNAPSHOT') return sessionRestoreController.restoreSnapshot(message.snapshotId, { entryIds: message.entryIds, conversationIds: message.conversationIds, activate: message.activate !== false });
   if (message.type === 'CHATSENTINEL_SWITCH_PROJECT') return sessionRestoreController.switchProject(message.projectId);
   return { ok: false, error: 'unknown-message' };
+}
+
+async function liveTabIds(tabIds = []) {
+  const ids = [...new Set((tabIds || []).map(Number).filter(Number.isInteger))];
+  const rows = await Promise.all(ids.map(async tabId => {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!tab) return null;
+    const active = await probeTabActivity(tabId);
+    return { tabId, active };
+  }));
+  const live = rows.filter(Boolean);
+  return {
+    ok: true,
+    tabIds: live.map(row => row.tabId),
+    activeTabIds: live.filter(row => row.active).map(row => row.tabId)
+  };
+}
+
+async function probeTabActivity(tabId) {
+  const result = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      const labels = [...document.querySelectorAll('button')]
+        .map(button => `${button.getAttribute('aria-label') || ''} ${button.textContent || ''}`.trim().toLowerCase());
+      return labels.some(value => /stop generating|continue generating|retry/.test(value));
+    }
+  }).catch(() => null);
+  return result?.[0]?.result === true;
 }
 
 async function forwardSignal(signal, tab) {

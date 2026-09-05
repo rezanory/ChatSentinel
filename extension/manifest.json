@@ -50,6 +50,7 @@
         "identity.js",
         "actuator.js",
         "content.js",
+        "components/project-chat-lifecycle/controller.js",
         "project-console.js"
       ],
       "run_at": "document_idle"

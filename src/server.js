@@ -265,7 +265,8 @@ async function route(req, res, ctx) {
       ...parsed.value,
       projectId: project.projectId,
       projectPath: project.projectPath,
-      operationClass: existing.operationClass || ''
+      operationClass: existing.operationClass || '',
+      attachedAt: new Date().toISOString()
     };
     await store.setConfig(parsed.value.conversationId, next);
     appendAuditEvent(store, { type: 'action', action: 'CHAT_ATTACHED', outcome: 'success', projectId: project.projectId, projectName: project.name, conversationId: parsed.value.conversationId });
@@ -478,6 +479,7 @@ function projectRows(store) {
             laneName: config.laneName,
             branch: config.branch,
             role: config.role,
+            attachedAt: config.attachedAt,
             state: session.state,
             decision: session.decision,
             updatedAt: session.updatedAt,

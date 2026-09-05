@@ -137,7 +137,13 @@
     const context = await api(`/project/context?conversationId=${encodeURIComponent(state.conversationId)}`);
     state.context = context;
     const treeResult = await api('/projects/tree');
-    state.projects = treeResult.projects || context.projects || [];
+    const rawProjects = treeResult.projects || context.projects || [];
+    const tabIds = rawProjects.flatMap(project => (project.chats || []).map(chat => chat.tabId)).filter(tabId => Number.isInteger(Number(tabId)));
+    const liveTabs = await runtime({ type: 'CHATSENTINEL_LIVE_TAB_IDS', tabIds });
+    const lifecycle = globalThis.ChatSentinelProjectChatLifecycle;
+    state.projects = liveTabs?.ok && lifecycle?.projectActiveChats
+      ? lifecycle.projectActiveChats(rawProjects, { liveTabIds: liveTabs.tabIds, activeTabIds: liveTabs.activeTabIds })
+      : rawProjects;
     state.projectTree = treeResult.tree || null;
     const historyResult = await api('/audit/history?limit=100');
     state.history = historyResult.events || [];
@@ -291,12 +297,14 @@
     }
 
     const chats = project.chats || [];
+    const hiddenCount = Number(project.inactiveChatCount || 0);
     group.innerHTML = `
-      <h3>${escapeHtml(project.name)} · Parallel Chats</h3>
+      <h3>${escapeHtml(project.name)} - Active Parallel Chats</h3>
       <div class="row">
         <button class="primary" id="newProjectChat">+ New project chat</button>
         <button id="groupTabs">Group open tabs</button>
       </div>
+      ${hiddenCount ? `<div class="muted" style="margin-top:8px">${hiddenCount} inactive / stale registered chat${hiddenCount === 1 ? '' : 's'} hidden from the active view.</div>` : ''}
       <div id="chatList" style="margin-top:8px"></div>`;
 
     shadow.getElementById('newProjectChat').addEventListener('click', () => {
@@ -308,7 +316,7 @@
 
     const list = shadow.getElementById('chatList');
     if (!chats.length) {
-      list.innerHTML = '<div class="muted">No chats attached yet.</div>';
+      list.innerHTML = '<div class="muted">No active parallel chats.</div>';
       return;
     }
 
@@ -341,7 +349,8 @@
       renderTreeNode(wrap, folder);
       container.append(wrap);
     }
-    for (const project of node.projects || []) {
+    for (const treeProject of node.projects || []) {
+      const project = state.projects.find(row => row.projectId === treeProject.projectId) || treeProject;
       const button = document.createElement('button');
       button.className = `project-chip${project.projectId === state.selectedProjectId ? ' active' : ''}`;
       button.textContent = `${project.name} · ${project.chatCount || 0}`;
