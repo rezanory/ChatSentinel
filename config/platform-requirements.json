@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "product": "ChatSentinel",
+  "required": [
+    {"id":"node","minVersion":"20.0.0","description":"Node.js runtime for the local watchdog and setup controller"},
+    {"id":"git","minVersion":"2.40.0","description":"Git for project reconciliation, branches and handoffs"},
+    {"id":"chrome","description":"Google Chrome with Manifest V3 extension support"}
+  ],
+  "recommended": [
+    {"id":"gh","description":"GitHub CLI for runner registration and repository operations"}
+  ],
+  "optional": [
+    {"id":"github-runner","description":"GitHub self-hosted runner for local project execution"},
+    {"id":"remote-bridge","description":"Authorized local command bridge such as Remote Desktop Commander"}
+  ],
+  "platforms": {
+    "win32": {"packageManager":"winget","service":"schtasks"},
+    "darwin": {"packageManager":"brew","service":"launchd"},
+    "linux": {"packageManager":"manual","service":"systemd"}
+  }
+}

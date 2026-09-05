@@ -120,6 +120,27 @@
     return sendPrompt(prompt);
   }
 
+  function prependPromptText(prefix) {
+    const composer = findComposer();
+    if (!composer) return { ok: false, reason: 'composer-not-found' };
+    const clean = String(prefix || '').trim();
+    if (!clean) return { ok: false, reason: 'prefix-required' };
+    const current = composerText(composer).trimStart();
+    if (current === clean || current.startsWith(`${clean}\n`) || current.startsWith(`${clean}\r\n`)) {
+      composer.focus();
+      return { ok: true, action: 'prepend-prompt', executed: false, deduplicated: true };
+    }
+    const next = current ? `${clean}\n\n${current}` : clean;
+    composer.focus();
+    setComposerText(composer, next);
+    return { ok: true, action: 'prepend-prompt', executed: true, text: next };
+  }
+
+  function composerText(element) {
+    if ('value' in element) return String(element.value || '');
+    return String(element.innerText || element.textContent || '');
+  }
+
   function findComposer() {
     return document.querySelector('#prompt-textarea, textarea, [contenteditable="true"]');
   }
@@ -147,5 +168,5 @@
     return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
   }
 
-  window.ChatSentinelActuator = { executeDecision, consumePendingPrompt, sendPendingPrompt };
+  window.ChatSentinelActuator = { executeDecision, consumePendingPrompt, sendPendingPrompt, prependPromptText };
 })();

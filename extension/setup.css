@@ -1,0 +1,18 @@
+html { color-scheme: light dark; }
+body { margin:0; font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; background:#0f172a; color:#e5e7eb; }
+main { max-width:880px; margin:0 auto; padding:28px 20px 48px; }
+header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:18px; }
+h1 { margin:0; font-size:26px; }
+header p { margin:6px 0 0; color:#94a3b8; }
+#version { color:#86efac; font-weight:700; }
+.card { border:1px solid #334155; border-radius:14px; padding:16px; margin-top:14px; background:#111827; }
+h2 { margin:0 0 10px; font-size:15px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; }
+.item { border:1px solid #334155; border-radius:10px; padding:10px; }
+.ok { color:#86efac; }.warn { color:#fbbf24; }.bad { color:#fca5a5; }
+.command { display:flex; gap:8px; align-items:center; }
+.command code { flex:1; overflow:auto; border:1px solid #334155; border-radius:8px; padding:9px; background:#020617; }
+button { cursor:pointer; border:1px solid #475569; border-radius:8px; padding:8px 12px; background:#1e293b; color:#f8fafc; }
+button:hover { background:#334155; }
+.note { color:#94a3b8; font-size:12px; }
+.row { display:flex; gap:8px; }

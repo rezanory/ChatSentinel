@@ -1,10 +1,9 @@
-import os from 'node:os';
 import path from 'node:path';
+import { defaultDataDir } from './components/setup/device-profile.js';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 
-const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-const dataDir = process.env.CHATSENTINEL_DATA_DIR || path.join(localAppData, 'ChatSentinel');
+const dataDir = process.env.CHATSENTINEL_DATA_DIR || defaultDataDir();
 
 export const runtimeConfig = Object.freeze({
   version: VERSION,

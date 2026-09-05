@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ChatSentinel Setup Assistant</title>
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>ChatSentinel Setup Assistant</h1>
+        <p>Cross-platform prerequisite, Watchdog and runner readiness.</p>
+      </div>
+      <span id="version">checking…</span>
+    </header>
+    <section class="card">
+      <h2>Device</h2>
+      <div id="device">Detecting platform…</div>
+    </section>
+    <section class="card">
+      <h2>Prerequisites</h2>
+      <div id="prerequisites">Checking local Watchdog…</div>
+    </section>
+    <section class="card">
+      <h2>Bootstrap</h2>
+      <p id="bootstrapHelp"></p>
+      <div class="command"><code id="bootstrapCommand"></code><button id="copyBootstrap">Copy</button></div>
+      <p class="note">System changes require explicit approval through the local Setup Bridge. This page never installs packages directly.</p>
+    </section>
+    <section class="card">
+      <h2>ChatGPT Setup Bridge</h2>
+      <p>After Node.js is available, run <code>npm run setup:mcp</code> from the ChatSentinel repository to expose the approval-gated local setup tools.</p>
+      <div class="row"><button id="refresh">Refresh status</button></div>
+    </section>
+  </main>
+  <script src="setup.js"></script>
+</body>
+</html>

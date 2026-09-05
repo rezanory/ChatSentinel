@@ -310,3 +310,42 @@ test('search and portable import/export routes enforce preview-before-apply', as
   assert.equal(applied.ok, true);
   await app.close();
 });
+
+test('setup status and plan are readable but system apply requires a local process', async t => {
+  const { dir, config } = await testConfig();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }).catch(() => {}));
+  const app = await createWatchdogServer(config);
+  const base = await listen(app);
+
+  let response = await fetch(`${base}/setup/status`);
+  assert.equal(response.status, 200);
+  let body = await response.json();
+  assert.equal(body.ok, true);
+  assert.ok(body.profile?.platform);
+  assert.ok(body.prerequisites?.node);
+
+  response = await fetch(`${base}/setup/plan?service=1`);
+  assert.equal(response.status, 200);
+  body = await response.json();
+  assert.equal(body.ok, true);
+  assert.ok(Array.isArray(body.steps));
+  assert.ok(body.report?.profile?.deviceId);
+
+  response = await fetch(`${base}/setup/apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'chrome-extension://test' },
+    body: JSON.stringify({ approvedStepIds: [], execute: false })
+  });
+  assert.equal(response.status, 403);
+
+  response = await fetch(`${base}/setup/apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ approvedStepIds: [], execute: false })
+  });
+  assert.equal(response.status, 200);
+  body = await response.json();
+  assert.equal(body.ok, true);
+  assert.ok(body.results.every(row => ['skipped', 'planned'].includes(row.status)));
+  await app.close();
+});

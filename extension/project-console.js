@@ -8,6 +8,7 @@
   const HOST_ID = 'chatsentinel-project-console-host';
   const MIN_WIDTH = 330;
   const MAX_WIDTH = 680;
+  const FULL_PROJECT_MODE = 'CHATSENTINEL FULL PROJECT MODE';
   let host;
   let shadow;
   let state = {
@@ -22,7 +23,8 @@
     selectedProjectId: null,
     searchResults: [],
     importBundle: null,
-    importPreview: null
+    importPreview: null,
+    setupPlan: null
   };
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -102,6 +104,7 @@
         </div>
         <div class="body">
           <div class="card" id="currentCard"></div>
+          <div class="card" id="setupCard"></div>
           <div class="card">
             <h3>Projects</h3>
             <div class="projects" id="projectList"></div>
@@ -149,6 +152,7 @@
     state.history = historyResult.events || [];
     if (!state.selectedProjectId) state.selectedProjectId = context.project?.projectId || state.projects[0]?.projectId || null;
 
+    state.setupPlan = await api('/setup/plan?service=1');
     const health = await api('/health');
     const healthEl = shadow.getElementById('health');
     healthEl.textContent = health.ok ? `v${health.version} online` : 'offline';
@@ -157,6 +161,7 @@
     if (footerVersion) footerVersion.textContent = health.ok ? `v${health.version} · local-first project watchdog` : 'local-first project watchdog';
 
     renderCurrent();
+    renderSetup();
     renderProjects();
     renderProjectEditor(selectedProject());
     renderChatGroup(selectedProject());
@@ -178,12 +183,57 @@
       </div>
       <div class="row" style="margin-top:8px">
         <label><input id="globalAuto" type="checkbox" style="width:auto"> Global auto-recovery master</label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="insertFullProjectMode">Insert Full Project Mode</button>
+        <span class="muted" id="fullProjectModeStatus"></span>
       </div>`;
     chrome.storage.local.get(['autoRecoveryEnabled']).then(values => {
       const checkbox = shadow.getElementById('globalAuto');
       if (!checkbox) return;
       checkbox.checked = Boolean(values.autoRecoveryEnabled);
       checkbox.addEventListener('change', () => chrome.storage.local.set({ autoRecoveryEnabled: checkbox.checked }));
+    });
+    shadow.getElementById('insertFullProjectMode')?.addEventListener('click', () => {
+      const status = shadow.getElementById('fullProjectModeStatus');
+      const result = window.ChatSentinelActuator?.prependPromptText?.(FULL_PROJECT_MODE)
+        || { ok: false, reason: 'actuator-missing' };
+      if (status) {
+        status.textContent = result.ok ? (result.deduplicated ? 'Already added' : 'Added to prompt') : (result.reason || 'Insert failed');
+        status.className = result.ok ? 'ok' : 'bad';
+      }
+    });
+  }
+
+  function renderSetup() {
+    const card = shadow.getElementById('setupCard');
+    const plan = state.setupPlan || {};
+    const report = plan.report || {};
+    const prereq = report.prerequisites || {};
+    const missing = ['node', 'git', 'chrome', 'gh'].filter(id => prereq[id] && !prereq[id].installed);
+    const profile = report.profile || {};
+    const rows = ['node', 'git', 'chrome', 'gh'].map(id => {
+      const row = prereq[id] || {};
+      const label = id === 'gh' ? 'GitHub CLI' : id === 'chrome' ? 'Chrome' : id === 'node' ? 'Node.js' : 'Git';
+      const suffix = row.version ? ` ${row.version}` : '';
+      return `<span class="${row.installed ? 'ok' : 'warn'}">${row.installed ? 'OK' : 'MISSING'} ${label}${escapeHtml(suffix)}</span>`;
+    }).join('<br>');
+    card.innerHTML = `
+      <h3>Environment Setup</h3>
+      <div class="muted">${escapeHtml(profile.platform || 'unknown')} / ${escapeHtml(profile.arch || 'unknown')}</div>
+      <div style="margin-top:6px">${rows}</div>
+      <div class="muted" style="margin-top:7px">${missing.length ? `Missing: ${escapeHtml(missing.join(', '))}` : 'Required prerequisites detected.'}</div>
+      <div class="field"><label>Bootstrap command</label><input id="bootstrapCommand" readonly value="${escapeAttr(plan.bootstrapHint || '')}"></div>
+      <div class="row" style="margin-top:8px"><button id="copyBootstrap">Copy setup command</button><button id="refreshSetup">Refresh</button><button id="openSetupAssistant">Setup Assistant</button></div>
+      <div class="muted">System installs require approval through the local ChatSentinel Setup Bridge.</div>`;
+    shadow.getElementById('refreshSetup')?.addEventListener('click', refresh);
+    shadow.getElementById('openSetupAssistant')?.addEventListener('click', () => chrome.runtime.openOptionsPage());
+    shadow.getElementById('copyBootstrap')?.addEventListener('click', async () => {
+      const input = shadow.getElementById('bootstrapCommand');
+      const text = input?.value || '';
+      if (!text) return;
+      try { await navigator.clipboard.writeText(text); }
+      catch { input?.select?.(); document.execCommand?.('copy'); }
     });
   }
 

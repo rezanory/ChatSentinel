@@ -4,13 +4,15 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { findBrowserExecutable } from './browser-paths.js';
 
 const ROOT = path.resolve('.');
 const execFileAsync = promisify(execFile);
 const TEST_PORT = 4318;
 const EXPECTED_EXTENSION_ID = 'pcidbmcahljjpbmaecjmfmpbpfnpoepc';
 const WATCHDOG = `http://127.0.0.1:${TEST_PORT}`;
-const CHROME = process.env.CHROME_BIN || await findTestChromium() || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const CHROME = process.env.CHROME_BIN || await findBrowserExecutable();
+if (!CHROME) throw new Error('Chrome/Chromium executable not found; install Chrome or set CHROME_BIN');
 const sourceExtension = path.join(ROOT, 'extension');
 const extension = path.join(os.tmpdir(), `chatsentinel-e2e-extension-${process.pid}`);
 const RUN = `e2e-${process.pid}-${Date.now()}`;
@@ -39,7 +41,7 @@ let EXTENSION_WORKER;
 try {
   await waitUrl('http://127.0.0.1:4320/idle');
   const health = await waitJson(`${WATCHDOG}/health`);
-  assert.equal(health.version, '1.2.0', 'v1.2.0 watchdog must be running');
+  assert.equal(health.version, '1.3.0', 'v1.3.0 watchdog must be running');
 
   chrome = spawn(CHROME, [
     `--user-data-dir=${profile}`,
@@ -216,7 +218,7 @@ async function actuatorSuite() {
   const deadTarget = await openPage(fixtureUrl('dead', { auto: '1', cid: deadId }));
   await waitEval(deadTarget, "location.pathname === '/newchat' && Boolean(document.body.dataset.sent)");
   const handoff = await evalValue(deadTarget, 'document.body.dataset.sent');
-  assert.match(handoff, /checkpoint|source-of-truth|Ø§Ø¯Ø§Ù…Ù‡ Ù¾Ø±ÙˆÚ˜Ù‡/i);
+  assert.match(handoff, /checkpoint|source-of-truth/i);
   console.log('CONTINUE_NEW_CHAT + handoff actuator: PASS');
 }
 
@@ -254,7 +256,25 @@ async function projectConsoleSuite() {
   assert.equal(toggle?.ok, true, `panel toggle failed: ${JSON.stringify(toggle)}`);
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.style.display === 'block'");
   await waitEval(pageA, "Boolean(document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('newProject'))");
-  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('footerVersion')?.textContent.includes('v1.2.0')");
+  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('footerVersion')?.textContent.includes('v1.3.0')");
+  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('setupCard')?.textContent.includes('Environment Setup')");
+  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('bootstrapCommand')?.value.includes('bootstrap-')");
+  assert.ok(await evalValue(pageA, "Boolean(document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('openSetupAssistant'))"));
+  console.log('cross-platform Setup Assistant status: PASS');
+  const setupOpened = await workerValue("chrome.runtime.openOptionsPage().then(()=>({ok:true})).catch(error=>({ok:false,error:String(error)}))");
+  assert.equal(setupOpened?.ok, true, `Setup Assistant open failed: ${JSON.stringify(setupOpened)}`);
+  const setupTarget = await waitTarget(row => row.type === 'page' && row.url.includes('/setup.html'));
+  await waitEval(setupTarget, "document.getElementById('version')?.textContent.includes('v1.3.0')");
+  await waitEval(setupTarget, "document.getElementById('prerequisites')?.textContent.includes('Node.js')");
+  const setupTab = await workerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('/setup.html'));return t?{id:t.id}:null})()");
+  if (setupTab?.id) await workerValue(`chrome.tabs.remove(${setupTab.id}).then(()=>true).catch(()=>false)`);
+  console.log('Setup Assistant extension page: PASS');
+  await evalValue(pageA, "(()=>{const c=document.querySelector('#prompt-textarea');c.value='Build feature X';c.dispatchEvent(new Event('input',{bubbles:true}));const s=document.getElementById('chatsentinel-project-console-host').shadowRoot;s.getElementById('insertFullProjectMode').click();return true})()");
+  await waitEval(pageA, "document.querySelector('#prompt-textarea').value.startsWith('CHATSENTINEL FULL PROJECT MODE') && document.querySelector('#prompt-textarea').value.includes('Build feature X')");
+  assert.equal(await evalValue(pageA, 'Number(document.body.dataset.sendCount || 0)'), 0, 'Full Project Mode insert must not auto-send');
+  await evalValue(pageA, "document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('insertFullProjectMode').click()");
+  assert.equal(await evalValue(pageA, "document.querySelector('#prompt-textarea').value.split('CHATSENTINEL FULL PROJECT MODE').length - 1"), 1, 'Full Project Mode insert must be idempotent');
+  console.log('Full Project Mode one-click prompt prepend: PASS');
   console.log('in-page project console: PASS');
 
   const projectPath = cleanProject;
@@ -644,6 +664,11 @@ async function prepareTestExtension(source, destination) {
   background = background.replaceAll('http://127.0.0.1:4317', `http://127.0.0.1:${TEST_PORT}`);
   await fs.writeFile(backgroundPath, background, 'utf8');
 
+  const setupPath = path.join(destination, 'setup.js');
+  let setup = await fs.readFile(setupPath, 'utf8');
+  setup = setup.replaceAll('http://127.0.0.1:4317', `http://127.0.0.1:${TEST_PORT}`);
+  await fs.writeFile(setupPath, setup, 'utf8');
+
   const guardPath = path.join(destination, 'components', 'tab-launch-guard', 'controller.js');
   let guard = await fs.readFile(guardPath, 'utf8');
   guard = guard.replace(
@@ -668,18 +693,4 @@ async function prepareCleanProject(base) {
   await execFileAsync('git', ['remote', 'add', 'origin', remote], { cwd: project });
   await execFileAsync('git', ['push', '-u', 'origin', 'main'], { cwd: project });
   return project;
-}
-
-async function findTestChromium() {
-  const base = path.join(process.env.LOCALAPPDATA || '', 'ms-playwright');
-  try {
-    const entries = (await fs.readdir(base)).filter(x => x.startsWith('chromium-')).sort().reverse();
-    for (const entry of entries) {
-      for (const rel of ['chrome-win64/chrome.exe', 'chrome-win/chrome.exe']) {
-        const candidate = path.join(base, entry, rel);
-        try { await fs.access(candidate); return candidate; } catch {}
-      }
-    }
-  } catch {}
-  return null;
 }

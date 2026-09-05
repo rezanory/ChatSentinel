@@ -14,6 +14,8 @@ import { searchProjectChats } from './project-search.js';
 import { applyPortableImport, createPortableBundle, previewPortableImport } from './portable-bundle.js';
 import { appendAuditEvent, listAuditEvents } from './audit-history.js';
 import { buildProjectTree } from './project-tree.js';
+import { detectPrerequisites } from './components/setup/prerequisite-detector.js';
+import { buildSetupPlan, applySetupPlan } from './components/setup/install-plan.js';
 export async function createWatchdogServer(config) {
   const logger = createLogger({ dir: config.logDir });
   const store = new StateStore({
@@ -115,6 +117,29 @@ async function route(req, res, ctx) {
 
   if (req.method === 'GET' && url.pathname === '/ready') {
     return json(res, 200, { ok: true, ready: true, version: config.version });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/setup/status') {
+    const report = detectPrerequisites();
+    return json(res, 200, { ...report, watchdog: { online: true, version: config.version, paired: Boolean(store.meta.trustedExtensionOrigin) } });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/setup/plan') {
+    const detected = detectPrerequisites();
+    const report = { ...detected, watchdog: { online: true, version: config.version, paired: Boolean(store.meta.trustedExtensionOrigin) } };
+    const includeWatchdogService = url.searchParams.get('service') === '1';
+    const plan = buildSetupPlan(report, { root: process.cwd(), includeRecommended: true, includeWatchdogService });
+    return json(res, plan.ok ? 200 : 400, { ...plan, report });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/setup/apply') {
+    if (ctx.auth?.client !== 'local-process') return json(res, 403, { ok: false, error: 'local-process-required', requestId: id });
+    const body = await readJson(req, config.maxBodyBytes);
+    const report = detectPrerequisites();
+    const plan = buildSetupPlan(report, { root: process.cwd(), includeRecommended: true, includeWatchdogService: Boolean(body?.includeWatchdogService) });
+    const result = await applySetupPlan(plan, { approvedStepIds: Array.isArray(body?.approvedStepIds) ? body.approvedStepIds : [], dryRun: body?.execute !== true, cwd: process.cwd() });
+    logger.info('setup-plan-applied', { requestId: id, execute: body?.execute === true, approvedStepIds: body?.approvedStepIds || [], ok: result.ok });
+    return json(res, result.ok ? 200 : 500, result);
   }
 
   if (req.method === 'GET' && url.pathname === '/commands') {

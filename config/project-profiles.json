@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "full": {
+      "command": "CHATSENTINEL FULL PROJECT MODE",
+      "autoRecovery": true,
+      "groupTabs": true,
+      "sessionSnapshots": true,
+      "selectiveRestore": true,
+      "activeParallelChats": true,
+      "conversationDomCompaction": true,
+      "searchExportImport": true,
+      "auditHistory": true,
+      "componentFirst": true,
+      "parallelLanes": true,
+      "canonicalHandoff": true,
+      "antiBlocker": true,
+      "integrationController": true,
+      "runnerOnDemand": true,
+      "releaseRequiresAllGates": true
+    }
+  }
+}
