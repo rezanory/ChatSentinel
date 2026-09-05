@@ -1,10 +1,4 @@
 (() => {
-  const ERROR_TEXTS = [
-    'Connection interrupted. Waiting for the complete answer',
-    'Something went wrong',
-    'There was an error generating a response'
-  ];
-
   let lastMutationAt = Date.now();
   let lastSignal = '';
 
@@ -60,7 +54,8 @@
     const retryVisible = buttons.some(value => /retry|try again/i.test(value));
     const continueVisible = buttons.some(value => /continue generating|continue/i.test(value));
     const stopVisible = buttons.some(value => /stop generating|stop/i.test(value));
-    const connectionInterrupted = ERROR_TEXTS.some(error => text.includes(error));
+    const interruption = globalThis.ChatSentinelResponseCompletion?.inspect?.(document);
+    const connectionInterrupted = interruption?.active === true;
     const conversationDead = /conversation not found|unable to load conversation/i.test(text);
     const progressAgeMs = testProgressAge() ?? (Date.now() - lastMutationAt);
     const uiFrozen = progressAgeMs >= 180000 && !stopVisible;
@@ -74,6 +69,8 @@
       retryVisible,
       continueVisible,
       connectionInterrupted,
+      interruptionSource: interruption?.source,
+      interruptionIncidentKey: interruption?.incidentKey,
       conversationDead,
       uiFrozen,
       progressAgeMs,

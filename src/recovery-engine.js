@@ -29,15 +29,14 @@ export function decideRecovery(input = {}) {
     return decision(Action.WAIT, 'execution-still-active', 0.93);
   }
 
-  if (uiFrozen && progressAgeMs >= 180000) {
-    return decision(Action.RELOAD_AND_RECHECK, 'ui-frozen-no-progress', 0.9);
+  if (connectionInterrupted) {
+    return checkpointFresh
+      ? decision(Action.CONTINUE_SAME_CHAT, 'stream-interrupted-complete-answer-checkpoint-known', 0.96)
+      : decision(Action.CONTINUE_SAME_CHAT, 'stream-interrupted-complete-answer-reconcile-required', 0.92);
   }
 
-  if (connectionInterrupted) {
-    if (checkpointFresh) {
-      return decision(Action.CONTINUE_SAME_CHAT, 'stream-interrupted-checkpoint-known', 0.88);
-    }
-    return decision(Action.RELOAD_AND_RECHECK, 'stream-interrupted-state-uncertain', 0.82);
+  if (uiFrozen && progressAgeMs >= 180000) {
+    return decision(Action.RELOAD_AND_RECHECK, 'ui-frozen-no-progress', 0.9);
   }
 
   if (retryVisible) {

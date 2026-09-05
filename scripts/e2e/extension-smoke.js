@@ -77,12 +77,13 @@ try {
 async function detectorSuite() {
   await verifyDecision('running', 'WAIT');
   await verifyDecision('retry', 'ESCALATE');
-  await verifyDecision('interrupt', 'RELOAD_AND_RECHECK');
+  await verifyDecision('interrupt', 'CONTINUE_SAME_CHAT');
+  await verifyDecision('interrupt-history', 'WAIT');
   await verifyDecision('dead', 'CONTINUE_NEW_CHAT');
   await verifyDecision('frozen', 'RELOAD_AND_RECHECK');
   await verifyDecision('rootidentity', 'WAIT');
   await verifyTabFallback();
-  console.log('detector/recovery + identity E2E: 7/7 PASS');
+  console.log('detector/recovery + identity E2E: 8/8 PASS');
 }
 
 async function actuatorSuite() {
@@ -118,8 +119,13 @@ async function actuatorSuite() {
   }));
   await waitEval(continueTarget, "Boolean(document.body.dataset.sent)");
   const sent = await evalValue(continueTarget, 'document.body.dataset.sent');
-  assert.match(sent, /reconcile|checkpoint|SHA/i);
-  console.log('CONTINUE_SAME_CHAT actuator: PASS');
+  assert.match(sent, /previous response was interrupted/i);
+  assert.match(sent, /complete remaining answer/i);
+  assert.match(sent, /reconcile the current durable state/i);
+  await sleep(1200);
+  const sendCount = await evalValue(continueTarget, 'Number(document.body.dataset.sendCount || 0)');
+  assert.equal(sendCount, 1, 'one interruption incident must not emit duplicate continuation prompts');
+  console.log('CONTINUE_SAME_CHAT complete-answer actuator: PASS');
 
   const deadId = `${RUN}-dead-auto`;
   const deadTarget = await openPage(fixtureUrl('dead', { auto: '1', cid: deadId }));

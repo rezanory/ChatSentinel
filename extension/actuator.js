@@ -11,12 +11,33 @@
       case 'SAFE_RETRY':
         return clickVisibleButton(/retry|try again/i, 'retry');
       case 'CONTINUE_SAME_CHAT':
+        if (globalThis.ChatSentinelResponseCompletion?.isStreamInterruptionDecision?.(decision)) {
+          return continueInterruptedResponse(context);
+        }
         return sendPrompt(context.continuePrompt || defaultContinuePrompt(context));
       case 'CONTINUE_NEW_CHAT':
         return createNewChatAndContinue(context);
       default:
         return { ok: false, reason: 'unknown-action', action: decision.action };
     }
+  }
+
+  function continueInterruptedResponse(context) {
+    const recovery = globalThis.ChatSentinelResponseCompletion;
+    const ticket = recovery?.prepareAttempt?.(document);
+    if (ticket && ticket.allowed === false) {
+      return {
+        ok: true,
+        action: 'response-completion',
+        executed: false,
+        deduplicated: Boolean(ticket.deduplicated),
+        reason: ticket.reason || 'interruption-no-longer-active'
+      };
+    }
+    const prompt = recovery?.buildContinuationPrompt?.(context) || defaultContinuePrompt(context);
+    const result = sendPrompt(prompt);
+    if (result?.ok && ticket?.allowed) recovery?.markAttempt?.(ticket);
+    return { ...result, action: 'response-completion', responseCompletion: true };
   }
 
   function defaultContinuePrompt(context) {

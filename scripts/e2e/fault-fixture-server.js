@@ -29,7 +29,12 @@ function render(kind, id) {
 
   if (kind === 'running') state = '<button aria-label="Stop generating">Stop generating</button>';
   if (kind === 'retry') state = '<button id="retry" onclick="document.body.dataset.retryClicked=\'1\';this.textContent=\'Retried\'">Retry</button>';
-  if (kind === 'interrupt') state = '<main>Connection interrupted. Waiting for the complete answer</main>';
+  if (kind === 'interrupt') state = `<main><article data-message-author-role="assistant" data-message-id="active-partial">Partial answer</article><div role="alert">Connection interrupted. Waiting for the complete answer</div></main>`;
+  if (kind === 'interrupt-history') state = `<main>
+    <article data-message-author-role="assistant" data-message-id="old-interrupt">Connection interrupted. Waiting for the complete answer</article>
+    <article data-message-author-role="user" data-message-id="recovery-user">Continue</article>
+    <article data-message-author-role="assistant" data-message-id="completed-assistant">Completed answer</article>
+  </main>`;
   if (kind === 'dead') state = '<main>Conversation not found</main>';
   if (kind === 'frozen') progress = ' data-chatsentinel-test-progress-age="180001"';
   if (kind === 'noidentity') identityAttr = '';
@@ -39,7 +44,7 @@ function render(kind, id) {
   }
 
   const composer = `<textarea id="prompt-textarea"></textarea>
-    <button aria-label="Send" onclick="document.body.dataset.sent=document.querySelector('#prompt-textarea').value">Send</button>`;
+    <button aria-label="Send" onclick="document.body.dataset.sent=document.querySelector('#prompt-textarea').value;document.body.dataset.sendCount=String(Number(document.body.dataset.sendCount||0)+1)">Send</button>`;
   return `<!doctype html><html${identityAttr}${progress}>
     <head><title>${kind}</title>${headScript}</head><body>${state}${composer}</body></html>`;
 }

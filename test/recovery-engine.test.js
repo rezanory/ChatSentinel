@@ -26,6 +26,19 @@ test('frozen UI reloads and rechecks', () => {
   assert.equal(decideRecovery({ uiFrozen: true, progressAgeMs: 180000 }).action, Action.RELOAD_AND_RECHECK);
 });
 
-test('interrupted stream with known checkpoint continues same chat', () => {
-  assert.equal(decideRecovery({ connectionInterrupted: true, checkpointFresh: true }).action, Action.CONTINUE_SAME_CHAT);
+test('interrupted stream with known checkpoint continues same chat to complete the answer', () => {
+  const result = decideRecovery({ connectionInterrupted: true, checkpointFresh: true });
+  assert.equal(result.action, Action.CONTINUE_SAME_CHAT);
+  assert.match(result.reason, /complete-answer-checkpoint-known/);
+});
+
+test('interrupted stream without a fresh checkpoint reconciles in the same chat instead of reload-looping', () => {
+  const result = decideRecovery({ connectionInterrupted: true, checkpointFresh: false });
+  assert.equal(result.action, Action.CONTINUE_SAME_CHAT);
+  assert.match(result.reason, /complete-answer-reconcile-required/);
+});
+
+test('active interruption takes precedence over stale-ui reload when generation already stopped', () => {
+  const result = decideRecovery({ connectionInterrupted: true, uiFrozen: true, progressAgeMs: 300000 });
+  assert.equal(result.action, Action.CONTINUE_SAME_CHAT);
 });
