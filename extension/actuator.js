@@ -10,6 +10,8 @@
         return { ok: true, action: decision.action, executed: true };
       case 'SAFE_RETRY':
         return clickVisibleButton(/retry|try again/i, 'retry');
+      case 'RETRY_MESSAGE_DELIVERY':
+        return retryTimedOutMessage();
       case 'CONTINUE_SAME_CHAT':
         if (globalThis.ChatSentinelResponseCompletion?.isStreamInterruptionDecision?.(decision)) {
           return continueInterruptedResponse(context);
@@ -20,6 +22,27 @@
       default:
         return { ok: false, reason: 'unknown-action', action: decision.action };
     }
+  }
+
+  function retryTimedOutMessage() {
+    const recovery = globalThis.ChatSentinelMessageDeliveryRecovery;
+    const ticket = recovery?.prepareAttempt?.(document);
+    if (!ticket?.allowed) {
+      return {
+        ok: true,
+        action: 'message-delivery-retry',
+        executed: false,
+        deduplicated: Boolean(ticket?.deduplicated),
+        reason: ticket?.reason || 'delivery-timeout-not-active'
+      };
+    }
+    const button = ticket.observation?.retryButton;
+    if (!button || button.disabled || !isVisible(button)) {
+      return { ok: false, action: 'message-delivery-retry', executed: false, reason: 'delivery-retry-button-unavailable' };
+    }
+    recovery.markAttempt(ticket);
+    button.click();
+    return { ok: true, action: 'message-delivery-retry', executed: true, nativeRetry: true };
   }
 
   function continueInterruptedResponse(context) {

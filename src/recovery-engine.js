@@ -1,6 +1,7 @@
 export const Action = Object.freeze({
   WAIT: 'WAIT',
   SAFE_RETRY: 'SAFE_RETRY',
+  RETRY_MESSAGE_DELIVERY: 'RETRY_MESSAGE_DELIVERY',
   CONTINUE_SAME_CHAT: 'CONTINUE_SAME_CHAT',
   RELOAD_AND_RECHECK: 'RELOAD_AND_RECHECK',
   CONTINUE_NEW_CHAT: 'CONTINUE_NEW_CHAT',
@@ -11,6 +12,8 @@ export function decideRecovery(input = {}) {
   const {
     state = 'UNKNOWN',
     retryVisible = false,
+    messageDeliveryTimedOut = false,
+    messageDeliveryRetryCount = 0,
     connectionInterrupted = false,
     conversationDead = false,
     uiFrozen = false,
@@ -27,6 +30,13 @@ export function decideRecovery(input = {}) {
 
   if (state === 'RUNNING' || externalActivity) {
     return decision(Action.WAIT, 'execution-still-active', 0.93);
+  }
+
+  if (messageDeliveryTimedOut) {
+    if (Number(messageDeliveryRetryCount || 0) < 2) {
+      return decision(Action.RETRY_MESSAGE_DELIVERY, 'message-delivery-timeout-native-retry', 0.97);
+    }
+    return decision(Action.ESCALATE, 'message-delivery-timeout-retry-budget-exhausted', 0.95);
   }
 
   if (connectionInterrupted) {

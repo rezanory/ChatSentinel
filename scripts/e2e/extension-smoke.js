@@ -77,16 +77,27 @@ try {
 async function detectorSuite() {
   await verifyDecision('running', 'WAIT');
   await verifyDecision('retry', 'ESCALATE');
+  await verifyDecision('delivery-timeout', 'RETRY_MESSAGE_DELIVERY');
+  await verifyDecision('delivery-timeout-history', 'WAIT');
   await verifyDecision('interrupt', 'CONTINUE_SAME_CHAT');
   await verifyDecision('interrupt-history', 'WAIT');
   await verifyDecision('dead', 'CONTINUE_NEW_CHAT');
   await verifyDecision('frozen', 'RELOAD_AND_RECHECK');
   await verifyDecision('rootidentity', 'WAIT');
   await verifyTabFallback();
-  console.log('detector/recovery + identity E2E: 8/8 PASS');
+  console.log('detector/recovery + identity E2E: 10/10 PASS');
 }
 
 async function actuatorSuite() {
+  const deliveryTarget = await openPage(fixtureUrl('delivery-timeout', {
+    auto: '1', cid: `${RUN}-delivery-timeout-auto`
+  }));
+  await waitEval(deliveryTarget, "document.body.dataset.deliveryRetryClicked === '1'");
+  await sleep(1200);
+  const deliveryRetryCount = await evalValue(deliveryTarget, 'Number(document.body.dataset.deliveryRetryCount || 0)');
+  assert.equal(deliveryRetryCount, 1, 'delivery retry must be incident-deduplicated during cooldown');
+  console.log('message delivery timeout native Retry actuator: PASS');
+
   await postJson('/conversation/register', {
     conversationId: `${RUN}-retry-auto`,
     operationClass: 'read_only'
