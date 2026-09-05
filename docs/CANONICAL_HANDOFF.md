@@ -105,3 +105,9 @@ Post-reload isolated live acceptance of the stale-focus membership-repair path p
 Live UI review found that Project counts and Parallel Chats reflected raw attached conversation membership rather than active work. This is superseded by `a2c78497a87fc6d4c3fbab4dc194905b30e6596f`: Active Parallel Chats now use real tab/activity and fresh lifecycle evidence, terminal/stale rows are excluded from the active projection, and stable memberships detach on actual tab close. Historical/raw state is not destructively erased by the projection.
 
 Pre-handoff gates are fully green: 125/125 unit, syntax, policy, browser E2E (including completed-live-tab exclusion and stable closed-tab cleanup), production smoke, npm audit 0 vulnerabilities, PowerShell parser 6/6 and diff-check.
+
+## v1.2.1 Verified Prompt Delivery hotfix — 2026-09-05
+
+Live browser evidence showed CREATE_LANE_CHAT could report `promptSent=true` while the prompt was serialized into `?prompt-textarea=...` and no ChatGPT user turn existed. Hotfix implementation `0a5b2dec09b1beb281ec4a857b2c4e3edee22b55` adds an explicit prompt-delivery component and requires independent post-click evidence before durable success.
+
+The browser regression fixture now contains a deliberate GET-form submit trap; the full pre-doc gate is green at 129/129 unit tests plus syntax, security policy, browser E2E (including URL-contamination rejection), production smoke, zero-vulnerability audit, PowerShell parsing and diff-check. Baseline v1.2.0 remains immutable; promotion to stable requires the same gate set on the docs-bound SHA.
