@@ -31,9 +31,19 @@ async function listen(app) {
   return `http://127.0.0.1:${address.port}`;
 }
 
+async function cleanupDir(dir) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try { await fs.rm(dir, { recursive: true, force: true }); return; }
+    catch (error) {
+      if (!['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(error?.code) || attempt === 5) throw error;
+      await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+}
+
 test('server persists config/session and restores them after restart', async t => {
   const { dir, config } = await testConfig();
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => cleanupDir(dir));
 
   let app = await createWatchdogServer(config);
   let base = await listen(app);
@@ -65,7 +75,7 @@ test('server persists config/session and restores them after restart', async t =
 
 test('server rejects unsafe browser origins and invalid content type', async t => {
   const { dir, config } = await testConfig();
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => cleanupDir(dir));
   const app = await createWatchdogServer(config);
   const base = await listen(app);
 
@@ -86,7 +96,7 @@ test('server rejects unsafe browser origins and invalid content type', async t =
 test('server pairs first extension origin in production mode', async t => {
   const { dir, config } = await testConfig();
   config.testMode = false;
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => cleanupDir(dir));
   const app = await createWatchdogServer(config);
   const base = await listen(app);
   const headers = { origin: 'chrome-extension://prod123', 'x-chatsentinel-client': 'extension' };
@@ -102,7 +112,7 @@ test('server pairs first extension origin in production mode', async t => {
 test('local process can reset extension pairing safely', async t => {
   const { dir, config } = await testConfig();
   config.testMode = false;
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => cleanupDir(dir));
   const app = await createWatchdogServer(config);
   const base = await listen(app);
 
@@ -123,7 +133,7 @@ test('local process can reset extension pairing safely', async t => {
 
 test('multi-project registry isolates parallel chat groups and persists them', async t => {
   const { dir, config } = await testConfig();
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => cleanupDir(dir));
   let app = await createWatchdogServer(config);
   let base = await listen(app);
 
@@ -182,7 +192,7 @@ test('multi-project registry isolates parallel chat groups and persists them', a
 
 test('audit history and nested project tree are exposed without coupling queue/session internals', async t => {
   const { dir, config } = await testConfig();
-  t.after(() => fs.rm(dir, { recursive: true, force: true }).catch(() => {}));
+  t.after(() => cleanupDir(dir));
   const app = await createWatchdogServer(config);
   const base = await listen(app);
   const post = async (route, body) => fetch(`${base}${route}`, {
@@ -209,7 +219,7 @@ test('audit history and nested project tree are exposed without coupling queue/s
 
 test('durable command API supports enqueue claim progress and completion', async t => {
   const { dir, config } = await testConfig();
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => cleanupDir(dir));
   const app = await createWatchdogServer(config);
   const base = await listen(app);
 
@@ -259,7 +269,7 @@ test('durable command API supports enqueue claim progress and completion', async
 
 test('browser extension cannot enqueue privileged supervisor commands directly', async t => {
   const { dir, config } = await testConfig();
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => cleanupDir(dir));
   const app = await createWatchdogServer(config);
   const base = await listen(app);
   const response = await fetch(`${base}/commands/enqueue`, {
@@ -277,7 +287,7 @@ test('browser extension cannot enqueue privileged supervisor commands directly',
 
 test('search and portable import/export routes enforce preview-before-apply', async t => {
   const { dir, config } = await testConfig();
-  t.after(() => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
+  t.after(() => cleanupDir(dir));
   const app = await createWatchdogServer(config);
   const base = await listen(app);
   const post = async (route, body, expected = 200) => {
@@ -313,7 +323,7 @@ test('search and portable import/export routes enforce preview-before-apply', as
 
 test('setup status and plan are readable but system apply requires a local process', async t => {
   const { dir, config } = await testConfig();
-  t.after(() => fs.rm(dir, { recursive: true, force: true }).catch(() => {}));
+  t.after(() => cleanupDir(dir));
   const app = await createWatchdogServer(config);
   const base = await listen(app);
 

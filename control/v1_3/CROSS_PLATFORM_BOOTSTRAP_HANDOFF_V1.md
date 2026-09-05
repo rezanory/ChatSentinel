@@ -58,3 +58,7 @@ The exact docs-bound SHA produced after this handoff must pass the complete inde
 ## Post-validation bridge detection fix-forward
 
 Live Windows Setup sanity-check correctly detected the existing GitHub Runner but initially reported the active Remote Desktop Commander bridge as absent. The detector now performs a bounded Windows command-line process probe for `desktop-commander` / `wonderwhy-er`, cached for 30 seconds in the long-running Watchdog to avoid repeated WMI cost. Explicit `CHATSENTINEL_REMOTE_BRIDGE=1` registration remains the highest-priority signal. Focused detector tests and live `setup-cli inspect` now report the current bridge as `installed=true`, `source=process`. This change requires a new exact final validation before push/freeze.
+
+## Final Windows harness stabilization
+
+The exact pre-final candidate exposed one teardown-only Windows `EBUSY` while deleting a temporary integration-test directory. No product assertion failed and all other gates continued green. Cleanup now retries only the known transient Windows filesystem codes with a bounded backoff. `test/server.integration.test.js` then completed three consecutive 10/10 green runs. A new exact final SHA and complete independent revalidation are required before push.

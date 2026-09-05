@@ -26,3 +26,7 @@ A physical macOS device is not currently connected to the authorized command cha
 ## Remote bridge visibility
 
 Windows Runner process discovery uses `tasklist`; Remote Desktop Commander discovery needs command-line evidence because its executable is normally Node.js. The Windows remote-bridge probe therefore uses a cached `Get-CimInstance Win32_Process` query only when no explicit bridge registration environment variable exists. This keeps Setup refresh responsive while avoiding a false “bridge missing” result on the current device.
+
+## Windows test teardown stabilization
+
+A final aggregate run exposed a Windows-only `EBUSY` during temporary server-directory removal after the multi-project integration test had already passed. Test cleanup now uses a bounded retry helper only for `EBUSY`, `EPERM`, and `ENOTEMPTY`; unrelated cleanup errors still fail immediately and the final retry still fails closed. The complete server integration file passed three consecutive runs after this harness-only stabilization. Product runtime behavior is unchanged.
