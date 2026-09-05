@@ -259,8 +259,12 @@ async function projectConsoleSuite() {
   assert.ok(tabA?.id, 'console tab A not found');
   await waitContentReady(tabA.id);
   await waitEval(pageA, "document.documentElement.dataset.chatsentinelConsoleReady === '1'");
-  const toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'}).catch(e=>({ok:false,error:String(e)}))`);
+  let toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'}).catch(e=>({ok:false,error:String(e)}))`);
+  if (toggle?.ok && toggle.open !== true) {
+    toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'}).catch(e=>({ok:false,error:String(e)}))`);
+  }
   assert.equal(toggle?.ok, true, `panel toggle failed: ${JSON.stringify(toggle)}`);
+  assert.equal(toggle?.open, true, `panel did not become open: ${JSON.stringify(toggle)}`);
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.style.display === 'block'");
   await waitEval(pageA, "Boolean(document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('newProject'))");
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('footerVersion')?.textContent.includes('v1.3.0')");
