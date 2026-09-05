@@ -174,7 +174,7 @@ function migrateLegacyProjects(state) {
         const now = new Date().toISOString();
         state.projects[projectId] = {
           projectId,
-          name: path.basename(normalizedPath) || 'Migrated Project',
+          name: portableBasename(normalizedPath) || 'Migrated Project',
           projectPath: normalizedPath,
           operationClass: config.operationClass || '',
           autoRecovery: false,
@@ -191,6 +191,10 @@ function migrateLegacyProjects(state) {
   }
   return changed;
 }
+function portableBasename(value) {
+  return String(value || '').replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).at(-1) || '';
+}
+
 function isRecord(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }

@@ -23,7 +23,13 @@ const bundle = path.join(destination, `ChatSentinel-${version}.bundle`);
 
 await git(['archive', '--format=zip', `--output=${sourceZip}`, `--prefix=ChatSentinel-${version}/`, ref]);
 await git(['archive', '--format=zip', `--output=${extensionZip}`, `--prefix=ChatSentinel-${version}-extension/`, ref, 'extension']);
-await git(['bundle', 'create', bundle, ref]);
+const bundleRef = `refs/heads/chatsentinel-archive-${process.pid}-${Date.now()}`;
+await git(['update-ref', bundleRef, sha]);
+try {
+  await git(['bundle', 'create', bundle, bundleRef]);
+} finally {
+  await git(['update-ref', '-d', bundleRef]).catch(() => {});
+}
 const files = [sourceZip, extensionZip, bundle];
 const sums = [];
 for (const file of files) {

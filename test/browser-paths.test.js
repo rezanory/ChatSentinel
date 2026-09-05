@@ -23,7 +23,7 @@ test('system Chrome candidates cover native Windows, macOS and Linux locations',
 test('Playwright cache candidates use native per-platform cache roots', () => {
   assert.deepEqual(playwrightCacheCandidates('darwin', {}, '/Users/r'), [path.posix.join('/Users/r', 'Library', 'Caches', 'ms-playwright')]);
   assert.deepEqual(playwrightCacheCandidates('linux', {}, '/home/r'), [path.posix.join('/home/r', '.cache', 'ms-playwright')]);
-  assert.deepEqual(playwrightCacheCandidates('win32', { LOCALAPPDATA: 'C:\\Users\\r\\AppData\\Local' }, 'C:\\Users\\r'), [path.join('C:\\Users\\r\\AppData\\Local', 'ms-playwright')]);
+  assert.deepEqual(playwrightCacheCandidates('win32', { LOCALAPPDATA: 'C:\\Users\\r\\AppData\\Local' }, 'C:\\Users\\r'), [path.win32.join('C:\\Users\\r\\AppData\\Local', 'ms-playwright')]);
 });
 
 test('Playwright Chromium discovery covers macOS ARM64 app layout', async () => {

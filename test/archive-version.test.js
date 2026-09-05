@@ -11,7 +11,8 @@ const execFileAsync = promisify(execFile);
 test('version archiver creates source, extension, bundle, manifest and checksums from an exact ref', async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'chatsentinel-archive-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }).catch(() => {}));
-  const ref = 'baseline/v1.2.0';
+  const ref = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: path.resolve('.'), encoding: 'utf8' })).stdout.trim();
+  const expectedExtensionVersion = JSON.parse(await fs.readFile('extension/manifest.json', 'utf8')).version;
   const version = '1.2.0-test';
   const { stdout } = await execFileAsync(process.execPath, [
     'scripts/archive-version.mjs', '--version', version, '--ref', ref, '--destination', dir
@@ -36,5 +37,5 @@ test('version archiver creates source, extension, bundle, manifest and checksums
   const installResult = JSON.parse(installed.stdout);
   assert.equal(installResult.installed, true);
   const installedManifest = JSON.parse(await fs.readFile(path.join(installResult.installRoot, 'extension', 'manifest.json'), 'utf8'));
-  assert.equal(installedManifest.version, '1.2.0');
+  assert.equal(installedManifest.version, expectedExtensionVersion);
 });
