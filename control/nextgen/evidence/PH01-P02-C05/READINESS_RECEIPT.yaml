@@ -1,0 +1,33 @@
+readiness_receipt:
+  schema_version: "1.0"
+  component_id: PH01-P02-C05
+  component_name: ModuleRegistryFeatureToggle
+  verdict: READY
+  exact_source:
+    commit: d9dd64783af37cb99eb4d6da1352b2ae1e126c1c
+    tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
+  source_evidence_commit: 8d1784ec93427b1ed9a9bf54955843dc95b56d40
+  independent_validation:
+    receipt_commit: a511eafba34e1f6fd51cb1d77a2d969326f67de3
+    receipt_tree: 8b3f7e16a1ae7ee34f2ac4ffb404f779bcf99c28
+    verdict: GREEN
+  pack_integration:
+    candidate_commit: 36a7ba4f1586956d849a81c15b582006170704ee
+    candidate_tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
+    receipt_commit_parent: 4daca6c0a90fbd076f79751970b2935052e00799
+    verdict: GREEN
+  predecessor_baseline:
+    commit: 75897faf9220da13389044b8080f3ee2a2473733
+    tree: 1194a4b92881b5d10603db249066388a56f84263
+  authority_status: CONSUMABLE_BY_EXACT_SUCCESSORS
+  scope_status: CLEAN
+  pack_spine_status: GREEN
+  source_validator_separation: VERIFIED
+  no_source_change_after_validation: VERIFIED
+  next_frontier_hint:
+    - PH01-P02-C06
+    - PH01-P02-C07
+    - PH01-P01-C01
+  note: >-
+    Frontier hints are not admissions. Each successor still requires exact independent
+    admission against the latest canonical trunk/spine and its own direct predecessors.
