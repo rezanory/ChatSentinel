@@ -1,0 +1,61 @@
+spec_index:
+  schema_version: "1.0"
+  project: ChatSentinel NextGen
+  authority_order:
+    - Canonical Software Engineering Workflow v3.0.1
+    - ChatSentinel Project Profile v1.1
+    - ChatSentinel Final Development Workflow v1.1
+    - ChatSentinel Final Target Architecture and Execution Master v1.1
+    - exact component admissions/contracts/risks
+    - exact source/validation/integration/readiness evidence
+  artifacts:
+    canonical_workflow:
+      filename: Canonical_Software_Engineering_Workflow_v3.0.1.md
+      sha256: cf74c19b44f7b0230dba9ee6b045de2a1a953168ae142b7b8af51312ad9d4b07
+      library_path: /ChatSentinel/NextGen/Canonical_Software_Engineering_Workflow_v3.0.1.md
+      library_file_id: libfile_fa9b212378d481919b6967961fc238f9
+    project_workflow:
+      filename: ChatSentinel_FINAL_Development_Workflow_v1.1.md
+      sha256: 65e3841457035810c980568d195912f87c6bbf0b8378ad77153a1652a2a24803
+      library_path: /ChatSentinel/NextGen/ChatSentinel_FINAL_Development_Workflow_v1.1.md
+      library_file_id: libfile_af4ec6ea2e7481919ad46d46e6893237
+    target_architecture:
+      filename: ChatSentinel_FINAL_Target_Architecture_and_Execution_Master_v1.1.md
+      sha256: 8e0bdf7fa121b00fb53f0acf8ea9c52ba3d679a590dfe31e179b320ce715141d
+      library_path: /ChatSentinel/NextGen/ChatSentinel_FINAL_Target_Architecture_and_Execution_Master_v1.1.md
+      library_file_id: libfile_b8fa2006cbf08191ac369fce954a530d
+    project_profile:
+      filename: ChatSentinel_Project_Profile_v1.1.yaml
+      sha256: c0deb91efeaaf8c51870cc60fa00035aad7db61bec0a0fd2e93d10376cbf3440
+      library_path: /ChatSentinel/NextGen/ChatSentinel_Project_Profile_v1.1.yaml
+      library_file_id: libfile_53bcacb5eb0c81919e4db6a7134bd64b
+    component_registry:
+      filename: ChatSentinel_Initial_Component_Registry_v1.1.json
+      sha256: dda74665e78a5f750befb2bc482842c3673f66f8e137c40b9c9fd2cb8dac7c47
+      library_path: /ChatSentinel/NextGen/ChatSentinel_Initial_Component_Registry_v1.1.json
+      library_file_id: libfile_ee16ffa8e20c8191981557d9d918c08c
+    dag:
+      filename: ChatSentinel_Initial_DAG_v1.1.json
+      sha256: 1b6890fa061dd6498ba07e27576be5902c0355b036b4d585e5618693665a8667
+      library_path: /ChatSentinel/NextGen/ChatSentinel_Initial_DAG_v1.1.json
+      library_file_id: libfile_0a11285ba290819196e870c310d0cdfe
+    bootstrap_bundle:
+      filename: ChatSentinel_NEXTGEN_Bootstrap_RepoBundle_v1.1.zip
+      sha256: 73817128589a541736e680f33b41a89599b38fe77b5ffb5ea83b56272b2655f1
+      library_path: /ChatSentinel/NextGen/ChatSentinel_NEXTGEN_Bootstrap_RepoBundle_v1.1.zip
+      library_file_id: libfile_a24842a955e0819194b58a90bed5c6d7
+  repository_persistence:
+    current_status: HASH_PINNED_INDEX_AND_CANONICAL_STATE_IN_REPO
+    bootstrap_marker: control/nextgen/BOOTSTRAP_START.md
+    canonical_state: control/nextgen/CANONICAL_STATE.json
+    requirements_ledger: control/nextgen/REQUIREMENTS_LEDGER.md
+    frontier: control/nextgen/dag/FRONTIER.json
+    full_bundle_vendoring_status: PENDING_BINARY_VENDOR_COMMIT
+    rule: >-
+      No worker may invent missing spec text. Until the full bundle is vendored byte-for-byte,
+      it must resolve the exact hash-pinned artifact from the persistent ChatGPT Files Library.
+      Any hash mismatch is DOCUMENT_TRUNCATED_OR_CORRUPT and blocks protected decisions.
+  local_persistence:
+    repo_worktree: C:\Users\Radlina\workspace\chatsentinel-nextgen
+    legacy_install: C:\ChatSentinel
+    library_mirror: ChatGPT Files Library /ChatSentinel/NextGen

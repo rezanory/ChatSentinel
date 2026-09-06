@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "project": "ChatSentinel NextGen",
+  "dag_epoch": 1,
+  "computed_from_trunk": "c0d3ee56d276bc4defe3855f07a98d0373db069e",
+  "computed_at": "2026-09-06T17:02:00Z",
+  "completed_ready": [
+    {
+      "component_id": "PH01-P02-C05",
+      "source": "d9dd64783af37cb99eb4d6da1352b2ae1e126c1c",
+      "validation_receipt": "a511eafba34e1f6fd51cb1d77a2d969326f67de3",
+      "readiness": "c0d3ee56d276bc4defe3855f07a98d0373db069e"
+    }
+  ],
+  "admission_candidates": [
+    {
+      "component_id": "PH01-P02-C06",
+      "name": "CoreProcessLifecycle",
+      "direct_predecessors": ["PH01-P02-C05", "PH00-P01-C02"],
+      "status": "CANDIDATE_REQUIRES_EXACT_ADMISSION",
+      "priority": "CRITICAL_PATH_HIGH"
+    },
+    {
+      "component_id": "PH01-P02-C07",
+      "name": "TransactionalStateAdapter",
+      "direct_predecessors": ["PH01-P02-C05", "PH00-P02-C04"],
+      "status": "CANDIDATE_REQUIRES_EXACT_ADMISSION",
+      "priority": "CRITICAL_PATH_HIGH"
+    },
+    {
+      "component_id": "PH01-P01-C01",
+      "name": "DesktopHostElectron",
+      "direct_predecessors": ["PH00-P02-C06", "PH00-P03-C07"],
+      "status": "CANDIDATE_REQUIRES_EXACT_ADMISSION",
+      "priority": "PARALLEL_FOUNDATION"
+    }
+  ],
+  "wip_limits": {
+    "authoring": 4,
+    "validation": 2,
+    "integration": 1,
+    "research_reuse": 2,
+    "governance": 1,
+    "hot_browser_slots": 6,
+    "migration_writers": 1,
+    "high_risk_parallel": 2
+  },
+  "notes": [
+    "Candidate status is not authority. Independent Admission is still required.",
+    "PH00 predecessor evidence is hash-pinned in bootstrap bundle/spec index and must be materialized or explicitly referenced in each Admission.",
+    "No phase barrier: any exact-ready component may start when WIP/resource/authority gates permit."
+  ]
+}
