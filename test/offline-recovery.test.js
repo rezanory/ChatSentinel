@@ -8,7 +8,7 @@ const source = fs.readFileSync(new URL('../extension/components/offline-recovery
 function loadContext(overrides = {}) {
   const values = new Map();
   const sandbox = {
-    document: { documentElement: null },
+    document: { documentElement: null, getElementById() { return null; } },
     sessionStorage: {
       getItem(key) { return values.get(key) || null; },
       setItem(key, value) { values.set(key, value); },
