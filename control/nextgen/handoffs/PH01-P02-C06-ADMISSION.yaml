@@ -1,0 +1,86 @@
+handoff:
+  schema_version: "1.0"
+  handoff_id: HOF-PH01-P02-C06-ADMISSION-20260906-V2
+  entity_type: governance
+  entity_id: PH01-P02-C06-ADMISSION
+  component_id: PH01-P02-C06
+  current_state: PASS_ADMISSION_RECEIPT_REMOTE_RECONCILED
+  created_at_utc: 2026-09-06T18:54:55Z
+  normative_workflow:
+    version: "3.0.1"
+    sha256: cf74c19b44f7b0230dba9ee6b045de2a1a953168ae142b7b8af51312ad9d4b07
+  repository: rezanory/ChatSentinel
+  branch: governance/ph01-p02-c06-admission-v1
+  workspace: C:\Users\Radlina\workspace\chatsentinel-ph01-p02-c06-admission
+  exact_receipt_snapshot:
+    commit: 381671eb329c2dfe1a563d64696fd91d3d1f8ce2
+    tree: d82bd2b14ae0ead3282bcc875b6e939d96d4a532
+    admission_path: control/nextgen/admissions/PH01-P02-C06.yaml
+    admission_sha256: 255f1ceaa6ee4f888691a655d0ca2d8af9ea0d2ed4b0237e7b64cdf2fe6dd73c
+    local_remote_equal_at_receipt: true
+  dag:
+    epoch: 1
+    sha256: 1b6890fa061dd6498ba07e27576be5902c0355b036b4d585e5618693665a8667
+  admission_ref:
+    admission_id: ADM-PH01-P02-C06-20260906-V2
+    verdict: PASS
+    decision: ADMITTED_FOR_BOUNDED_AUTHORING
+    receipt_commit: 381671eb329c2dfe1a563d64696fd91d3d1f8ce2
+  predecessor_refs:
+    - component_id: PH01-P02-C05
+      source_sha: d9dd64783af37cb99eb4d6da1352b2ae1e126c1c
+      validation_receipt_sha: a511eafba34e1f6fd51cb1d77a2d969326f67de3
+      readiness_ref: c0d3ee56d276bc4defe3855f07a98d0373db069e
+      status: GREEN_READY
+    - component_id: PH00-P01-C02
+      readiness_ref: ce71e37fa2c5f3854104df4985ec54739450b8f0
+      evidence_blob: 2a105ebb31309860af895fd31327e4549d94a222
+      status: READY_AS_BOOTSTRAP_PREDECESSOR
+  source_ref:
+    exact_authoring_baseline_sha: 6484d50f54e7784841d6ba4bf648a567191491c3
+    exact_authoring_baseline_tree: ec5808ea879d45b9f4e94eb5ee2df3337e5ac46a
+    exact_src_tree: a271b71269edd8d3890a68480d3f78e3d909072a
+  reuse_ref:
+    path: control/nextgen/admissions/PH01-P02-C06/REUSE_RECORD.yaml
+    sha256: a0cb67b789c9b2d90504ca9105aa61b8a316f60eab166c60b26c27acf44fd8cb
+  sizing_ref:
+    path: control/nextgen/admissions/PH01-P02-C06/SIZING_RECORD.yaml
+    sha256: db743ce3225c023c5e166036ff1112297fa4372b0ce9208e9cb0d709c525d50f
+  contract_ref:
+    path: control/nextgen/admissions/PH01-P02-C06/CONTRACT_FREEZE.yaml
+    sha256: ce582280e3a859ab9043a7120f17d9c2636d0735b2a6fe0161f685c5a252d170
+  risk_ref:
+    path: control/nextgen/admissions/PH01-P02-C06/RISK_FREEZE.yaml
+    sha256: afe8bf84e9ecae97e478f1c5689cb5ceee0c173aa6dc9d19ac5f9aa82f08993c
+    class: HIGH
+  validation_ref: NOT_STARTED_BY_DESIGN
+  readiness_ref: NOT_APPLICABLE_UNTIL_SOURCE_VALIDATION_INTEGRATION
+  blocker_refs:
+    - blocker_id: BLK-C06-CONTROLLER-ACTUATION-POLICY-20260906
+      scope: CONTROLLER_RUNTIME_ACTUATION_ONLY
+      canonical_source_commit: 6484d50f54e7784841d6ba4bf648a567191491c3
+      canonical_mode: DIRECT_RDC_PLUS_EXACT_GIT_WORKTREES
+      v1_3_4_orchestrator_authorized: false
+      effect: >-
+        Do not POST /orchestrator/configure through v1.3.4 while the canonical rollback policy
+        marks the NextGen orchestration project disabled. This does not invalidate C06 admission.
+      does_not_invalidate_component_admission: true
+  allowed_next_actions:
+    - controller reconciles and records this exact PASS receipt and handoff
+    - controller may mark C06AUTHOR required as WIP permits after exact receipt consumption
+    - controller may mark C07ADM required as the governance slot permits
+    - use Direct RDC plus exact Git worktrees under current canonical supervision policy
+    - materialize a fresh controller generation only through an actuation path permitted by canonical policy
+  forbidden_actions:
+    - no C06 source mutation before controller consumes the exact receipt
+    - no v1.3.4 orchestrator configure while canonical policy disables it
+    - no main merge
+    - no production activation
+    - no provider side effects
+    - no authority widening
+  last_safe_action: >-
+    Exact PASS admission receipt commit 381671eb329c2dfe1a563d64696fd91d3d1f8ce2
+    was pushed and local/remote equality was verified with a clean worktree.
+  transition_context:
+    transition_id: NOT_MATERIALIZED_BOOTSTRAP_PRE_EVENTJOURNAL
+    correlation_id: ADM-PH01-P02-C06-20260906-V2
