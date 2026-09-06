@@ -39,9 +39,8 @@ jobs:
         run: |
           dest="$RUNNER_TEMP/ChatSentinel-$RELEASE_VERSION"
           node scripts/archive-version.mjs --version "$RELEASE_VERSION" --ref "$RELEASE_SHA" --destination "$dest"
-          cd "$dest"
-          sha256sum -c SHA256SUMS.txt
-          git bundle verify "ChatSentinel-$RELEASE_VERSION.bundle"
+          (cd "$dest" && sha256sum -c SHA256SUMS.txt)
+          git -C "$GITHUB_WORKSPACE" bundle verify "$dest/ChatSentinel-$RELEASE_VERSION.bundle"
       - name: Publish release
         shell: bash
         run: |
@@ -60,5 +59,6 @@ jobs:
       - name: Verify release identity
         shell: bash
         run: |
+          git fetch --tags origin
           test "$(git rev-list -n 1 "v$RELEASE_VERSION")" = "$RELEASE_SHA"
           gh release view "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,url,assets
