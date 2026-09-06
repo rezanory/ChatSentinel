@@ -1,87 +1,90 @@
 admission:
-  schema_version: "1.0"
+  schema_version: "2.0"
+  receipt_kind: EXACT_PASS_ADMISSION_RECEIPT
+  admission_id: ADM-PH01-P02-C06-20260906-V2
   component_id: PH01-P02-C06
   component_name: CoreProcessLifecycle
   decision: ADMITTED_FOR_BOUNDED_AUTHORING
-  issued_at: 2026-09-06T17:36:00Z
+  verdict: PASS
+  issued_at_utc: 2026-09-06T18:42:00Z
+  supersedes:
+    prior_receipt_commit: e347978f75ff3e9488728f006a53c9ba9f444b31
+    reason: >-
+      Prior receipt lacked exact DAG hash/epoch, sizing ref, standalone contract/risk hashes,
+      explicit authority scope and a canonical admission handoff required by CSEW v3.0.1.
   normative_workflow:
+    name: Canonical Software Engineering Workflow
     version: "3.0.1"
     sha256: cf74c19b44f7b0230dba9ee6b045de2a1a953168ae142b7b8af51312ad9d4b07
-  project_workflow:
+    integrity_verified: true
+  project_profile_ref:
+    artifact: ChatSentinel_Project_Profile_v1.1.yaml
+    sha256: c0deb91efeaaf8c51870cc60fa00035aad7db61bec0a0fd2e93d10376cbf3440
+    required_execution_profile: EP2
+  project_workflow_ref:
     version: "1.1"
     sha256: 65e3841457035810c980568d195912f87c6bbf0b8378ad77153a1652a2a24803
-  target_architecture:
+  target_architecture_ref:
     version: "1.1"
     sha256: 8e0bdf7fa121b00fb53f0acf8ea9c52ba3d679a590dfe31e179b320ce715141d
-  exact_baseline:
-    source_sha: ce71e37fa2c5f3854104df4985ec54739450b8f0
-    source_tree: 10554c301355c13f470d8636186532e9f5271162
-  predecessor_lineage:
+  exact_dag:
+    artifact: ChatSentinel_Initial_DAG_v1.1.json
+    epoch: 1
+    sha256: 1b6890fa061dd6498ba07e27576be5902c0355b036b4d585e5618693665a8667
+  component_registry_ref:
+    artifact: ChatSentinel_Initial_Component_Registry_v1.1.json
+    sha256: dda74665e78a5f750befb2bc482842c3673f66f8e137c40b9c9fd2cb8dac7c47
+  reconciled_canonical_trunk:
+    branch: feat/nextgen-ep2-l5-v1
+    commit: 6484d50f54e7784841d6ba4bf648a567191491c3
+    tree: ec5808ea879d45b9f4e94eb5ee2df3337e5ac46a
+    src_tree: a271b71269edd8d3890a68480d3f78e3d909072a
+    canonical_state_blob: fbf69eac4aea8bf12e44212c3c6b01cd4e690142
+    requirements_ledger_blob: 8baf16120b3ef6973cfc0c405dac5f7fd9875979
+    spec_index_blob: eeacf8231a8e4cacf35c4960027f17cd4d9d054f
+  exact_authoring_baseline:
+    sha: 6484d50f54e7784841d6ba4bf648a567191491c3
+    tree: ec5808ea879d45b9f4e94eb5ee2df3337e5ac46a
+    src_tree: a271b71269edd8d3890a68480d3f78e3d909072a
+  direct_predecessors:
     - component_id: PH01-P02-C05
       source_sha: d9dd64783af37cb99eb4d6da1352b2ae1e126c1c
-      validation_receipt: a511eafba34e1f6fd51cb1d77a2d969326f67de3
-      readiness_receipt: c0d3ee56d276bc4defe3855f07a98d0373db069e
+      source_tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
+      validation_receipt_sha: a511eafba34e1f6fd51cb1d77a2d969326f67de3
+      readiness_ref: c0d3ee56d276bc4defe3855f07a98d0373db069e
+      readiness_blob: b8873463d7901598e1bfa81e9c0eb2a7ce885994
       status: GREEN_READY
     - component_id: PH00-P01-C02
-      readiness_receipt: ce71e37fa2c5f3854104df4985ec54739450b8f0
+      readiness_ref: ce71e37fa2c5f3854104df4985ec54739450b8f0
       evidence_file: control/nextgen/evidence/PH00/BOOTSTRAP_READINESS.yaml
+      evidence_blob: 2a105ebb31309860af895fd31327e4549d94a222
       status: READY_AS_BOOTSTRAP_PREDECESSOR
-  component_contract:
-    purpose: >-
-      Introduce the durable ChatSentinel Core lifecycle boundary while preserving the working
-      v1.3.4 watchdog behavior. The new lifecycle must be host-independent and usable by the
-      future Desktop main process without making Electron or the browser extension canonical authority.
-    required_capabilities:
-      - deterministic Core lifecycle states: created|starting|running|stopping|stopped|failed
-      - idempotent start and stop semantics
-      - graceful shutdown with bounded forced-stop fallback delegated to host policy
-      - explicit readiness/liveness snapshots independent of Desktop renderer state
-      - compatibility adapter around current createWatchdogServer/runtimeConfig behavior
-      - structured lifecycle events suitable for future EventJournal promotion
-      - no implicit process exit from reusable lifecycle library code
-      - injectable server/config factory for independent tests
-      - exact module-registry descriptor for Core lifecycle capability without dynamic remote loading
-    legacy_reuse:
-      decision: R2_ADAPT_EXTEND
-      sources:
-        - src/local-watchdog.js
-        - src/server.js:createWatchdogServer
-        - src/runtime-config.js
-      rule: >-
-        Preserve current watchdog runtime semantics. New code wraps/extracts lifecycle behavior;
-        it does not replace command queue, recovery engine, project orchestration, HTTP routes or setup logic.
-  forbidden:
-    - no Electron dependency or Desktop renderer code
-    - no SQLite/state-store migration in this component
-    - no browser/DOM/provider logic
-    - no package.json/package-lock changes
-    - no mutation of legacy src/local-watchdog.js or src/server.js unless a separately admitted fix-forward proves unavoidable
-    - no production service installer mutation
-    - no provider/network side effects beyond existing test-local server behavior
-    - no authority widening from lifecycle health state
-  risk_freeze:
+  reuse_ref:
+    path: control/nextgen/admissions/PH01-P02-C06/REUSE_RECORD.yaml
+    sha256: a0cb67b789c9b2d90504ca9105aa61b8a316f60eab166c60b26c27acf44fd8cb
+    verdict: PASS
+    decision: R2_ADAPT_OR_EXTEND
+  sizing_ref:
+    path: control/nextgen/admissions/PH01-P02-C06/SIZING_RECORD.yaml
+    sha256: db743ce3225c023c5e166036ff1112297fa4372b0ce9208e9cb0d709c525d50f
+    verdict: ACCEPT
+  contract_ref:
+    path: control/nextgen/admissions/PH01-P02-C06/CONTRACT_FREEZE.yaml
+    sha256: ce582280e3a859ab9043a7120f17d9c2636d0735b2a6fe0161f685c5a252d170
+  risk_ref:
+    path: control/nextgen/admissions/PH01-P02-C06/RISK_FREEZE.yaml
+    sha256: afe8bf84e9ecae97e478f1c5689cb5ceee0c173aa6dc9d19ac5f9aa82f08993c
     class: HIGH
-    primary_risks:
-      - lifecycle race causing duplicate listeners or double shutdown
-      - new wrapper accidentally owning process exit authority
-      - divergence between reusable Core lifecycle and legacy local-watchdog entrypoint
-      - false readiness while server startup failed
-      - lost shutdown/flush semantics
-      - module registry metadata incorrectly implying runtime activation
+    verdict: ACCEPT_WITH_FROZEN_CONTROLS
   owned_paths:
     - src/core/bootstrap/**
     - test/core-process-lifecycle.test.js
     - control/nextgen/evidence/PH01-P02-C06/**
-  read_only_reference_paths:
-    - src/local-watchdog.js
-    - src/server.js
-    - src/runtime-config.js
-    - src/core/modules/registry.js
   shared_resources:
     package_manifest_writer: false
     migration_writer: false
     production_listener: false
-  required_tests:
+  required_test_matrix:
     focused:
       - node --test test/core-process-lifecycle.test.js
       - node --check src/core/bootstrap/lifecycle.js
@@ -91,7 +94,29 @@ admission:
       - npm run policy-check
     full_before_source_freeze:
       - npm run release-validate
-  source_freeze_rule: >-
-    Freeze only after focused and collect-all suites are GREEN, source scope is clean,
-    branch is pushed, and legacy runtime behavior remains unchanged outside owned paths.
-    Independent exact validation must materialize the exact source SHA/tree and may not patch source.
+  authority_scope:
+    - bounded source authoring only inside owned source/test paths
+    - component evidence authoring inside owned evidence path
+    - local test execution required by the frozen test matrix
+    - source freeze and push only after collect-all GREEN
+  activation_condition:
+    controller_must_record_this_exact_receipt: true
+    C06AUTHOR_remains_reserve_until_controller_update: true
+  forbidden_actions:
+    - no mutation outside owned paths
+    - no legacy queue recovery orchestration rewrite
+    - no package manifest or migration writer
+    - no main merge
+    - no production activation
+    - no provider side effects
+    - no authority widening
+  runtime_supervision_boundary:
+    canonical_mode: DIRECT_RDC_PLUS_EXACT_GIT_WORKTREES
+    v1_3_4_nextgen_supervisor_authorized: false
+    source_admission_independent_of_supervisor_activation: true
+  transition_context:
+    caused_by_transition_id: NOT_MATERIALIZED_BOOTSTRAP_PRE_EVENTJOURNAL
+    correlation_id: ADM-PH01-P02-C06-20260906-V2
+    note: >-
+      EventJournal/transactional transition authority is not yet implemented at this bootstrap stage;
+      no transition identity is invented. The exact Git receipt and canonical handoff are authoritative.

@@ -1,0 +1,50 @@
+component_sizing:
+  schema_version: "1.0"
+  sizing_id: SIZ-PH01-P02-C06-V2
+  component_id: PH01-P02-C06
+  component_name: CoreProcessLifecycle
+  evaluated_at_utc: 2026-09-06T18:42:00Z
+  source_registry:
+    artifact: ChatSentinel_Initial_Component_Registry_v1.1.json
+    sha256: dda74665e78a5f750befb2bc482842c3673f66f8e137c40b9c9fd2cb8dac7c47
+    declared_status: DECLARED
+    declared_sizing_status: REQUIRES_COMPONENT_SIZING_GATE
+  measured_scope:
+    contract_surface_count: 9
+    owned_path_groups: 3
+    authority_domains:
+      - core_process_lifecycle_library
+    migration_units:
+      - legacy_watchdog_compatibility_adapter
+    test_families:
+      - focused_component
+      - predecessor_system_regression
+      - full_release_validation
+    failure_domains: 5
+    external_dependency_additions: 0
+    shared_writer_locks: 0
+    risk_class: HIGH
+  split_analysis:
+    independent_authority_domains: false
+    independent_migrations: false
+    independent_lifecycles: false
+    meaningful_parallel_split_available: false
+    split_candidates: []
+  merge_analysis:
+    merge_candidates: []
+    merge_required: false
+  duration_estimates:
+    authoring: NOT_USED_AS_ADMISSION_AUTHORITY
+    validation: NOT_USED_AS_ADMISSION_AUTHORITY
+  handoff_context:
+    bounded_by_exact_artifact_refs: true
+    free_text_dependency: false
+  verdict: ACCEPT
+  rationale: >-
+    The component has one lifecycle authority domain, one bounded compatibility adaptation,
+    three owned path groups, a dedicated focused test surface, and no shared migration/package
+    writer. Splitting would create artificial boundaries without independent acceptance value;
+    merging would widen authority into unrelated Core runtime responsibilities.
+  admission_effect:
+    sizing_gate_satisfied: true
+    does_not_authorize_source_by_itself: true

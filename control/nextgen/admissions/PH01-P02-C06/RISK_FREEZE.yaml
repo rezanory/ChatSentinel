@@ -1,0 +1,48 @@
+risk_freeze:
+  schema_version: "1.0"
+  risk_id: RSK-PH01-P02-C06-V2
+  component_id: PH01-P02-C06
+  component_name: CoreProcessLifecycle
+  frozen_at_utc: 2026-09-06T18:42:00Z
+  risk_class: HIGH
+  risks:
+    - id: C06-R01
+      statement: lifecycle race creates duplicate listeners or duplicate starts
+      control: idempotent start state machine plus focused concurrency tests
+    - id: C06-R02
+      statement: lifecycle wrapper acquires process-exit authority
+      control: reusable library must never call implicit process exit
+    - id: C06-R03
+      statement: reusable lifecycle diverges from proven legacy watchdog behavior
+      control: exact first-party reuse pins plus predecessor/full regression suites
+    - id: C06-R04
+      statement: readiness reports healthy after startup failure
+      control: readiness derives from explicit lifecycle/server start result and failure transition
+    - id: C06-R05
+      statement: shutdown loses flush/close semantics or double-closes resources
+      control: bounded graceful stop contract plus idempotent repeated-stop tests
+  shared_resource_risk:
+    migration_writer: false
+    package_manifest_writer: false
+    production_listener: false
+  recovery_constraints:
+    - no blind takeover or reset of dirty work
+    - inspect process/tool activity before recovery
+    - older fencing epoch is read-only after takeover
+    - UI idle or missing heartbeat alone is not destructive-authority evidence
+  scope_constraints:
+    - no source mutation outside owned paths
+    - no foreign frozen-source mutation to fix local failure
+    - no provider or production side effects
+    - no main merge
+    - no authority widening from health state
+  validation_strategy:
+    collect_all_default: true
+    fail_fast_default: false
+    independent_exact_validation_required: true
+    source_patch_by_validator: false
+  verdict: ACCEPT_WITH_FROZEN_CONTROLS
+  residual_risk: >-
+    HIGH classification remains appropriate because lifecycle races and shutdown correctness can
+    affect Core availability. The bounded contract, exact reuse pins, dedicated tests and independent
+    validation make the component admissible without expanding its authority boundary.

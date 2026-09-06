@@ -1,0 +1,52 @@
+reuse_record:
+  schema_version: "1.0"
+  record_id: REUSE-PH01-P02-C06-V2
+  component_id: PH01-P02-C06
+  component_name: CoreProcessLifecycle
+  evaluated_at_utc: 2026-09-06T18:42:00Z
+  canonical_trunk:
+    branch: feat/nextgen-ep2-l5-v1
+    commit: 6484d50f54e7784841d6ba4bf648a567191491c3
+    tree: ec5808ea879d45b9f4e94eb5ee2df3337e5ac46a
+    src_tree: a271b71269edd8d3890a68480d3f78e3d909072a
+  decision: R2_ADAPT_OR_EXTEND
+  sources:
+    - path: src/local-watchdog.js
+      blob_sha: 5dc14119b73826a49c5c95ce6dd1e9a05b746aba
+      provenance: FIRST_PARTY_REPOSITORY
+      role: legacy lifecycle entrypoint/reference
+    - path: src/server.js
+      symbol: createWatchdogServer
+      blob_sha: de04a157e64d4b98958fbc5e7070ca38adf4f835
+      provenance: FIRST_PARTY_REPOSITORY
+      role: existing server factory/runtime semantics
+    - path: src/runtime-config.js
+      blob_sha: 74ecbe65dee57c0b9f036e0bbe41351e4cb50e2e
+      provenance: FIRST_PARTY_REPOSITORY
+      role: existing runtime configuration semantics
+    - path: src/core/modules/registry.js
+      blob_sha: 1ea4e3f209293e89a21673eb0f91919493e23ced
+      provenance: FIRST_PARTY_REPOSITORY
+      role: read-only registry integration reference
+  external_dependency_additions: []
+  preserved_working_surfaces:
+    - command_queue
+    - recovery_engine
+    - project_orchestration
+    - existing_http_routes
+    - setup_and_platform_logic
+  rules:
+    - preserve existing watchdog runtime semantics
+    - wrap_or_extract lifecycle behavior instead of replacing working systems
+    - no dynamic remote code loading
+    - no package dependency addition in this component
+    - no production activation or provider side effect
+  license_security_provenance:
+    classification: FIRST_PARTY_SOURCE_REUSE
+    external_license_gate_required: false
+    supply_chain_delta: NONE
+  verdict: PASS
+  rationale: >-
+    Existing first-party server/config/watchdog behavior is exact-pinned and sufficient for
+    an R2 compatibility wrapper. Building a replacement queue/recovery/orchestrator is neither
+    required nor authorized by the component boundary.
