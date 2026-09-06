@@ -1,74 +1,79 @@
 contract_freeze:
-  schema_version: "1.0"
-  contract_id: CTR-PH01-P02-C06-V2
+  schema_version: '1.0'
+  contract_id: CTR-PH01-P02-C06-V3
   component_id: PH01-P02-C06
   component_name: CoreProcessLifecycle
-  frozen_at_utc: 2026-09-06T18:42:00Z
-  purpose: >-
-    Introduce a durable, host-independent Core lifecycle boundary while preserving the existing
-    watchdog server/config behavior and keeping Desktop renderer and Browser Bridge non-authoritative.
+  frozen_at_utc: '2026-09-06T19:07:00Z'
+  purpose: Introduce a durable, host-independent Core lifecycle boundary while preserving the existing watchdog
+    server/config behavior and keeping Desktop renderer and Browser Bridge non-authoritative.
   lifecycle_states:
-    - created
-    - starting
-    - running
-    - stopping
-    - stopped
-    - failed
+  - created
+  - starting
+  - running
+  - stopping
+  - stopped
+  - failed
   required_capabilities:
-    - deterministic lifecycle state transitions
-    - idempotent start semantics
-    - idempotent stop semantics
-    - graceful shutdown with host-policy bounded forced-stop fallback
-    - readiness snapshot independent of Desktop renderer
-    - liveness snapshot independent of Desktop renderer
-    - compatibility adapter around existing createWatchdogServer/runtimeConfig behavior
-    - structured lifecycle events suitable for later EventJournal promotion
-    - injectable server/config factory for independent tests
+  - deterministic lifecycle state transitions
+  - idempotent start semantics
+  - idempotent stop semantics
+  - graceful shutdown with host-policy bounded forced-stop fallback
+  - readiness snapshot independent of Desktop renderer
+  - liveness snapshot independent of Desktop renderer
+  - compatibility adapter around existing createWatchdogServer/runtimeConfig behavior
+  - structured lifecycle events suitable for later EventJournal promotion
+  - injectable server/config factory for independent tests
   required_invariants:
-    - reusable lifecycle library never calls implicit process exit
-    - lifecycle health never widens canonical authority
-    - repeated start cannot create duplicate active listeners
-    - repeated stop cannot double-close or emit false readiness
-    - legacy queue recovery orchestration routes and setup logic remain outside ownership
+  - reusable lifecycle library never calls implicit process exit
+  - lifecycle health never widens canonical authority
+  - repeated start cannot create duplicate active listeners
+  - repeated stop cannot double-close or emit false readiness
+  - legacy queue recovery orchestration routes and setup logic remain outside ownership
+  - equivalent core-loop reliability may not regress below stable/v1.2.1
+  - logical objective completion is independent from command execution or dedupe
+  - non-terminal core supervision may not silently stop while safe admissible work exists
+  - protected automation requires coherent Core Desktop Browser Bridge and protocol identities
+  - CoreProcessLifecycle remains a separated subsystem contract and not hidden orchestrator authority
   owned_paths:
-    - src/core/bootstrap/**
-    - test/core-process-lifecycle.test.js
-    - control/nextgen/evidence/PH01-P02-C06/**
+  - src/core/bootstrap/**
+  - test/core-process-lifecycle.test.js
+  - control/nextgen/evidence/PH01-P02-C06/**
   read_only_reference_paths:
-    - src/local-watchdog.js
-    - src/server.js
-    - src/runtime-config.js
-    - src/core/modules/registry.js
+  - src/local-watchdog.js
+  - src/server.js
+  - src/runtime-config.js
+  - src/core/modules/registry.js
   allowed_source_effects:
-    - add or modify files only inside owned source/test paths after controller admits authoring
-    - write component evidence under owned evidence path
+  - add or modify files only inside owned source/test paths after controller admits authoring
+  - write component evidence under owned evidence path
   forbidden_source_effects:
-    - no Electron or Desktop renderer dependency
-    - no SQLite or state-store migration
-    - no browser DOM provider logic
-    - no package.json or package-lock mutation
-    - no legacy local-watchdog/server mutation without separate fix-forward admission
-    - no production service installer mutation
-    - no external provider/network side effect
-    - no authority widening
-  compatibility_rule: >-
-    Preserve current server/config/watchdog semantics through an adapter/extraction boundary;
+  - no Electron or Desktop renderer dependency
+  - no SQLite or state-store migration
+  - no browser DOM provider logic
+  - no package.json or package-lock mutation
+  - no legacy local-watchdog/server mutation without separate fix-forward admission
+  - no production service installer mutation
+  - no external provider/network side effect
+  - no authority widening
+  compatibility_rule: Preserve current server/config/watchdog semantics through an adapter/extraction boundary;
     do not replace the working command queue, recovery engine, project orchestration or routes.
   required_test_matrix:
     focused:
-      - node --test test/core-process-lifecycle.test.js
-      - node --check src/core/bootstrap/lifecycle.js
+    - node --test test/core-process-lifecycle.test.js
+    - node --check src/core/bootstrap/lifecycle.js
     predecessor_system:
-      - node --test test/module-registry.test.js
-      - npm test
-      - npm run policy-check
+    - node --test test/module-registry.test.js
+    - npm test
+    - npm run policy-check
     full_before_source_freeze:
-      - npm run release-validate
-  source_freeze_rule: >-
-    Freeze only after focused and collect-all required suites are GREEN, source scope is clean,
+    - npm run release-validate
+    reliability_before_readiness:
+    - execute the R-016 stable-v1.2 comparison corpus against the exact frozen candidate
+    - prove no SILENT_PROJECT_STOP in lifecycle continuation/recovery scenarios
+    - prove runtime/version drift fails closed before protected automation
+  source_freeze_rule: Freeze only after focused and collect-all required suites are GREEN, source scope is clean,
     remote persistence is exact, and legacy runtime behavior remains unchanged outside owned paths.
-  independent_validation_rule: >-
-    The validator materializes the exact frozen source SHA/tree and may not patch source.
+  independent_validation_rule: The validator materializes the exact frozen source SHA/tree and may not patch source.
   activation_boundary:
     acceptance_implies_production_activation: false
     provider_side_effect_authority: false

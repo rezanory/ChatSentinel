@@ -1,20 +1,20 @@
 admission:
-  schema_version: "2.0"
+  schema_version: '2.1'
   receipt_kind: EXACT_PASS_ADMISSION_RECEIPT
-  admission_id: ADM-PH01-P02-C06-20260906-V2
+  admission_id: ADM-PH01-P02-C06-20260906-V3
   component_id: PH01-P02-C06
   component_name: CoreProcessLifecycle
   decision: ADMITTED_FOR_BOUNDED_AUTHORING
   verdict: PASS
-  issued_at_utc: 2026-09-06T18:42:00Z
+  issued_at_utc: '2026-09-06T19:07:00Z'
   supersedes:
-    prior_receipt_commit: e347978f75ff3e9488728f006a53c9ba9f444b31
-    reason: >-
-      Prior receipt lacked exact DAG hash/epoch, sizing ref, standalone contract/risk hashes,
-      explicit authority scope and a canonical admission handoff required by CSEW v3.0.1.
+    prior_pass_receipt_commit: 381671eb329c2dfe1a563d64696fd91d3d1f8ce2
+    prior_handoff_commit: 844a99910e9cc1b075d9fc2314fb333e222cb6b2
+    reason: Canonical trunk advanced to 3f689218 with R-016..R-021 strengthening; exact Admission is reissued against
+      latest canonical governance while the src tree remains unchanged.
   normative_workflow:
     name: Canonical Software Engineering Workflow
-    version: "3.0.1"
+    version: 3.0.1
     sha256: cf74c19b44f7b0230dba9ee6b045de2a1a953168ae142b7b8af51312ad9d4b07
     integrity_verified: true
   project_profile_ref:
@@ -22,10 +22,10 @@ admission:
     sha256: c0deb91efeaaf8c51870cc60fa00035aad7db61bec0a0fd2e93d10376cbf3440
     required_execution_profile: EP2
   project_workflow_ref:
-    version: "1.1"
+    version: '1.1'
     sha256: 65e3841457035810c980568d195912f87c6bbf0b8378ad77153a1652a2a24803
   target_architecture_ref:
-    version: "1.1"
+    version: '1.1'
     sha256: 8e0bdf7fa121b00fb53f0acf8ea9c52ba3d679a590dfe31e179b320ce715141d
   exact_dag:
     artifact: ChatSentinel_Initial_DAG_v1.1.json
@@ -36,29 +36,29 @@ admission:
     sha256: dda74665e78a5f750befb2bc482842c3673f66f8e137c40b9c9fd2cb8dac7c47
   reconciled_canonical_trunk:
     branch: feat/nextgen-ep2-l5-v1
-    commit: 6484d50f54e7784841d6ba4bf648a567191491c3
-    tree: ec5808ea879d45b9f4e94eb5ee2df3337e5ac46a
+    commit: 3f689218256001aebec4ab5a985c72660d29235a
+    tree: 2dfca6a1eebf72306ab60e414440f953be34712b
     src_tree: a271b71269edd8d3890a68480d3f78e3d909072a
-    canonical_state_blob: fbf69eac4aea8bf12e44212c3c6b01cd4e690142
-    requirements_ledger_blob: 8baf16120b3ef6973cfc0c405dac5f7fd9875979
+    canonical_state_blob: 67aa1d0f4a538bebf4cd2fe13a0b0b20c7511e40
+    requirements_ledger_blob: 3b2d0fbc06c58c27ff7aa532eb323de2198d9f74
     spec_index_blob: eeacf8231a8e4cacf35c4960027f17cd4d9d054f
   exact_authoring_baseline:
-    sha: 6484d50f54e7784841d6ba4bf648a567191491c3
-    tree: ec5808ea879d45b9f4e94eb5ee2df3337e5ac46a
+    sha: 3f689218256001aebec4ab5a985c72660d29235a
+    tree: 2dfca6a1eebf72306ab60e414440f953be34712b
     src_tree: a271b71269edd8d3890a68480d3f78e3d909072a
   direct_predecessors:
-    - component_id: PH01-P02-C05
-      source_sha: d9dd64783af37cb99eb4d6da1352b2ae1e126c1c
-      source_tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
-      validation_receipt_sha: a511eafba34e1f6fd51cb1d77a2d969326f67de3
-      readiness_ref: c0d3ee56d276bc4defe3855f07a98d0373db069e
-      readiness_blob: b8873463d7901598e1bfa81e9c0eb2a7ce885994
-      status: GREEN_READY
-    - component_id: PH00-P01-C02
-      readiness_ref: ce71e37fa2c5f3854104df4985ec54739450b8f0
-      evidence_file: control/nextgen/evidence/PH00/BOOTSTRAP_READINESS.yaml
-      evidence_blob: 2a105ebb31309860af895fd31327e4549d94a222
-      status: READY_AS_BOOTSTRAP_PREDECESSOR
+  - component_id: PH01-P02-C05
+    source_sha: d9dd64783af37cb99eb4d6da1352b2ae1e126c1c
+    source_tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
+    validation_receipt_sha: a511eafba34e1f6fd51cb1d77a2d969326f67de3
+    readiness_ref: c0d3ee56d276bc4defe3855f07a98d0373db069e
+    readiness_blob: b8873463d7901598e1bfa81e9c0eb2a7ce885994
+    status: GREEN_READY
+  - component_id: PH00-P01-C02
+    readiness_ref: ce71e37fa2c5f3854104df4985ec54739450b8f0
+    evidence_file: control/nextgen/evidence/PH00/BOOTSTRAP_READINESS.yaml
+    evidence_blob: 2a105ebb31309860af895fd31327e4549d94a222
+    status: READY_AS_BOOTSTRAP_PREDECESSOR
   reuse_ref:
     path: control/nextgen/admissions/PH01-P02-C06/REUSE_RECORD.yaml
     sha256: a0cb67b789c9b2d90504ca9105aa61b8a316f60eab166c60b26c27acf44fd8cb
@@ -66,57 +66,68 @@ admission:
     decision: R2_ADAPT_OR_EXTEND
   sizing_ref:
     path: control/nextgen/admissions/PH01-P02-C06/SIZING_RECORD.yaml
-    sha256: db743ce3225c023c5e166036ff1112297fa4372b0ce9208e9cb0d709c525d50f
+    sha256: 69458ad4eba181c09da47426d9f3812c0f83398b3b97309311780dad9d4f05e5
     verdict: ACCEPT
   contract_ref:
     path: control/nextgen/admissions/PH01-P02-C06/CONTRACT_FREEZE.yaml
-    sha256: ce582280e3a859ab9043a7120f17d9c2636d0735b2a6fe0161f685c5a252d170
+    sha256: 95608ddc9cf5328250f4c1ebccc15ceca6fa262d65a08968de2fc9d894418bd5
   risk_ref:
     path: control/nextgen/admissions/PH01-P02-C06/RISK_FREEZE.yaml
-    sha256: afe8bf84e9ecae97e478f1c5689cb5ceee0c173aa6dc9d19ac5f9aa82f08993c
+    sha256: f2df7d5532a445d49658aa229a228ded3cf780a4a89221c01bd53327616bc04b
     class: HIGH
     verdict: ACCEPT_WITH_FROZEN_CONTROLS
   owned_paths:
-    - src/core/bootstrap/**
-    - test/core-process-lifecycle.test.js
-    - control/nextgen/evidence/PH01-P02-C06/**
+  - src/core/bootstrap/**
+  - test/core-process-lifecycle.test.js
+  - control/nextgen/evidence/PH01-P02-C06/**
   shared_resources:
     package_manifest_writer: false
     migration_writer: false
     production_listener: false
   required_test_matrix:
     focused:
-      - node --test test/core-process-lifecycle.test.js
-      - node --check src/core/bootstrap/lifecycle.js
+    - node --test test/core-process-lifecycle.test.js
+    - node --check src/core/bootstrap/lifecycle.js
     predecessor_system:
-      - node --test test/module-registry.test.js
-      - npm test
-      - npm run policy-check
+    - node --test test/module-registry.test.js
+    - npm test
+    - npm run policy-check
     full_before_source_freeze:
-      - npm run release-validate
+    - npm run release-validate
   authority_scope:
-    - bounded source authoring only inside owned source/test paths
-    - component evidence authoring inside owned evidence path
-    - local test execution required by the frozen test matrix
-    - source freeze and push only after collect-all GREEN
+  - bounded source authoring only inside owned source/test paths
+  - component evidence authoring inside owned evidence path
+  - local test execution required by the frozen test matrix
+  - source freeze and push only after collect-all GREEN
   activation_condition:
     controller_must_record_this_exact_receipt: true
     C06AUTHOR_remains_reserve_until_controller_update: true
   forbidden_actions:
-    - no mutation outside owned paths
-    - no legacy queue recovery orchestration rewrite
-    - no package manifest or migration writer
-    - no main merge
-    - no production activation
-    - no provider side effects
-    - no authority widening
+  - no mutation outside owned paths
+  - no legacy queue recovery orchestration rewrite
+  - no package manifest or migration writer
+  - no main merge
+  - no production activation
+  - no provider side effects
+  - no authority widening
   runtime_supervision_boundary:
     canonical_mode: DIRECT_RDC_PLUS_EXACT_GIT_WORKTREES
     v1_3_4_nextgen_supervisor_authorized: false
     source_admission_independent_of_supervisor_activation: true
   transition_context:
     caused_by_transition_id: NOT_MATERIALIZED_BOOTSTRAP_PRE_EVENTJOURNAL
-    correlation_id: ADM-PH01-P02-C06-20260906-V2
-    note: >-
-      EventJournal/transactional transition authority is not yet implemented at this bootstrap stage;
-      no transition identity is invented. The exact Git receipt and canonical handoff are authoritative.
+    correlation_id: ADM-PH01-P02-C06-20260906-V3
+    note: EventJournal/transactional transition authority is not yet implemented at this bootstrap stage; no transition
+      identity is invented. The exact Git receipt and canonical handoff are authoritative.
+  architecture_regression_invariants:
+  - STABLE_1_2_RELIABILITY_FLOOR
+  - LOGICAL_OBJECTIVE_NOT_COMMAND_COMPLETION
+  - NO_SILENT_PROJECT_STOP
+  - RUNTIME_VERSION_COHERENCE
+  - THIN_ORCHESTRATOR_SEPARATED_RESPONSIBILITIES
+  - COMPONENT_FIRST_MULTI_LANE_EXECUTION
+  execution_topology:
+    mode: DEGRADED_SINGLE_SESSION_COORDINATION
+    target: CONTROLLER_PLUS_INDEPENDENT_COMPONENT_WORKERS
+    controller_default_author: false
+    author_validator_separation_required: true
