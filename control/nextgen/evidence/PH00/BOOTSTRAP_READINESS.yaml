@@ -1,0 +1,70 @@
+bootstrap_readiness:
+  schema_version: "1.0"
+  project: ChatSentinel NextGen
+  verdict: READY_FOR_EXACT_SUCCESSOR_ADMISSION
+  scope: PH00 bootstrap evidence required by PH01 foundation components
+  canonical_parent:
+    branch: feat/nextgen-ep2-l5-v1
+    commit: e6700754ca83b1a1e27bf55d73724bbad072a1e6
+    tree: e6f9aa52ff09a07397b85e7c5bb2caa6e7e69c5c
+  normative_workflow:
+    version: "3.0.1"
+    sha256: cf74c19b44f7b0230dba9ee6b045de2a1a953168ae142b7b8af51312ad9d4b07
+  bootstrap_bundle:
+    version: "1.1"
+    sha256: 73817128589a541736e680f33b41a89599b38fe77b5ffb5ea83b56272b2655f1
+  evidence_artifacts:
+    evidence_baseline:
+      sha256: a18d4abd59c07a69943651087e59503aac4365b2ad7c9378fc0c0de8bf68b5fe
+    reuse_and_data_readiness:
+      sha256: ded72b52512e3ba1829d1eb956f70dc753301507414789e293c5aa19ff0bfe94
+    current_assurance_projection:
+      sha256: 951cdc122216028654aa399cd556636822d142319903c4af9658ec6668f8d1ba
+    architecture_freeze:
+      sha256: d4c528291d5373e915e172103fdfe0cbdb6c756c61a12ed26ba26c5e3f6b35ae
+    wip_policy:
+      sha256: fe061a383672ad655d6dbb35c3101db15c63b97bf198d216c4340a5e3f9b477a
+    completion_ledger:
+      sha256: 472eb2da35bfdb422bd98348a0596ee5400a4d8601ed236b17a3c9738bd1cf8e
+    start_handoff:
+      sha256: 75f6cc8177642edf6d6bf7ad5fd39a585d9b06aa6ecd20314c4a226ad99bc093
+  predecessor_projection:
+    PH00-P01-C02:
+      name: LegacyCapabilityInventory
+      evidence: evidence_baseline + completion_ledger + current repo v1.3.4
+      status: READY_AS_BOOTSTRAP_PREDECESSOR
+    PH00-P02-C04:
+      name: ArchitecturePriorArtScan
+      evidence: reuse_and_data_readiness
+      status: READY_AS_BOOTSTRAP_PREDECESSOR
+    PH00-P02-C06:
+      name: DesktopHostDecision
+      evidence: architecture_freeze + reuse_and_data_readiness
+      status: READY_AS_BOOTSTRAP_PREDECESSOR
+      decision: Electron-first behind DesktopHost abstraction
+    PH00-P03-C07:
+      name: TargetArchitectureFreeze
+      evidence: architecture_freeze + target architecture v1.1
+      status: READY_AS_BOOTSTRAP_PREDECESSOR
+  exact_external_pins_current_scan:
+    electron: "44.2.0"
+    electron_forge_cli: "7.11.2"
+    better_sqlite3: "13.0.3"
+    dagrejs_graphlib: "4.0.5"
+  package_security_observation:
+    depth2_scan_packages: 78
+    known_vulnerabilities: 0
+    note: Architecture-level scan only; each component must repeat its own exact reuse gate before dependency adoption.
+  portability:
+    persistent_library_path: /ChatSentinel/NextGen
+    spec_index: control/nextgen/spec/SPEC_INDEX.yaml
+    current_repo_status: HASH_PINNED_BOOTSTRAP_EVIDENCE
+    full_bundle_vendoring: PENDING
+  authority:
+    permits: exact successor Admission evaluation
+    does_not_permit:
+      - implicit successor authoring
+      - dependency installation without component reuse gate
+      - production activation
+      - provider/network side effects
+      - treating Library data as unverified when hashes mismatch
