@@ -3,7 +3,7 @@
   const BUTTON_ID = 'chatsentinel-runtime-recovery';
   const DRAFT_KEY = 'chatsentinel:offline-recovery:draft';
   const STATUS_KEY = 'chatsentinel:offline-recovery:last-status';
-  const REPAIR_COMMAND = 'powershell -ExecutionPolicy Bypass -File C:\\ChatSentinel\\scripts\\install-autostart.ps1';
+  const REPAIR_COMMAND = 'powershell -ExecutionPolicy Bypass -File C:\\ChatSentinel\\scripts\\recover-runtime.ps1';
 
   function classify(runtimeAlive, health) {
     if (!runtimeAlive) return { state: 'extension-disconnected', recoverableByReload: true };
