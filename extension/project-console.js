@@ -10,6 +10,7 @@
   const MAX_WIDTH = 680;
   let host;
   let shadow;
+  let boundShadow = null;
   let state = {
     open: false,
     tab: null,
@@ -44,6 +45,7 @@
     host = document.getElementById(HOST_ID);
     if (host?.shadowRoot) {
       shadow = host.shadowRoot;
+      bindPanelEventsOnce();
       return;
     }
     host = document.createElement('div');
@@ -52,8 +54,14 @@
     shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = template();
     document.documentElement.appendChild(host);
+    bindPanelEventsOnce();
+  }
+
+  function bindPanelEventsOnce() {
+    if (!shadow || boundShadow === shadow) return;
     bindEvents();
     restorePanelWidth();
+    boundShadow = shadow;
   }
 
   function template() {
