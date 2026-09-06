@@ -69,7 +69,7 @@ test('one-click protocol failure keeps the existing repair page fallback', () =>
 test('generation detection prevents destructive reload while an answer is still running', () => {
   const api = loadApi();
   const running = { querySelectorAll() { return [{ getAttribute() { return 'Stop generating'; }, textContent: '' }]; } };
-  const idle = { querySelectorAll() { return [{ getAttribute() { return 'Send'; }, textContent: '' }]; };
+  const idle = { querySelectorAll() { return [{ getAttribute() { return 'Send'; }, textContent: '' }]; } };
   assert.equal(api.isGenerationRunning(running), true);
   assert.equal(api.isGenerationRunning(idle), false);
 });
