@@ -1,0 +1,69 @@
+name: v1.3.3 Unified Author Once
+
+on:
+  push:
+    branches:
+      - fix/v1.3.3-unified-recovery-panel-history
+    paths:
+      - .github/workflows/v133-unified-author-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  author:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/v1.3.3-unified-recovery-panel-history
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply unified source patch
+        run: python3 scripts/v133-unified-author.py
+      - name: Bind version 1.3.3
+        shell: bash
+        run: |
+          npm version 1.3.3 --no-git-tag-version
+          python3 - <<'PY'
+          from pathlib import Path
+          paths = [
+            'extension/manifest.json',
+            'src/runtime-config.js',
+            'scripts/install-autostart.ps1',
+            'scripts/e2e/extension-smoke.js',
+            'scripts/production-smoke.mjs',
+            'mcp/setup-server.mjs'
+          ]
+          for path in paths:
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count('1.3.2')
+              if count < 1:
+                  raise SystemExit(f'{path}: expected v1.3.2 binding')
+              p.write_text(text.replace('1.3.2', '1.3.3'), encoding='utf-8', newline='\n')
+          PY
+      - name: Focused collect-all validation
+        shell: bash
+        run: |
+          failures=0
+          node --test test/audit-history.test.js test/offline-recovery.test.js test/remote-desktop-commander-recovery.test.js test/panel-repair-history-noise.test.js test/runtime-recovery-script.test.js || failures=$((failures+1))
+          npm run version-check || failures=$((failures+1))
+          npm run check || failures=$((failures+1))
+          npm run policy-check || failures=$((failures+1))
+          npm run shell-check || failures=$((failures+1))
+          if [ "$failures" -ne 0 ]; then echo "COLLECT_ALL_FAILURES=$failures"; exit 1; fi
+      - name: Commit unified hotfix
+        shell: bash
+        run: |
+          git config user.name 'rezanory'
+          git config user.email '62356000+rezanory@users.noreply.github.com'
+          git rm scripts/v133-unified-author.py
+          git add -A
+          git commit -m 'fix: unify recovery controls and suppress routine wait noise'
+          git push origin HEAD:fix/v1.3.3-unified-recovery-panel-history
