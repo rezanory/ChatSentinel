@@ -78,7 +78,7 @@
   }
 
   function buttonLabel(status) {
-    if (status.state === 'online') return 'Connected';
+    if (status.state === 'online') return 'Connected · Check';
     if (status.state === 'extension-disconnected') return 'Reconnect ChatSentinel';
     if (status.state === 'pairing-mismatch') return 'Repair pairing';
     return 'Repair ChatSentinel';
@@ -109,13 +109,13 @@
       }
       if (result.action === 'none') {
         button.textContent = 'Connected';
-        setTimeout(() => { button.disabled = false; button.textContent = 'Check connection'; }, 1500);
+        setTimeout(() => { button.disabled = false; button.textContent = 'Connected · Check'; }, 1500);
       }
     });
     header.insertBefore(button, shadow.getElementById('close'));
     diagnose().then(status => {
       button.textContent = buttonLabel(status);
-      button.disabled = status.state === 'online';
+      button.disabled = false;
     }).catch(() => {
       button.textContent = 'Reconnect ChatSentinel';
       button.disabled = false;
@@ -125,9 +125,16 @@
 
   function boot() {
     restoreDraft();
-    if (installButton()) return;
+    installButton();
     const observer = new MutationObserver(() => {
-      if (installButton()) observer.disconnect();
+      restoreDraft();
+      if (installButton()) return;
+      const host = document.getElementById(HOST_ID);
+      if (host?.shadowRoot?.getElementById(BUTTON_ID)) {
+        let pending = '';
+        try { pending = sessionStorage.getItem(DRAFT_KEY) || ''; } catch {}
+        if (!pending) observer.disconnect();
+      }
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
