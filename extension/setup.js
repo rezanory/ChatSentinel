@@ -1,9 +1,12 @@
 const BASE = 'http://127.0.0.1:4317';
 const headers = { 'x-chatsentinel-client': 'extension' };
+const WINDOWS_RECOVERY = 'powershell -ExecutionPolicy Bypass -File C:\\ChatSentinel\\scripts\\recover-runtime.ps1';
+const MAC_RECOVERY = 'bash scripts/install-autostart-macos.sh';
 let platformInfo = { os: 'unknown', arch: 'unknown' };
 
 document.getElementById('refresh').addEventListener('click', refresh);
 document.getElementById('copyBootstrap').addEventListener('click', copyBootstrap);
+document.getElementById('recoverRuntime').addEventListener('click', recoverRuntime);
 
 chrome.runtime.getPlatformInfo(info => {
   platformInfo = info || platformInfo;
@@ -46,9 +49,32 @@ function renderPrerequisites(prerequisites) {
 }
 
 function renderOffline() {
-  document.getElementById('prerequisites').innerHTML = '<div class="warn">Local Watchdog is not reachable yet. Run the bootstrap from the ChatSentinel repository.</div>';
+  document.getElementById('prerequisites').innerHTML = '<div class="warn">Local Watchdog is not reachable yet. Use Runtime Recovery first; use Bootstrap only if prerequisites are missing.</div>';
   document.getElementById('bootstrapHelp').textContent = 'First-stage bootstrap installs prerequisites; it does not require the Watchdog to already be running.';
   setBootstrap(bootstrapFor(platformInfo.os));
+}
+
+async function recoverRuntime() {
+  const button = document.getElementById('recoverRuntime');
+  const status = document.getElementById('recoveryStatus');
+  button.disabled = true;
+  status.textContent = 'Checking…';
+  const health = await request('/health');
+  if (health?.ok) {
+    status.textContent = `Watchdog v${health.version || ''} is online. If a ChatGPT tab still says Offline, use its Reconnect ChatSentinel button.`;
+    status.className = 'ok';
+    button.disabled = false;
+    return;
+  }
+  const command = platformInfo.os === 'mac' ? MAC_RECOVERY : WINDOWS_RECOVERY;
+  let copied = false;
+  try { await navigator.clipboard.writeText(command); copied = true; } catch {}
+  setBootstrap(command);
+  status.textContent = copied
+    ? 'Watchdog is offline. Recovery command copied; run it, then click Refresh status.'
+    : 'Watchdog is offline. Recovery command is shown below; run it, then click Refresh status.';
+  status.className = 'warn';
+  button.disabled = false;
 }
 
 function setBootstrap(value) {
