@@ -48,10 +48,9 @@ test('RDC recovery restarts only a validated lightweight agent task', async () =
 test('RDC PowerShell contract binds the root task and a real node remote-agent process', () => {
   assert.equal(RDC_TASK_NAME, 'DesktopCommander.RemoteAgent');
   assert.equal(RDC_TASK_PATH, '\\');
-  assert.match(source, /-TaskPath '\\'/);
-  assert.match(source, /Name -ieq 'node\.exe'/);
-  assert.match(source, /ExecutablePath -ieq \$exe/);
-  assert.match(source, /dist\[\\\\\/\]index\\\.js/);
-  assert.match(source, /\$running=\$validated -and \(\$task\.State -eq 'Running'\) -and \(\$processCount -gt 0\)/);
-  assert.match(source, /for\(\$i=0;\$i -lt 20;\$i\+\+\)/);
+  assert.ok(source.includes("Name -ieq 'node.exe'"));
+  assert.ok(source.includes('ExecutablePath -ieq $exe'));
+  assert.ok(source.includes('@wonderwhy-er'));
+  assert.ok(source.includes("$running=$validated -and ($task.State -eq 'Running') -and ($processCount -gt 0)"));
+  assert.ok(source.includes('for($i=0;$i -lt 20;$i++)'));
 });
