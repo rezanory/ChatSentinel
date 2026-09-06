@@ -100,3 +100,22 @@ test('invalidated MV3 context never reloads while a response is still generating
   assert.equal(result.action, 'wait');
   assert.notEqual(sandbox.location.reloaded, true);
 });
+
+test('offline recovery is loaded by manifest and every bounded reinjection path', () => {
+  const manifest = JSON.parse(fs.readFileSync(new URL('../extension/manifest.json', import.meta.url), 'utf8'));
+  const scripts = manifest.content_scripts.flatMap(row => row.js || []);
+  assert.ok(scripts.includes('components/offline-recovery/controller.js'));
+
+  const background = fs.readFileSync(new URL('../extension/background.js', import.meta.url), 'utf8');
+  const executor = fs.readFileSync(new URL('../extension/command-executor.js', import.meta.url), 'utf8');
+  assert.match(background, /project-console\.js', 'components\/offline-recovery\/controller\.js'/);
+  assert.match(executor, /project-console\.js', 'components\/offline-recovery\/controller\.js'/);
+});
+
+test('Setup Assistant exposes the bounded runtime recovery action', () => {
+  const html = fs.readFileSync(new URL('../extension/setup.html', import.meta.url), 'utf8');
+  const setup = fs.readFileSync(new URL('../extension/setup.js', import.meta.url), 'utf8');
+  assert.match(html, /id="recoverRuntime"/);
+  assert.match(setup, /recover-runtime\.ps1/);
+  assert.match(setup, /Watchdog is offline/);
+});
