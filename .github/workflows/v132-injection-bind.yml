@@ -1,0 +1,49 @@
+name: v1.3.2 Injection Bind
+
+on:
+  push:
+    branches:
+      - fix/v1.3.2-offline-recovery-control
+    paths:
+      - .github/workflows/v132-injection-bind.yml
+
+permissions:
+  contents: write
+
+jobs:
+  bind-injection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/v1.3.2-offline-recovery-control
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Add recovery controller to bounded reinjection lists
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const files = ['extension/background.js', 'extension/command-executor.js'];
+          const needle = "'components/full-project-mode/controller.js', 'project-console.js']";
+          const replacement = "'components/full-project-mode/controller.js', 'project-console.js', 'components/offline-recovery/controller.js']";
+          for (const file of files) {
+            const before = fs.readFileSync(file, 'utf8');
+            if (!before.includes(needle)) throw new Error(`reinjection anchor missing: ${file}`);
+            const after = before.replaceAll(needle, replacement);
+            fs.writeFileSync(file, after, 'utf8');
+          }
+          NODE
+          node --check extension/background.js
+          node --check extension/command-executor.js
+      - name: Commit reinjection binding
+        shell: bash
+        run: |
+          git config user.name 'ChatSentinel Release Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add extension/background.js extension/command-executor.js
+          git diff --cached --check
+          git commit -m 'fix: rehydrate offline recovery after extension reload'
+          git push origin HEAD:fix/v1.3.2-offline-recovery-control
