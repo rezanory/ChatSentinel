@@ -147,3 +147,102 @@ must be explicit N/A_OPTIONAL_DISABLED. Acceptance does not imply production/ext
 
 This ledger is additive to the hash-pinned project workflow/architecture. A Project Profile may strengthen it but may not
 weaken Universal Core invariants. Conflicts are resolved by the authority order in `control/nextgen/spec/SPEC_INDEX.yaml`.
+
+## R-016 Stable-1.2 Reliability Floor
+
+`stable/v1.2.1` is the behavioral reliability reference for the core development loop.
+It is not architectural authority and does not limit NextGen capability growth, but no new capability may be accepted
+if it measurably reduces the reliability of the equivalent core loop below the stable-1.2 reference.
+
+The comparison corpus must include at least:
+- detect a dead/idle worker;
+- continue/recover without duplicate side effects;
+- create/attach a lane exactly once;
+- preserve a running long tool/test instead of interrupting it;
+- recover a crashed/reloaded browser surface;
+- resume after disconnect;
+- advance work while independent safe work exists;
+- never silently stop a non-terminal project.
+
+A regression against this floor blocks readiness even if all feature-local tests are GREEN.
+
+## R-017 Logical Objective != Command Completion
+
+Command execution, command generation and logical objective completion are separate identities.
+A successful or deduplicated command proves only that command execution state; it MUST NOT prove that the lane/project objective is complete.
+
+Every supervised objective that can outlive one command requires:
+- objective_id;
+- command_generation;
+- execution_attempt_id;
+- terminal_objective_predicate;
+- next-action predicate when non-terminal;
+- independent supervision after command success.
+
+WAVEADV/continuation is the canonical example: CREATE/SEND may succeed once while the continuation objective remains active.
+Idempotency protects side effects; it must never suppress required future generations of a still-live objective.
+
+## R-018 Long-Horizon No-Silent-Stop Assurance
+
+Feature-local GREEN is insufficient for orchestration acceptance.
+NextGen requires long-horizon and accelerated-soak scenarios across multiple waves, reconnects, retries, browser restarts and validator/integration transitions.
+
+Invariant:
+If a project is non-terminal, no protected human/external blocker is proven, and safe admissible work exists, then within a bounded supervision interval the system must expose at least one of:
+- active meaningful work;
+- queued/scheduled next work;
+- active validation/integration;
+- bounded recovery/reconciliation;
+- explicit blocker proof.
+
+`non_terminal + no_proven_blocker + zero_actionable_progress` is a critical failure named `SILENT_PROJECT_STOP`.
+The soak suite must specifically cover WAVEADV idle-after-response, dedupe-after-success, stale UI, lost heartbeat, returning old owner and long-running tool cases.
+
+## R-019 Runtime / Extension / Desktop Version Coherence
+
+A deployment is not healthy merely because each surface is individually healthy.
+Core, Desktop, Browser Bridge and compatibility supervisor must expose exact build/version identities and a compatibility contract.
+
+Before enabling automation, Core must verify:
+- Core build/version and source identity;
+- Browser Bridge manifest/build identity;
+- Desktop build identity when present;
+- protocol/schema versions;
+- compatibility matrix status;
+- active local source/install path.
+
+Unknown or incompatible mixed versions are `RUNTIME_VERSION_DRIFT` and must block protected orchestration actions until reconciled.
+The system must never silently operate a 1.3.x backend with an older/different extension while reporting one coherent release.
+
+## R-020 Thin Orchestrator / Separated Control Responsibilities
+
+The terminal Orchestrator is a coordinator, not a monolith.
+It may sequence decisions, but authoritative logic must live behind explicit subsystems/contracts for:
+- DAG/frontier scheduling;
+- liveness/progress/process health;
+- leases and fencing;
+- command queue/idempotency;
+- recovery;
+- Git/worktree reconciliation;
+- validation/integration;
+- workflow/objective continuation.
+
+A Component review must reject responsibility accumulation that makes one controller the hidden owner of unrelated domains.
+Code size alone is not a gate, but cross-domain decision authority without a contract boundary is a design defect.
+## R-021 Component-First Multi-Lane Execution Topology
+
+The controller conversation/session is coordination authority only; it MUST NOT become the default author for every Component.
+For every maximum-safe DAG frontier, independent Components are materialized into separate worktrees/lane identities and may run concurrently within WIP/resource/risk limits.
+
+Required separation:
+- one controller/orchestration lane;
+- separate authoring lane per admitted Component;
+- separate independent validation lane/worktree for each frozen source candidate;
+- separate reuse/research lanes where prior-art scans can proceed without blocking authoring;
+- one serialized Pack Integration Spine per affected shared integration scope.
+
+A temporary tooling outage may force one human/AI session to coordinate several lanes, but that is degraded execution, not the target topology.
+It must be recorded as `DEGRADED_SINGLE_SESSION_COORDINATION` and may not be used as justification to serialize independent DAG work.
+
+Ready source code/public prior art should be investigated by dedicated reuse lanes in parallel, then exact-pinned and handed to the owning Component.
+The controller should spend context on scheduling, reconciliation, blocker proof and handoff—not on serially implementing every independent Component.

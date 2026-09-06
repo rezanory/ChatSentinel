@@ -1,102 +1,123 @@
-{
-  "schema_version": "1.0",
-  "project": "ChatSentinel NextGen",
-  "updated_at": "2026-09-06T17:44:00Z",
-  "normative_workflow": {
-    "name": "Canonical Software Engineering Workflow",
-    "version": "3.0.1",
-    "sha256": "cf74c19b44f7b0230dba9ee6b045de2a1a953168ae142b7b8af51312ad9d4b07"
-  },
-  "project_workflow": {
-    "version": "1.1",
-    "sha256": "65e3841457035810c980568d195912f87c6bbf0b8378ad77153a1652a2a24803"
-  },
-  "target_architecture": {
-    "version": "1.1",
-    "sha256": "8e0bdf7fa121b00fb53f0acf8ea9c52ba3d679a590dfe31e179b320ce715141d"
-  },
-  "project_profile": {
-    "version": "1.1",
-    "sha256": "c0deb91efeaaf8c51870cc60fa00035aad7db61bec0a0fd2e93d10376cbf3440",
-    "terminal_execution_profile": "EP2",
-    "terminal_mandatory_maturity": "L5"
-  },
-  "bootstrap_bundle": {
-    "version": "1.1",
-    "sha256": "73817128589a541736e680f33b41a89599b38fe77b5ffb5ea83b56272b2655f1"
-  },
-  "repo": "rezanory/ChatSentinel",
-  "canonical_trunk": "feat/nextgen-ep2-l5-v1",
-  "state_parent_head": "c0d3ee56d276bc4defe3855f07a98d0373db069e",
-  "state_parent_tree": "eb7e3e07df50896bfb0e1bf0e1b9407e63e88df4",
-  "legacy_working_backup": {
-    "branch": "backup/v1.3.4-working-20260906",
-    "sha": "874112cff9d77837f93cdd616abe620d1aa2e4dd",
-    "tree": "05acb3a515206b5ed24e0be48b406b830b715a31"
-  },
-  "older_backup": {
-    "branch": "backup/v1.3.2-working-20260906",
-    "sha": "09710ff1071e64ab10ce89ed6b755c20771d5013",
-    "tree": "2f78cae91771ebc72edd92430f0bd515e4bbe0b2"
-  },
-  "components": {
-    "PH01-P02-C05": {
-      "name": "ModuleRegistryFeatureToggle",
-      "status": "READY_AND_INTEGRATED",
-      "admission": {
-        "branch": "governance/ph01-p02-c05-admission-v1",
-        "commit": "f58365285e2e6eff3dc311c96f0202ed5353b9cc"
-      },
-      "source": {
-        "branch": "feat/ph01-p02-c05-module-registry-v1",
-        "commit": "d9dd64783af37cb99eb4d6da1352b2ae1e126c1c",
-        "tree": "b133e73a40ac7b781ff9805ccdedb5d0ec146d5f",
-        "evidence_commit": "8d1784ec93427b1ed9a9bf54955843dc95b56d40"
-      },
-      "validation": {
-        "branch": "validation/ph01-p02-c05-exact-v1",
-        "receipt_commit": "a511eafba34e1f6fd51cb1d77a2d969326f67de3",
-        "receipt_tree": "8b3f7e16a1ae7ee34f2ac4ffb404f779bcf99c28",
-        "verdict": "GREEN"
-      },
-      "integration": {
-        "branch": "integration/ph01-p02-spine-v1",
-        "candidate_commit": "36a7ba4f1586956d849a81c15b582006170704ee",
-        "candidate_tree": "b133e73a40ac7b781ff9805ccdedb5d0ec146d5f",
-        "receipt_commit": "4daca6c0a90fbd076f79751970b2935052e00799",
-        "readiness_commit": "c0d3ee56d276bc4defe3855f07a98d0373db069e",
-        "verdict": "GREEN"
-      }
-    }
-  },
-  "current_frontier": [
-    "PH01-P01-C01",
-    "PH01-P02-C06",
-    "PH01-P02-C07"
-  ],
-  "frontier_is_advisory_until_admission": true,
-  "runtime_notes": {
-    "browser_e2e_current_machine_wait_ms": 180000,
-    "browser_e2e_current_machine_cdp_timeout_ms": 30000,
-    "reason": "Observed browser-load flake; source-independent harness timing only.",
-    "current_C_ChatSentinel_state": "MIXED_DIRTY_NOT_CANONICAL_ROLLBACK"
-  },
-  "canonical_requirements_file": "control/nextgen/REQUIREMENTS_LEDGER.md",
-  "spec_index_file": "control/nextgen/spec/SPEC_INDEX.yaml",
-  "frontier_file": "control/nextgen/dag/FRONTIER.json",
-  "legacy_runtime_policy": {
-    "user_reported_current_family": "1.2",
-    "exact_stable_reference": {
-      "branch": "backup/v1.2.1-working-reference-20260906",
-      "sha": "05d7370a43087845d806389f5ae867f81b82df73",
-      "tree": "f6163b7b8d3e46335e91adc5b7e5528e5f136593"
-    },
-    "v1_3_4_status": "NOT_WORKING_DO_NOT_USE_AS_NEXTGEN_SUPERVISOR",
-    "v1_3_4_reference_only": {
-      "branch": "backup/v1.3.4-working-20260906",
-      "sha": "874112cff9d77837f93cdd616abe620d1aa2e4dd"
-    },
-    "current_nextgen_supervision": "DIRECT_RDC_PLUS_EXACT_GIT_WORKTREES",
-    "rollback_evidence": "control/nextgen/evidence/legacy-runtime/ROLLBACK_STATE_20260906.yaml"
-  }
+﻿{
+    "schema_version":  "1.0",
+    "project":  "ChatSentinel NextGen",
+    "updated_at":  "2026-09-06T17:44:00Z",
+    "normative_workflow":  {
+                               "name":  "Canonical Software Engineering Workflow",
+                               "version":  "3.0.1",
+                               "sha256":  "cf74c19b44f7b0230dba9ee6b045de2a1a953168ae142b7b8af51312ad9d4b07"
+                           },
+    "project_workflow":  {
+                             "version":  "1.1",
+                             "sha256":  "65e3841457035810c980568d195912f87c6bbf0b8378ad77153a1652a2a24803"
+                         },
+    "target_architecture":  {
+                                "version":  "1.1",
+                                "sha256":  "8e0bdf7fa121b00fb53f0acf8ea9c52ba3d679a590dfe31e179b320ce715141d"
+                            },
+    "project_profile":  {
+                            "version":  "1.1",
+                            "sha256":  "c0deb91efeaaf8c51870cc60fa00035aad7db61bec0a0fd2e93d10376cbf3440",
+                            "terminal_execution_profile":  "EP2",
+                            "terminal_mandatory_maturity":  "L5"
+                        },
+    "bootstrap_bundle":  {
+                             "version":  "1.1",
+                             "sha256":  "73817128589a541736e680f33b41a89599b38fe77b5ffb5ea83b56272b2655f1"
+                         },
+    "repo":  "rezanory/ChatSentinel",
+    "canonical_trunk":  "feat/nextgen-ep2-l5-v1",
+    "state_parent_head":  "c0d3ee56d276bc4defe3855f07a98d0373db069e",
+    "state_parent_tree":  "eb7e3e07df50896bfb0e1bf0e1b9407e63e88df4",
+    "legacy_working_backup":  {
+                                  "branch":  "backup/v1.3.4-working-20260906",
+                                  "sha":  "874112cff9d77837f93cdd616abe620d1aa2e4dd",
+                                  "tree":  "05acb3a515206b5ed24e0be48b406b830b715a31"
+                              },
+    "older_backup":  {
+                         "branch":  "backup/v1.3.2-working-20260906",
+                         "sha":  "09710ff1071e64ab10ce89ed6b755c20771d5013",
+                         "tree":  "2f78cae91771ebc72edd92430f0bd515e4bbe0b2"
+                     },
+    "components":  {
+                       "PH01-P02-C05":  {
+                                            "name":  "ModuleRegistryFeatureToggle",
+                                            "status":  "READY_AND_INTEGRATED",
+                                            "admission":  {
+                                                              "branch":  "governance/ph01-p02-c05-admission-v1",
+                                                              "commit":  "f58365285e2e6eff3dc311c96f0202ed5353b9cc"
+                                                          },
+                                            "source":  {
+                                                           "branch":  "feat/ph01-p02-c05-module-registry-v1",
+                                                           "commit":  "d9dd64783af37cb99eb4d6da1352b2ae1e126c1c",
+                                                           "tree":  "b133e73a40ac7b781ff9805ccdedb5d0ec146d5f",
+                                                           "evidence_commit":  "8d1784ec93427b1ed9a9bf54955843dc95b56d40"
+                                                       },
+                                            "validation":  {
+                                                               "branch":  "validation/ph01-p02-c05-exact-v1",
+                                                               "receipt_commit":  "a511eafba34e1f6fd51cb1d77a2d969326f67de3",
+                                                               "receipt_tree":  "8b3f7e16a1ae7ee34f2ac4ffb404f779bcf99c28",
+                                                               "verdict":  "GREEN"
+                                                           },
+                                            "integration":  {
+                                                                "branch":  "integration/ph01-p02-spine-v1",
+                                                                "candidate_commit":  "36a7ba4f1586956d849a81c15b582006170704ee",
+                                                                "candidate_tree":  "b133e73a40ac7b781ff9805ccdedb5d0ec146d5f",
+                                                                "receipt_commit":  "4daca6c0a90fbd076f79751970b2935052e00799",
+                                                                "readiness_commit":  "c0d3ee56d276bc4defe3855f07a98d0373db069e",
+                                                                "verdict":  "GREEN"
+                                                            }
+                                        }
+                   },
+    "current_frontier":  [
+                             "PH01-P01-C01",
+                             "PH01-P02-C06",
+                             "PH01-P02-C07"
+                         ],
+    "frontier_is_advisory_until_admission":  true,
+    "runtime_notes":  {
+                          "browser_e2e_current_machine_wait_ms":  180000,
+                          "browser_e2e_current_machine_cdp_timeout_ms":  30000,
+                          "reason":  "Observed browser-load flake; source-independent harness timing only.",
+                          "current_C_ChatSentinel_state":  "MIXED_DIRTY_NOT_CANONICAL_ROLLBACK"
+                      },
+    "canonical_requirements_file":  "control/nextgen/REQUIREMENTS_LEDGER.md",
+    "spec_index_file":  "control/nextgen/spec/SPEC_INDEX.yaml",
+    "frontier_file":  "control/nextgen/dag/FRONTIER.json",
+    "legacy_runtime_policy":  {
+                                  "user_reported_current_family":  "1.2",
+                                  "exact_stable_reference":  {
+                                                                 "branch":  "backup/v1.2.1-working-reference-20260906",
+                                                                 "sha":  "05d7370a43087845d806389f5ae867f81b82df73",
+                                                                 "tree":  "f6163b7b8d3e46335e91adc5b7e5528e5f136593"
+                                                             },
+                                  "v1_3_4_status":  "NOT_WORKING_DO_NOT_USE_AS_NEXTGEN_SUPERVISOR",
+                                  "v1_3_4_reference_only":  {
+                                                                "branch":  "backup/v1.3.4-working-20260906",
+                                                                "sha":  "874112cff9d77837f93cdd616abe620d1aa2e4dd"
+                                                            },
+                                  "current_nextgen_supervision":  "DIRECT_RDC_PLUS_EXACT_GIT_WORKTREES",
+                                  "rollback_evidence":  "control/nextgen/evidence/legacy-runtime/ROLLBACK_STATE_20260906.yaml"
+                              },
+    "reliability_reference":  {
+                                  "branch":  "stable/v1.2.1",
+                                  "sha":  "05d7370a43087845d806389f5ae867f81b82df73",
+                                  "tree":  "f6163b7b8d3e46335e91adc5b7e5528e5f136593",
+                                  "role":  "BEHAVIORAL_RELIABILITY_FLOOR",
+                                  "backup_branch":  "backup/v1.2.1-working-reference-20260906"
+                              },
+    "architecture_regression_invariants":  [
+                                               "STABLE_1_2_RELIABILITY_FLOOR",
+                                               "LOGICAL_OBJECTIVE_NOT_COMMAND_COMPLETION",
+                                               "NO_SILENT_PROJECT_STOP",
+                                               "RUNTIME_VERSION_COHERENCE",
+                                               "THIN_ORCHESTRATOR_SEPARATED_RESPONSIBILITIES"
+                                           ],
+    "execution_topology":  {
+                               "mode":  "DEGRADED_SINGLE_SESSION_COORDINATION",
+                               "target":  "CONTROLLER_PLUS_INDEPENDENT_COMPONENT_WORKERS",
+                               "reason":  "v1.3.4 supervisor disabled after reliability regression; chat-level worker automation not currently trusted",
+                               "serialization_allowed_only_when":  "DAG/resource/risk/authority requires it",
+                               "controller_default_author":  false
+                           }
 }
