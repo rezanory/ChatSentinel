@@ -1,0 +1,56 @@
+name: v1.3.3 Author Fix Once
+
+on:
+  push:
+    branches:
+      - fix/v1.3.3-panel-repair-history-noise
+    paths:
+      - .github/workflows/v133-author-fix-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-author:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/v1.3.3-panel-repair-history-noise
+          fetch-depth: 0
+      - name: Repair author workflow expression grouping
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/v133-author-once.yml')
+          text = path.read_text(encoding='utf-8')
+
+          def fix_write_call(text, opener, next_marker):
+              if text.count(opener) != 1:
+                  raise SystemExit(f'opener count mismatch: {opener} -> {text.count(opener)}')
+              text = text.replace(opener, opener.replace(", '''", ", ('''"), 1)
+              marker_pos = text.find(next_marker)
+              if marker_pos < 0:
+                  raise SystemExit(f'next marker missing: {next_marker}')
+              close = "''').replace('          ', '')"
+              close_pos = text.rfind(close, 0, marker_pos)
+              if close_pos < 0:
+                  raise SystemExit(f'closing expression missing before {next_marker}')
+              text = text[:close_pos] + "''').replace('          ', ''))" + text[close_pos + len(close):]
+              return text
+
+          text = fix_write_call(text, "write('src/audit-history.js', '''", "          replace_once(\n              'src/server.js'")
+          text = fix_write_call(text, "write('test/panel-repair-history-noise.test.js', '''", "          # Let the existing cross-platform verification workflows")
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+      - name: Commit repair and retire fixer
+        shell: bash
+        run: |
+          git config user.name 'rezanory'
+          git config user.email '62356000+rezanory@users.noreply.github.com'
+          git rm .github/workflows/v133-author-fix-once.yml
+          git add .github/workflows/v133-author-once.yml
+          git commit -m 'ci: fix v1.3.3 author expression grouping'
+          git push origin HEAD:fix/v1.3.3-panel-repair-history-noise
