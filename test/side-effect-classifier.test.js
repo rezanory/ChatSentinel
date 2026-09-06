@@ -38,3 +38,18 @@ test('unknown clean write state remains conservative', () => {
 test('explicit readonly policy is enough without a repository', () => {
   assert.equal(classifySideEffectRisk({ policy: { operationClass: 'read_only' } }), 'none');
 });
+
+test('stale cached remote evidence can never be treated as a fresh checkpoint', () => {
+  assert.equal(isFreshCheckpoint({ ...clean, remoteHeadFresh: false }), false);
+});
+
+test('semantic working-tree evidence identifies concrete possible side effects', () => {
+  assert.equal(classifySideEffectRisk({
+    reconciliation: {
+      ...clean,
+      clean: false,
+      changeSummary: { total: 1, staged: 1, unstaged: 0, untracked: 0, conflicted: 0 }
+    },
+    policy: { operationClass: 'read_only' }
+  }), 'possible');
+});

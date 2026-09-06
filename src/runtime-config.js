@@ -16,6 +16,7 @@ export const runtimeConfig = Object.freeze({
   maxSessions: intEnv('CHATSENTINEL_MAX_SESSIONS', 500, 10, 5000),
   maxBodyBytes: intEnv('CHATSENTINEL_MAX_BODY_BYTES', 64 * 1024, 1024, 1024 * 1024),
   rateLimitPerMinute: intEnv('CHATSENTINEL_RATE_LIMIT_PER_MIN', 600, 60, 10_000),
+  reconcileRemoteTtlMs: intEnv('CHATSENTINEL_RECONCILE_REMOTE_TTL_MS', 15_000, 1_000, 5 * 60_000),
   testMode: process.env.CHATSENTINEL_TEST_MODE === '1'
 });
 

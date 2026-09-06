@@ -1,20 +1,26 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 
+const execFileAsync = promisify(execFile);
+
 const ROOT = path.resolve('.');
 const PORT = 4319;
 const BASE = `http://127.0.0.1:${PORT}`;
 const dataDir = path.join(os.tmpdir(), `chatsentinel-prod-smoke-${process.pid}`);
+const projectDir = path.join(dataDir, 'project');
+const originDir = path.join(dataDir, 'origin.git');
 let child;
 
 try {
+  await createCleanGitFixture();
   child = startWatchdog();
   await waitHealth();
   const project = (await post('/projects/upsert', {
-    name: 'Production Smoke', projectPath: ROOT, operationClass: 'read_only',
+    name: 'Production Smoke', projectPath: projectDir, operationClass: 'read_only',
     autoRecovery: true, groupTabs: true, color: 'blue'
   })).project;
   await post('/projects/attach', {
@@ -55,6 +61,25 @@ try {
 } finally {
   child?.kill();
   await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
+}
+
+async function createCleanGitFixture() {
+  await fs.mkdir(dataDir, { recursive: true });
+  await fs.mkdir(projectDir, { recursive: true });
+  await fs.writeFile(path.join(projectDir, 'README.md'), '# production smoke\n', 'utf8');
+  await git(projectDir, ['init', '-b', 'main']);
+  await git(projectDir, ['config', 'user.name', 'ChatSentinel Smoke']);
+  await git(projectDir, ['config', 'user.email', 'smoke@localhost']);
+  await git(projectDir, ['add', 'README.md']);
+  await git(projectDir, ['commit', '-m', 'smoke baseline']);
+  await fs.mkdir(originDir, { recursive: true });
+  await git(originDir, ['init', '--bare']);
+  await git(projectDir, ['remote', 'add', 'origin', originDir]);
+  await git(projectDir, ['push', '-u', 'origin', 'main']);
+}
+
+async function git(cwd, args) {
+  await execFileAsync('git', ['-C', cwd, ...args], { windowsHide: true, timeout: 15000 });
 }
 
 function startWatchdog() {

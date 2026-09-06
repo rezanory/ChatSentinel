@@ -1,10 +1,12 @@
-(() => {
+﻿(() => {
   let lastMutationAt = Date.now();
   let lastSignal = '';
   const runtimeContext = globalThis.ChatSentinelRuntimeContext;
   let disposed = false;
   let observer = null;
   let heartbeatTimer = null;
+  let lastAssistantFingerprint = '';
+  let lastAssistantChangedAt = Date.now();
 
   const runtimeListener = (message, _sender, sendResponse) => {
     if (message?.type === 'CHATSENTINEL_GET_IDENTITY') {
@@ -13,6 +15,7 @@
     }
     if (message?.type === 'CHATSENTINEL_GET_LAUNCH_STATE') {
       const guard = globalThis.ChatSentinelTabLaunchGuard;
+      const experience = globalThis.ChatSentinelChatExperienceGuard?.ensureChat?.(document) || { detected: false, changed: false };
       const requestRate = globalThis.ChatSentinelRequestRateLimit;
       const rateObservation = requestRate?.inspect?.(document) || { active: false, incidentKey: '' };
       const state = guard?.inspectPage?.(document) || { healthy: false, rateLimited: false, crashed: false, reason: 'launch-guard-unavailable' };
@@ -24,7 +27,10 @@
         rateLimited: rateObservation.active || state.rateLimited,
         reason: rateObservation.active ? 'chatgpt-rate-limited' : state.reason,
         requestRateLimitIncidentKey: rateObservation.incidentKey || '',
-        requestRateLimitDismissed: Boolean(rateDismissal?.dismissed)
+        requestRateLimitDismissed: Boolean(rateDismissal?.dismissed),
+        experienceDetected: Boolean(experience.detected),
+        workModeCorrected: Boolean(experience.changed),
+        workSelected: Boolean(experience.workSelected && !experience.chatSelected && !experience.changed)
       });
       return;
     }
@@ -81,6 +87,13 @@
     if (disposed) return;
     if (!runtimeContext?.isAlive?.()) { dispose(); return; }
     const text = document.body?.innerText || '';
+    const experience = globalThis.ChatSentinelChatExperienceGuard?.ensureChat?.(document) || { detected: false, changed: false };
+    const launchInspection = globalThis.ChatSentinelTabLaunchGuard?.inspectPage?.(document) || { healthy: true, crashed: false, reason: 'not-inspected' };
+    const assistant = lastAssistantTurn();
+    if (assistant.fingerprint && assistant.fingerprint !== lastAssistantFingerprint) {
+      lastAssistantFingerprint = assistant.fingerprint;
+      lastAssistantChangedAt = Date.now();
+    }
     const buttons = [...document.querySelectorAll('button')]
       .map(button => (button.innerText || button.getAttribute('aria-label') || '').trim())
       .filter(Boolean);
@@ -100,7 +113,8 @@
     const messageDeliveryRetryCount = delivery?.incidentKey
       ? globalThis.ChatSentinelMessageDeliveryRecovery?.retryCount?.(delivery.incidentKey) || 0
       : 0;
-    const conversationDead = /conversation not found|unable to load conversation/i.test(text);
+    const conversationDead = /conversation not found|unable to load conversation|conversation is unavailable/i.test(text);
+    const genericUiFailure = /there was an error generating a response|something went wrong|network error|failed to load|an error occurred|response failed/i.test(text);
     const progressAgeMs = testProgressAge() ?? (Date.now() - lastMutationAt);
     const uiFrozen = progressAgeMs >= 180000 && !stopVisible;
     const identity = currentIdentity();
@@ -115,6 +129,15 @@
       messageDeliveryTimedOut,
       messageDeliveryIncidentKey: delivery?.incidentKey,
       messageDeliveryRetryCount,
+      genericUiFailure,
+      pageCrashed: launchInspection.crashed === true,
+      pageFailureReason: launchInspection.reason || '',
+      experienceWorkDetected: Boolean(experience.detected),
+      workModeCorrected: Boolean(experience.changed),
+      workSelected: Boolean(experience.workSelected && !experience.chatSelected && !experience.changed),
+      lastAssistantText: assistant.text,
+      lastAssistantFingerprint: assistant.fingerprint,
+      assistantSettledMs: assistant.fingerprint ? Math.max(0, Date.now() - lastAssistantChangedAt) : 0,
       requestRateLimited: requestRateObservation.active === true,
       requestRateLimitIncidentKey: requestRateObservation.incidentKey || '',
       requestRateLimitDismissed: Boolean(requestRateDismissal?.dismissed),
@@ -139,6 +162,21 @@
     }).catch(() => dispose());
   }
 
+  function lastAssistantTurn() {
+    const turns = [...document.querySelectorAll('[data-message-author-role="assistant"]')];
+    const node = turns.at(-1);
+    const text = String(node?.innerText || node?.textContent || '').replace(/\s+/g, ' ').trim().slice(-2000);
+    return { text, fingerprint: text ? simpleHash(text) : '' };
+  }
+
+  function simpleHash(value) {
+    let hash = 2166136261;
+    for (const character of String(value || '')) {
+      hash ^= character.charCodeAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
   function dispose() {
     if (disposed) return;
     disposed = true;

@@ -1,8 +1,9 @@
-importScripts('components/project-chat-lifecycle/controller.js', 'session-snapshot-store.js', 'session-restore-controller.js');
+importScripts('components/project-chat-lifecycle/controller.js', 'components/tab-resource-hygiene/controller.js', 'session-snapshot-store.js', 'session-restore-controller.js');
 
 const CONTENT_SCRIPT_FILES = Object.freeze([
   'components/runtime-context-guard/controller.js',
   'components/request-rate-limit/controller.js',
+  'components/chat-experience-guard/controller.js',
   'components/tab-launch-guard/controller.js',
   'components/message-delivery-recovery/controller.js',
   'components/prompt-delivery/controller.js',
@@ -33,6 +34,18 @@ importScripts('components/request-rate-limit/controller.js', 'components/tab-lau
 
 const crashRecoveryInFlight = new Set();
 const crashRecoveryPending = new Map();
+const signalOutbox = new Map();
+let signalFlushTimer = null;
+let signalTransportFailures = 0;
+let signalRetryAt = 0;
+const MAX_SIGNAL_OUTBOX = 500;
+const MAX_SIGNAL_BACKOFF_MS = 60_000;
+const RESOURCE_HYGIENE_ALARM = 'chatsentinel-resource-hygiene';
+chrome.alarms.create(RESOURCE_HYGIENE_ALARM, { periodInMinutes: 2 });
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm?.name !== RESOURCE_HYGIENE_ALARM) return;
+  runResourceHygiene().catch(error => console.warn('ChatSentinel resource hygiene failed', error));
+});
 
 chrome.action.onClicked.addListener(tab => togglePanelInTab(tab));
 rehydrateOpenChatGptTabs('service-worker-start').catch(error => console.warn('ChatSentinel tab rehydrate failed', error));
@@ -60,6 +73,29 @@ chrome.tabs.onDetached.addListener(() => sessionRestoreController.scheduleCaptur
 chrome.tabGroups.onCreated.addListener(() => sessionRestoreController.scheduleCaptureAll('group-created'));
 chrome.tabGroups.onUpdated.addListener(() => sessionRestoreController.scheduleCaptureAll('group-updated'));
 chrome.tabGroups.onMoved.addListener(() => sessionRestoreController.scheduleCaptureAll('group-moved'));
+
+async function runResourceHygiene() {
+  const hygiene = globalThis.ChatSentinelTabResourceHygiene;
+  if (!hygiene) return { ok: false, reason: 'resource-hygiene-unavailable' };
+  const response = await apiRequest('/projects').catch(() => null);
+  const byTab = new Map();
+  for (const project of response?.projects || []) {
+    for (const chat of project.chats || []) {
+      if (Number.isInteger(Number(chat.tabId))) byTab.set(Number(chat.tabId), chat);
+    }
+  }
+  const tabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' }).catch(() => []);
+  const discarded = [];
+  for (const tab of tabs) {
+    const chat = byTab.get(Number(tab.id));
+    if (!chat) continue;
+    const gate = hygiene.safeToDiscard({ tab, chat });
+    if (!gate.allowed) continue;
+    const result = await chrome.tabs.discard(tab.id).catch(() => null);
+    if (result?.discarded) discarded.push({ tabId: tab.id, role: chat.role || 'worker', reason: gate.reason });
+  }
+  return { ok: true, discarded };
+}
 
 async function rehydrateOpenChatGptTabs(reason = 'manual') {
   const tabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' }).catch(() => []);
@@ -346,7 +382,7 @@ async function probeTabActivity(tabId) {
   return result?.[0]?.result === true;
 }
 
-async function forwardSignal(signal, tab) {
+async function forwardSignal(signal, tab, options = {}) {
   const tabId = tab?.id;
   const conversationId = signal.conversationId || (tabId ? `tab:${tabId}` : 'unknown');
   const normalized = {
@@ -356,6 +392,18 @@ async function forwardSignal(signal, tab) {
     title: tab?.title,
     url: signal.url || tab?.url
   };
+  const base = watchdogBase(normalized.url);
+  const signalRequestId = options.requestId || newSignalRequestId();
+  if (Date.now() < signalRetryAt) {
+    queueSignal(normalized, tab, base, signalRequestId);
+    return {
+      ok: false,
+      queued: true,
+      error: 'watchdog-backoff-active',
+      retryAfterMs: Math.max(0, signalRetryAt - Date.now()),
+      execution: { executed: false, reason: 'signal-queued-during-watchdog-backoff' }
+    };
+  }
 
   await attachPendingProject(tabId, normalized);
   await migrateTabIdentity(tabId, conversationId, normalized);
@@ -370,10 +418,33 @@ async function forwardSignal(signal, tab) {
   const response = await apiRequest('/signal', 'POST', {
     ...normalized,
     retryCount: await effectiveRetryCount(normalized)
-  }, watchdogBase(normalized.url));
+  }, base, { requestId: signalRequestId });
 
-  if (!response.ok) return { ...response, execution: { executed: false, reason: 'watchdog-rejected' } };
+  if (!response.ok) {
+    if (isTransientSignalFailure(response)) {
+      noteSignalFailure(response);
+      queueSignal(normalized, tab, base, signalRequestId);
+      return {
+        ...response,
+        queued: true,
+        retryAfterMs: Math.max(0, signalRetryAt - Date.now()),
+        execution: { executed: false, reason: 'signal-queued-after-watchdog-failure' }
+      };
+    }
+    return { ...response, execution: { executed: false, reason: 'watchdog-rejected' } };
+  }
+  noteSignalSuccess();
   await recordDecision(conversationId, response);
+  if (normalized.pageCrashed && tabId) {
+    const observed = await chrome.tabs.get(tabId).catch(() => tab || null);
+    const recovery = await recoverCrashedProjectTab(tabId, observed || tab || {}, {
+      crashed: true,
+      reason: normalized.pageFailureReason || 'browser-crash-content',
+      url: normalized.url || tab?.url || '',
+      title: normalized.title || tab?.title || ''
+    }).catch(error => ({ ok: false, error: String(error), reason: 'page-crash-recovery-failed' }));
+    return { ...response, execution: recovery };
+  }
   const execution = await maybeAct(response, tabId, normalized);
   globalThis.ChatSentinelCommandManager?.kick?.();
   return { ...response, execution };
@@ -491,13 +562,87 @@ async function incrementRetryCount(conversationId) {
   await chrome.storage.local.set({ [key]: current + 1 });
 }
 
-async function apiRequest(route, method = 'GET', body, base = DEFAULT_WATCHDOG) {
-  const headers = { ...CLIENT_HEADERS };
+function newSignalRequestId() {
+  try { if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID(); } catch {}
+  return `signal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function isTransientSignalFailure(response = {}) {
+  const status = Number(response.status || 0);
+  return response.transportError === true || status === 429 || status >= 500;
+}
+
+function noteSignalFailure(response = {}) {
+  signalTransportFailures = Math.min(10, signalTransportFailures + 1);
+  const floor = Number(response.status) === 429 ? 5000 : 2000;
+  const delay = Math.min(MAX_SIGNAL_BACKOFF_MS, floor * (2 ** Math.min(5, signalTransportFailures - 1)));
+  signalRetryAt = Date.now() + delay;
+  scheduleSignalFlush(delay);
+}
+
+function noteSignalSuccess() {
+  signalTransportFailures = 0;
+  signalRetryAt = 0;
+  if (signalOutbox.size) scheduleSignalFlush(250);
+}
+function queueSignal(signal, tab, base, requestId) {
+  const key = String(signal?.conversationId || tab?.id || 'unknown');
+  signalOutbox.set(key, {
+    key,
+    signal: { ...(signal || {}) },
+    tabId: Number(tab?.id),
+    base,
+    requestId: requestId || newSignalRequestId(),
+    queuedAt: Date.now()
+  });
+  while (signalOutbox.size > MAX_SIGNAL_OUTBOX) {
+    const oldest = signalOutbox.keys().next().value;
+    if (oldest === undefined) break;
+    signalOutbox.delete(oldest);
+  }
+  scheduleSignalFlush(Math.max(250, signalRetryAt - Date.now()));
+}
+
+function scheduleSignalFlush(delayMs = 250) {
+  if (signalFlushTimer) return;
+  signalFlushTimer = setTimeout(() => {
+    signalFlushTimer = null;
+    flushSignalOutbox().catch(error => console.warn('ChatSentinel signal outbox flush failed', error));
+  }, Math.max(100, Math.min(MAX_SIGNAL_BACKOFF_MS, Number(delayMs || 0))));
+}
+async function flushSignalOutbox() {
+  if (Date.now() < signalRetryAt) {
+    scheduleSignalFlush(signalRetryAt - Date.now());
+    return { flushed: 0, deferred: signalOutbox.size };
+  }
+  let flushed = 0;
+  const entries = [...signalOutbox.entries()].slice(0, 8);
+  for (const [key, entry] of entries) {
+    if (Date.now() < signalRetryAt) break;
+    signalOutbox.delete(key);
+    const tab = Number.isInteger(entry.tabId)
+      ? await chrome.tabs.get(entry.tabId).catch(() => null)
+      : null;
+    if (!tab) continue;
+    await forwardSignal(entry.signal, tab, { requestId: entry.requestId, fromOutbox: true });
+    flushed += 1;
+  }
+  if (signalOutbox.size) scheduleSignalFlush(Math.max(250, signalRetryAt - Date.now()));
+  return { flushed, remaining: signalOutbox.size };
+}
+
+async function apiRequest(route, method = 'GET', body, base = DEFAULT_WATCHDOG, requestOptions = {}) {
+  const headers = { ...CLIENT_HEADERS, ...(requestOptions.headers || {}) };
+  if (requestOptions.requestId) headers['x-request-id'] = String(requestOptions.requestId);
   const options = { method, headers };
   if (body !== undefined) options.body = JSON.stringify(body);
-  const response = await fetch(`${base}${route}`, options);
-  const result = await response.json().catch(() => ({ ok: false, error: `http-${response.status}` }));
-  return response.ok ? result : { ...result, ok: false, status: response.status };
+  try {
+    const response = await fetch(`${base}${route}`, options);
+    const result = await response.json().catch(() => ({ ok: false, error: `http-${response.status}` }));
+    return response.ok ? result : { ...result, ok: false, status: response.status };
+  } catch (error) {
+    return { ok: false, transportError: true, error: 'watchdog-unreachable', detail: String(error?.message || error) };
+  }
 }
 
 function tabContext(tab) {

@@ -58,9 +58,15 @@
       };
     }
     const prompt = recovery?.buildContinuationPrompt?.(context) || defaultContinuePrompt(context);
-    const result = await sendPrompt(prompt);
-    if (result?.ok && ticket?.allowed) recovery?.markAttempt?.(ticket);
-    return { ...result, action: 'response-completion', responseCompletion: true };
+    if (ticket?.allowed) recovery?.markAttempt?.(ticket);
+    try {
+      const result = await sendPrompt(prompt);
+      if (!result?.ok && ticket?.allowed) recovery?.clearAttempt?.(ticket);
+      return { ...result, action: 'response-completion', responseCompletion: true };
+    } catch (error) {
+      if (ticket?.allowed) recovery?.clearAttempt?.(ticket);
+      throw error;
+    }
   }
 
   function defaultContinuePrompt(context) {
@@ -81,12 +87,12 @@
 
   async function sendPrompt(prompt) {
     const delivery = globalThis.ChatSentinelPromptDelivery;
-    if (!delivery?.prepare || !delivery?.click) {
+    if (!delivery?.prepare || (!delivery?.commit && !delivery?.click)) {
       return { ok: false, reason: 'prompt-delivery-component-unavailable' };
     }
     const prepared = await delivery.prepare(document, String(prompt || ''));
     if (!prepared?.ok) return { ...prepared, action: 'send-prompt', executed: false };
-    const clicked = delivery.click(prepared);
+    const clicked = delivery.commit ? await delivery.commit(prepared) : delivery.click(prepared);
     if (!clicked?.ok) return { ...clicked, action: 'send-prompt', executed: false };
     return {
       ok: true,

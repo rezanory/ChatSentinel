@@ -70,6 +70,11 @@ test('server persists config/session and restores them after restart', async t =
   assert.equal(supervisor.sessions[0].id, 'chat-prod');
   const health = await fetch(`${base}/health`).then(r => r.json());
   assert.equal(health.conversations, 1);
+  const metrics = await fetch(`${base}/metrics`).then(r => r.json());
+  assert.equal(metrics.ok, true);
+  assert.equal(metrics.counts.conversations, 1);
+  assert.equal(typeof metrics.memory.rss, 'number');
+  assert.equal(typeof metrics.reconciliation.remoteCacheEntries, 'number');
   await app.close();
 });
 
@@ -358,4 +363,32 @@ test('setup status and plan are readable but system apply requires a local proce
   assert.equal(body.ok, true);
   assert.ok(body.results.every(row => ['skipped', 'planned'].includes(row.status)));
   await app.close();
+});
+
+test('signal Request-ID makes transient transport retries idempotent', async t => {
+  const { dir, config } = await testConfig();
+  const app = await createWatchdogServer(config);
+  t.after(async () => {
+    await app.close().catch(() => {});
+    await cleanupDir(dir);
+  });
+  const base = await listen(app);
+  const headers = { 'content-type': 'application/json', 'x-request-id': 'signal-retry-0001' };
+  const body = JSON.stringify({
+    conversationId: 'dedupe-signal',
+    state: 'IDLE',
+    messageDeliveryTimedOut: true,
+    messageDeliveryRetryCount: 0
+  });
+
+  const first = await fetch(`${base}/signal`, { method: 'POST', headers, body }).then(r => r.json());
+  const second = await fetch(`${base}/signal`, { method: 'POST', headers, body }).then(r => r.json());
+  assert.equal(first.ok, true);
+  assert.equal(Boolean(first.replayed), false);
+  assert.equal(second.ok, true);
+  assert.equal(second.replayed, true);
+
+  const history = await fetch(`${base}/audit/history?limit=50`).then(r => r.json());
+  const matching = history.events.filter(event => event.type === 'recovery' && event.conversationId === 'dedupe-signal');
+  assert.equal(matching.length, 1);
 });

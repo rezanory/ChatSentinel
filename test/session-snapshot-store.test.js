@@ -125,3 +125,10 @@ test('restorable URL policy permits ChatGPT and local fixtures only', () => {
   assert.equal(normalizeRestorableUrl('https://example.org/'), '');
   assert.equal(normalizeRestorableUrl('javascript:alert(1)'), '');
 });
+test('restorable ChatGPT URLs strip Work or other mode state while preserving conversation identity', () => {
+  assert.equal(
+    normalizeRestorableUrl('https://chatgpt.com/c/abc123?mode=work&foo=bar#draft'),
+    'https://chatgpt.com/c/abc123'
+  );
+  assert.equal(normalizeRestorableUrl('https://chatgpt.com/work?mode=work'), 'https://chatgpt.com/');
+});

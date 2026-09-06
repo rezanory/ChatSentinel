@@ -7,6 +7,13 @@ import {
   OrchestratorAction
 } from './decision.js';
 import {
+  terminalCandidate,
+  parseJudgeDecision,
+  buildJudgeInstruction,
+  judgeNeedsRollover,
+  judgeChatForProject
+} from '../judge-supervisor/controller.js';
+import {
   normalizeWorkflow,
   resolveWorkflow,
   selectCurrentStage,
@@ -110,6 +117,9 @@ export async function tickProjectOrchestration(store, projectId, { logger } = {}
   for (const lane of effectivePlan.lanes || []) {
     rows.push(await inspectLaneRow(store, projectId, effectivePlan, lane));
   }
+  const auxiliaryCommands = [];
+  auxiliaryCommands.push(...await superviseTerminalCandidates(store, project, rows));
+  auxiliaryCommands.push(...await closeCompletedWorkerChats(store, project, rows));
 
   let integrationRow = null;
   let projectDecision;
@@ -122,6 +132,8 @@ export async function tickProjectOrchestration(store, projectId, { logger } = {}
       requiredRows.every(row => row?.completion?.complete === true);
     if (implementationsComplete && stage?.integrationLane) {
       integrationRow = await inspectLaneRow(store, projectId, effectivePlan, stage.integrationLane);
+      auxiliaryCommands.push(...await superviseTerminalCandidates(store, project, [integrationRow]));
+      auxiliaryCommands.push(...await closeCompletedWorkerChats(store, project, [integrationRow]));
     }
     stageState = stageCompletion(stage, rows, integrationRow);
     if (stageState.complete) {
@@ -143,7 +155,7 @@ export async function tickProjectOrchestration(store, projectId, { logger } = {}
   }
 
   const allRows = integrationRow ? [...rows, integrationRow] : rows;
-  const emitted = await materializeDecision(
+  const materialized = await materializeDecision(
     store,
     project,
     effectivePlan,
@@ -151,6 +163,13 @@ export async function tickProjectOrchestration(store, projectId, { logger } = {}
     projectDecision,
     { workflow, stage, stageState, workflowDecision }
   );
+  const materializedCommands = materialized?.commands || (materialized?.command ? [materialized.command] : []);
+  const combinedCommands = [...auxiliaryCommands, ...materializedCommands];
+  const emitted = {
+    ...(materialized || {}),
+    command: combinedCommands[0] || null,
+    commands: combinedCommands
+  };
   logger?.info?.('orchestrator-tick', {
     projectId,
     action: projectDecision.action,
@@ -201,7 +220,7 @@ async function inspectLaneRow(store, projectId, plan, lane) {
     activeCommand,
     lastCommand
   });
-  return { lane: effectiveLane, conversationId, session, git, completion, decision };
+  return { lane: effectiveLane, conversationId, session, git, completion, decision, activeCommand, lastCommand };
 }
 
 async function materializeDecision(store, project, plan, rows, decision, context = {}) {
@@ -281,6 +300,114 @@ async function materializeDecision(store, project, plan, rows, decision, context
     });
   }
   return null;
+}
+
+async function superviseTerminalCandidates(store, project, rows = []) {
+  const commands = [];
+  const row = rows.find(item => terminalCandidate(item, item.lastCommand));
+  if (!row) return commands;
+  const candidate = terminalCandidate(row, row.lastCommand);
+  row.decision = { action: OrchestratorAction.WAIT, reason: 'awaiting-judge-verdict' };
+
+  const judge = judgeChatForProject(store.configs, store.sessions, project.projectId);
+  const decision = judge ? parseJudgeDecision(judge.session?.lastAssistantText) : { verdict: '', incident: '' };
+  if (decision.incident === candidate.assistantFingerprint && decision.verdict) {
+    if (decision.verdict === 'HOLD') {
+      row.decision = { action: OrchestratorAction.WAIT, reason: 'judge-hold' };
+      return commands;
+    }
+    const continuationPrompt = buildJudgeContinuationPrompt(candidate, decision.verdict);
+    const emitted = await enqueueCommand(store, {
+      type: 'REPLACE_CHAT',
+      idempotencyKey: `judge:${project.projectId}:${candidate.laneId}:${candidate.assistantFingerprint}:replace`,
+      payload: {
+        projectId: project.projectId,
+        conversationId: candidate.conversationId,
+        tabId: candidate.tabId,
+        prompt: continuationPrompt,
+        laneId: candidate.laneId,
+        laneName: candidate.laneName,
+        branch: candidate.branch,
+        baselineSha: candidate.baselineSha,
+        role: row.lane?.role || 'worker',
+        closeOld: true
+      }
+    });
+    if (emitted?.command) commands.push(emitted.command);
+    row.decision = { action: OrchestratorAction.WAIT, reason: `judge-${decision.verdict.toLowerCase()}` };
+    return commands;
+  }
+  const prompt = buildJudgeInstruction(candidate);
+  let emitted;
+  if (!judge) {
+    emitted = await enqueueCommand(store, {
+      type: 'CREATE_LANE_CHAT',
+      idempotencyKey: `judge:${project.projectId}:${candidate.assistantFingerprint}:create`,
+      payload: {
+        projectId: project.projectId,
+        prompt,
+        laneId: '__JUDGE__',
+        laneName: `${project.name || 'Project'} Judge`,
+        role: 'judge'
+      }
+    });
+  } else {
+    const projectCommands = Object.values(store.commands).filter(command => command?.payload?.projectId === project.projectId);
+    const rollover = judgeNeedsRollover(projectCommands, 6, judge.config?.attachedAt);
+    emitted = await enqueueCommand(store, {
+      type: rollover ? 'REPLACE_CHAT' : 'SEND_PROMPT',
+      idempotencyKey: `judge:${project.projectId}:${candidate.assistantFingerprint}:${rollover ? 'rollover' : 'review'}`,
+      payload: {
+        projectId: project.projectId,
+        conversationId: judge.conversationId,
+        tabId: judge.config?.tabId,
+        prompt,
+        laneId: '__JUDGE__',
+        laneName: `${project.name || 'Project'} Judge`,
+        role: 'judge',
+        ...(rollover ? { closeOld: true } : {})
+      }
+    });
+  }
+  if (emitted?.command) commands.push(emitted.command);
+  return commands;
+}
+
+async function closeCompletedWorkerChats(store, project, rows = []) {
+  const commands = [];
+  for (const row of rows) {
+    if (!row?.completion?.complete || !row?.conversationId) continue;
+    const role = String(row.lane?.role || row.session?.role || '').toLowerCase();
+    if (role === 'judge') continue;
+    const emitted = await enqueueCommand(store, {
+      type: 'CLOSE_CHAT',
+      idempotencyKey: `orchestrator:${project.projectId}:${row.lane?.laneId}:close:${row.completion.head || 'complete'}`,
+      payload: {
+        projectId: project.projectId,
+        conversationId: row.conversationId,
+        tabId: row.session?.tabId,
+        laneId: row.lane?.laneId,
+        laneName: row.lane?.laneName,
+        role: row.lane?.role
+      }
+    });
+    if (emitted?.command) commands.push(emitted.command);
+  }
+  return commands;
+}
+
+function buildJudgeContinuationPrompt(candidate, verdict) {
+  return [
+    'Continue in this fresh worker chat. A separate ChatSentinel Judge reviewed the previous worker termination.',
+    `Judge verdict: ${verdict}.`,
+    `Incident: ${candidate.assistantFingerprint}.`,
+    `Previous completion gate: ${candidate.completionReason}.`,
+    'Reconcile GitHub/local and the canonical workflow first. Do not trust the previous final wording as completion evidence.',
+    'Preserve correct completed work, fix-forward only what remains in scope, run the required suites without fail-fast, push, and hand off.',
+    'Do not stop merely because a prose answer sounds final; stop only when the deterministic lane completion contract is satisfied.',
+    'Previous worker final excerpt:',
+    String(candidate.assistantExcerpt || '').slice(-1400)
+  ].join('\n');
 }
 
 export async function advanceWorkflow(store, project, plan, workflow, decision) {

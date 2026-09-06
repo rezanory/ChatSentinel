@@ -130,7 +130,8 @@ test('one active interruption incident is deduplicated during the attempt cooldo
   const values = new Map();
   const storage = {
     getItem(key) { return values.get(key) || null; },
-    setItem(key, value) { values.set(key, value); }
+    setItem(key, value) { values.set(key, value); },
+    removeItem(key) { values.delete(key); }
   };
   const first = api.prepareAttempt(root, storage, 100000, 30000);
   assert.equal(first.allowed, true);
@@ -140,4 +141,22 @@ test('one active interruption incident is deduplicated during the attempt cooldo
   assert.equal(duplicate.deduplicated, true);
   const retry = api.prepareAttempt(root, storage, 131000, 30000);
   assert.equal(retry.allowed, true);
+});
+
+test('failed async send can release its reserved interruption incident safely', () => {
+  const api = loadApi();
+  const root = documentWithTurns([
+    turn('assistant', 'Connection interrupted. Waiting for the complete answer', 'a1')
+  ]);
+  const values = new Map();
+  const storage = {
+    getItem(key) { return values.get(key) || null; },
+    setItem(key, value) { values.set(key, value); },
+    removeItem(key) { values.delete(key); }
+  };
+  const ticket = api.prepareAttempt(root, storage, 200000, 30000);
+  assert.equal(ticket.allowed, true);
+  assert.equal(api.markAttempt(ticket, storage, 200000), true);
+  assert.equal(api.clearAttempt(ticket, storage), true);
+  assert.equal(api.prepareAttempt(root, storage, 200001, 30000).allowed, true);
 });

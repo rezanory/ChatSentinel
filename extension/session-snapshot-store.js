@@ -252,6 +252,11 @@
       const fixture = url.protocol === 'http:' && (host === '127.0.0.1' || host === 'localhost');
       if (!chatGpt && !fixture) return '';
       url.hash = '';
+      if (chatGpt) {
+        const match = url.pathname.match(/^\/c\/([A-Za-z0-9_-]+)/);
+        url.pathname = match ? `/c/${match[1]}` : '/';
+        url.search = '';
+      }
       return url.toString();
     } catch {
       return '';

@@ -7,6 +7,7 @@
   document.documentElement.dataset.chatsentinelConsoleReady = '1';
   const HOST_ID = 'chatsentinel-project-console-host';
   const RECOVERY_BUTTON_ID = 'chatsentinel-runtime-recovery';
+  const RUNTIME_LISTENER_KEY = '__CHATSENTINEL_PROJECT_CONSOLE_RUNTIME_LISTENER__';
   const MIN_WIDTH = 330;
   const MAX_WIDTH = 680;
   let host;
@@ -29,16 +30,31 @@
     rdcStatus: null
   };
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type !== 'CHATSENTINEL_TOGGLE_PANEL') return;
-    togglePanel().then(() => sendResponse({ ok: true, open: state.open }))
+  const runtimeListener = (message, _sender, sendResponse) => {
+    if (!['CHATSENTINEL_TOGGLE_PANEL', 'CHATSENTINEL_SET_PANEL_OPEN'].includes(message?.type)) return;
+    const operation = message.type === 'CHATSENTINEL_SET_PANEL_OPEN'
+      ? setPanelOpen(message.open !== false)
+      : togglePanel();
+    operation.then(() => sendResponse({ ok: true, open: state.open }))
       .catch(error => sendResponse({ ok: false, error: String(error) }));
     return true;
-  });
+  };
+  try {
+    const previous = globalThis[RUNTIME_LISTENER_KEY];
+    if (previous) chrome.runtime.onMessage.removeListener(previous);
+  } catch {}
+  globalThis[RUNTIME_LISTENER_KEY] = runtimeListener;
+  chrome.runtime.onMessage.addListener(runtimeListener);
 
   async function togglePanel() {
     ensurePanel();
-    state.open = !state.open;
+    const currentlyOpen = host?.style?.display === 'block';
+    return setPanelOpen(!currentlyOpen);
+  }
+
+  async function setPanelOpen(open) {
+    ensurePanel();
+    state.open = Boolean(open);
     host.style.display = state.open ? 'block' : 'none';
     if (state.open) await refresh();
   }

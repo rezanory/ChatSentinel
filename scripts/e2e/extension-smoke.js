@@ -13,6 +13,7 @@ const TEST_PORT = Number(process.env.CHATSENTINEL_E2E_WATCHDOG_PORT || process.e
 const FIXTURE_PORT = Number(process.env.CHATSENTINEL_E2E_FIXTURE_PORT || await freePort(new Set([TEST_PORT])));
 const EXPECTED_EXTENSION_ID = 'pcidbmcahljjpbmaecjmfmpbpfnpoepc';
 const E2E_WAIT_MS = Math.max(10000, Number(process.env.CHATSENTINEL_E2E_WAIT_MS || 90000));
+const E2E_CDP_TIMEOUT_MS = Math.max(5000, Number(process.env.CHATSENTINEL_E2E_CDP_TIMEOUT_MS || 10000));
 const WATCHDOG = `http://127.0.0.1:${TEST_PORT}`;
 const FIXTURE = `http://127.0.0.1:${FIXTURE_PORT}`;
 const CHROME = process.env.CHROME_BIN || await findBrowserExecutable();
@@ -277,11 +278,8 @@ async function projectConsoleSuite() {
   assert.ok(tabA?.id, 'console tab A not found');
   await waitContentReady(tabA.id);
   await waitEval(pageA, "document.documentElement.dataset.chatsentinelConsoleReady === '1'");
-  let toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'}).catch(e=>({ok:false,error:String(e)}))`);
-  if (toggle?.ok && toggle.open !== true) {
-    toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'}).catch(e=>({ok:false,error:String(e)}))`);
-  }
-  assert.equal(toggle?.ok, true, `panel toggle failed: ${JSON.stringify(toggle)}`);
+  const toggle = await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_SET_PANEL_OPEN',open:true}).catch(e=>({ok:false,error:String(e)}))`);
+  assert.equal(toggle?.ok, true, `panel open failed: ${JSON.stringify(toggle)}`);
   assert.equal(toggle?.open, true, `panel did not become open: ${JSON.stringify(toggle)}`);
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.style.display === 'block'");
   await waitEval(pageA, "Boolean(document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('newProject'))");
@@ -378,8 +376,8 @@ async function projectConsoleSuite() {
   const completedId = `WEB:${RUN}-completed`;
   await postJson('/projects/attach', { projectId: project.projectId, conversationId: completedId, tabId: tabC.id, title: 'E2E completed chat', url: tabC.url });
   await postJson('/signal', { conversationId: completedId, tabId: tabC.id, state: 'COMPLETE', checkpointFresh: true });
-  await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'})`);
-  await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_TOGGLE_PANEL'})`);
+  await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_SET_PANEL_OPEN',open:false})`);
+  await workerValue(`chrome.tabs.sendMessage(${tabA.id},{type:'CHATSENTINEL_SET_PANEL_OPEN',open:true})`);
   await waitEval(pageA, "[...document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('projectList').querySelectorAll('button')].some(button => button.textContent.includes('E2E Project') && button.textContent.trim().endsWith('2'))");
   await waitEval(pageA, "!document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('chatList').textContent.includes('E2E completed chat')");
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('chatGroup').textContent.includes('1 inactive / stale registered chat hidden')");
@@ -673,7 +671,7 @@ async function cdp(target, method, params = {}) {
   });
   const id = Math.floor(Math.random() * 1_000_000) + 1;
   const response = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`CDP timeout: ${method}`)), 5000);
+    const timer = setTimeout(() => reject(new Error(`CDP timeout: ${method}`)), E2E_CDP_TIMEOUT_MS);
     ws.addEventListener('message', event => {
       const message = JSON.parse(event.data);
       if (message.id !== id) return;
@@ -682,8 +680,12 @@ async function cdp(target, method, params = {}) {
     });
   });
   ws.send(JSON.stringify({ id, method, params }));
-  const result = await response;
-  ws.close();
+  let result;
+  try {
+    result = await response;
+  } finally {
+    try { ws.close(); } catch {}
+  }
   if (result.error) throw new Error(JSON.stringify(result.error));
   return result;
 }

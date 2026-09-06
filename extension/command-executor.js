@@ -89,6 +89,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     if (!project) throw new Error('project-not-found');
     const progress = command.progress || {};
     let tab = progress.tabId ? await safeGetTab(progress.tabId) : null;
+    if (tab?.discarded) tab = await reviveDiscardedTab(tab);
 
     if (tab && progress.launchFailureReason === 'chatgpt-rate-limited') {
       await chrome.tabs.reload(tab.id).catch(() => {});
@@ -136,6 +137,9 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     if (launchState?.crashed) {
       await handleLaunchFailure(command, workerId, tab, launchState);
     }
+    if (launchState?.workSelected) {
+      await handleLaunchFailure(command, workerId, tab, { reason: 'work-mode-selected' });
+    }
     if (command.progress?.launchFailureReason) {
       await progressCommand(command, workerId, { step: 'launch-healthy', launchFailureReason: null });
     }
@@ -170,6 +174,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
       .catch(() => null);
     if (preSendState?.rateLimited) await handleRateLimitedLaunch(command, workerId, tab, preSendState);
     if (preSendState?.crashed) await handleLaunchFailure(command, workerId, tab, preSendState);
+    if (preSendState?.workSelected) throw retryableError('work-mode-not-corrected', 1500);
 
     if (!command.progress?.promptSent) {
       const delivery = await sendPromptWithVerification(
@@ -233,12 +238,14 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     const guard = globalThis.ChatSentinelTabLaunchGuard;
     if (!guard) throw new Error('tab-launch-guard-unavailable');
     const payload = command.payload || {};
-    const tab = await resolveTargetTab(payload);
+    let tab = await resolveTargetTab(payload);
     if (!tab) throw new Error('target-tab-not-found');
+    if (tab.discarded) tab = await reviveDiscardedTab(tab);
     await ensureContent(tab.id);
     const preSendState = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_GET_LAUNCH_STATE' }).catch(() => null);
     if (preSendState?.rateLimited) await handleRateLimitedLaunch(command, workerId, tab, preSendState);
     if (preSendState?.crashed) await handleLaunchFailure(command, workerId, tab, preSendState);
+    if (preSendState?.workSelected) throw retryableError('work-mode-not-corrected', 1500);
     await enforceRequestRateGate();
     if (!command.progress?.promptSent) {
       const delivery = await sendPromptWithVerification(command, workerId, tab, payload);
@@ -462,6 +469,13 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
     throw retryableError('request-rate-limit-cooldown', Math.min(60_000, Math.max(1000, Number(gate.waitMs || 0))));
   }
 
+  async function reviveDiscardedTab(tab) {
+    if (!tab?.discarded) return tab;
+    await chrome.tabs.reload(tab.id);
+    await sleep(1200);
+    return await safeGetTab(tab.id) || tab;
+  }
+
   function retryableError(message, retryAfterMs, terminal = false) {
     const error = new Error(message);
     error.retryAfterMs = retryAfterMs;
@@ -514,7 +528,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
       if (attempt === 2) {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['components/runtime-context-guard/controller.js', 'components/request-rate-limit/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js', 'components/offline-recovery/controller.js']
+          files: ['components/runtime-context-guard/controller.js', 'components/request-rate-limit/controller.js', 'components/chat-experience-guard/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js', 'components/offline-recovery/controller.js']
         }).catch(() => {});
       }
       await sleep(500);

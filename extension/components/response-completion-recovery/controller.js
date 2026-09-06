@@ -129,7 +129,16 @@
 
   function markAttempt(ticket, storage = safeSessionStorage(), now = Date.now()) {
     if (!ticket?.key || !storage?.setItem) return false;
-    storage.setItem(ticket.key, String(now));
+    ticket.reservedAt = Number(now);
+    storage.setItem(ticket.key, String(ticket.reservedAt));
+    return true;
+  }
+
+  function clearAttempt(ticket, storage = safeSessionStorage()) {
+    if (!ticket?.key || !storage?.getItem || !storage?.removeItem) return false;
+    const current = Number(storage.getItem(ticket.key) || 0);
+    if (ticket.reservedAt && current && current !== Number(ticket.reservedAt)) return false;
+    storage.removeItem(ticket.key);
     return true;
   }
 
@@ -201,6 +210,7 @@
     buildContinuationPrompt,
     isStreamInterruptionDecision,
     prepareAttempt,
-    markAttempt
+    markAttempt,
+    clearAttempt
   });
 })();

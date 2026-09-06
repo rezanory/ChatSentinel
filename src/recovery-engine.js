@@ -1,4 +1,4 @@
-export const Action = Object.freeze({
+﻿export const Action = Object.freeze({
   WAIT: 'WAIT',
   SAFE_RETRY: 'SAFE_RETRY',
   RETRY_MESSAGE_DELIVERY: 'RETRY_MESSAGE_DELIVERY',
@@ -17,6 +17,8 @@ export function decideRecovery(input = {}) {
     connectionInterrupted = false,
     conversationDead = false,
     uiFrozen = false,
+    genericUiFailure = false,
+    pageCrashed = false,
     progressAgeMs = 0,
     sideEffectRisk = 'unknown',
     checkpointFresh = false,
@@ -45,6 +47,10 @@ export function decideRecovery(input = {}) {
       : decision(Action.CONTINUE_SAME_CHAT, 'stream-interrupted-complete-answer-reconcile-required', 0.92);
   }
 
+  if (pageCrashed) {
+    return decision(Action.RELOAD_AND_RECHECK, 'page-crash-content-detected', 0.97);
+  }
+
   if (uiFrozen && progressAgeMs >= 180000) {
     return decision(Action.RELOAD_AND_RECHECK, 'ui-frozen-no-progress', 0.9);
   }
@@ -57,6 +63,12 @@ export function decideRecovery(input = {}) {
       return decision(Action.CONTINUE_SAME_CHAT, 'retry-visible-side-effects-possible', 0.91);
     }
     return decision(Action.ESCALATE, 'retry-visible-state-uncertain', 0.86);
+  }
+
+  if (genericUiFailure) {
+    return checkpointFresh
+      ? decision(Action.CONTINUE_SAME_CHAT, 'generic-ui-failure-checkpoint-known', 0.88)
+      : decision(Action.RELOAD_AND_RECHECK, 'generic-ui-failure-state-uncertain', 0.84);
   }
 
   if (progressAgeMs >= 300000) {

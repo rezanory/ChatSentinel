@@ -17,6 +17,8 @@ function load(href = 'https://chatgpt.com/') {
     location: { href },
     Event: FakeEvent,
     InputEvent: FakeEvent,
+    MouseEvent: FakeEvent,
+    KeyboardEvent: FakeEvent,
     setTimeout,
     getComputedStyle: () => ({ visibility: 'visible', display: 'block' }),
     console
@@ -84,4 +86,44 @@ test('prepare ignores a generic GET submit trap and uses the explicit ChatGPT se
   assert.equal(clicked.ok, true);
   assert.equal(verifiedClicks, 1);
   assert.equal(genericClicks, 0);
+});
+
+test('commit retries a composed prompt and uses Enter only when click did not submit', async () => {
+  const api = load();
+  let clicks = 0;
+  let enterFallbacks = 0;
+  const composer = {
+    value: '',
+    focus() {},
+    dispatchEvent(event) {
+      if (event.type === 'keydown' && event.key === 'Enter') {
+        enterFallbacks += 1;
+        this.value = '';
+      }
+      return true;
+    },
+    getBoundingClientRect: () => ({ left: 10, top: 10, right: 400, bottom: 80, width: 390, height: 70 })
+  };
+  const send = {
+    disabled: false,
+    getBoundingClientRect: () => ({ left: 350, top: 35, right: 390, bottom: 75, width: 40, height: 40 }),
+    dispatchEvent() { return true; },
+    click() { clicks += 1; }
+  };
+  const root = {
+    querySelector(selector) {
+      if (selector === '#prompt-textarea') return composer;
+      if (selector === 'button[data-testid="send-button"]') return send;
+      return null;
+    },
+    querySelectorAll() { return []; }
+  };
+  const prepared = await api.prepare(root, 'pending prompt', { timeoutMs: 200 });
+  assert.equal(prepared.ok, true);
+  const committed = await api.commit(prepared, { settleMs: 200, attempts: 2 });
+  assert.equal(committed.ok, true);
+  assert.equal(committed.keyboardFallback, true);
+  assert.equal(clicks, 1);
+  assert.equal(enterFallbacks, 1);
+  assert.equal(composer.value, '');
 });

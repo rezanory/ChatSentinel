@@ -42,3 +42,12 @@ test('background self-rehydrates already-open ChatGPT tabs after extension servi
   assert.match(source, /files: CONTENT_SCRIPT_FILES/);
   assert.match(source, /https:\/\/chatgpt\.com\/\*/);
 });
+
+test('project console reinjection replaces the prior runtime listener and derives toggle state from the live DOM', () => {
+  const source = fs.readFileSync(new URL('../extension/project-console.js', import.meta.url), 'utf8');
+  assert.match(source, /RUNTIME_LISTENER_KEY/);
+  assert.match(source, /CHATSENTINEL_SET_PANEL_OPEN/);
+  assert.match(source, /chrome\.runtime\.onMessage\.removeListener\(previous\)/);
+  assert.match(source, /host\?\.style\?\.display === 'block'/);
+  assert.match(source, /async function setPanelOpen\(open\)/);
+});

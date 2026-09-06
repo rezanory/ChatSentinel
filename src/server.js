@@ -1,9 +1,9 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { decideRecovery } from './recovery-engine.js';
-import { reconcileProject } from './project-reconciler.js';
+import { reconcileProject, reconciliationMetrics } from './project-reconciler.js';
 import { startHeartbeat } from './heartbeat.js';
-import { classifySideEffectRisk, isFreshCheckpoint } from './side-effect-classifier.js';
+import { isFreshCheckpoint, sideEffectEvidence } from './side-effect-classifier.js';
 import { StateStore } from './state-store.js';
 import { createLogger } from './logger.js';
 import { authorizeRequest, createRateLimiter, requestId, setCors } from './http-security.js';
@@ -18,6 +18,10 @@ import { buildProjectTree } from './project-tree.js';
 import { detectPrerequisites } from './components/setup/prerequisite-detector.js';
 import { buildSetupPlan, applySetupPlan } from './components/setup/install-plan.js';
 import { remoteDesktopCommanderStatus, recoverRemoteDesktopCommander } from './remote-desktop-commander-recovery.js';
+
+const SIGNAL_RECEIPT_TTL_MS = 5 * 60 * 1000;
+const MAX_SIGNAL_RECEIPTS = 2000;
+
 export async function createWatchdogServer(config) {
   const logger = createLogger({ dir: config.logDir });
   const store = new StateStore({
@@ -30,6 +34,7 @@ export async function createWatchdogServer(config) {
   const rateLimit = createRateLimiter({ limitPerMinute: config.rateLimitPerMinute });
   const heartbeat = startHeartbeat();
   const startedAt = Date.now();
+  const signalReceipts = new Map();
   let ready = true;
 
   const server = http.createServer(async (req, res) => {
@@ -49,7 +54,7 @@ export async function createWatchdogServer(config) {
         return json(res, auth.status || 403, { ok: false, error: auth.reason, requestId: id });
       }
 
-      return await route(req, res, { id, store, logger, config, heartbeat, startedAt, ready, auth });
+      return await route(req, res, { id, store, logger, config, heartbeat, startedAt, ready, auth, signalReceipts });
     } catch (error) {
       logger.error('request-error', { requestId: id, error });
       return json(res, error.statusCode || 500, {
@@ -68,6 +73,7 @@ export async function createWatchdogServer(config) {
 
   const cleanup = setInterval(() => {
     store.prune();
+    pruneSignalReceipts(signalReceipts);
     store.scheduleSave(0);
   }, Math.min(config.sessionTtlMs, 60 * 60 * 1000));
   cleanup.unref?.();
@@ -121,6 +127,29 @@ async function route(req, res, ctx) {
     return json(res, 200, { ok: true, ready: true, version: config.version });
   }
 
+  if (req.method === 'GET' && url.pathname === '/metrics') {
+    const commandStatus = {};
+    for (const command of Object.values(store.commands || {})) {
+      const status = String(command?.status || 'unknown');
+      commandStatus[status] = Number(commandStatus[status] || 0) + 1;
+    }
+    const memory = process.memoryUsage();
+    return json(res, 200, {
+      ok: true,
+      version: config.version,
+      uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
+      memory: { rss: memory.rss, heapUsed: memory.heapUsed, heapTotal: memory.heapTotal, external: memory.external },
+      counts: {
+        projects: Object.keys(store.projects).length,
+        sessions: Object.keys(store.sessions).length,
+        conversations: Object.keys(store.configs).length,
+        commands: Object.keys(store.commands || {}).length,
+        commandStatus
+      },
+      reconciliation: reconciliationMetrics(),
+      heartbeat: { enabled: heartbeat.enabled }
+    });
+  }
 
   if (req.method === 'GET' && url.pathname === '/recovery/remote-desktop-commander') {
     const result = await remoteDesktopCommanderStatus();
@@ -379,7 +408,9 @@ async function route(req, res, ctx) {
       ...(conversationUrl ? { url: conversationUrl } : {})
     };
     await store.setConfig(conversationId, next);
-    const reconciliation = next.projectPath ? await reconcileProject(next.projectPath) : null;
+    const reconciliation = next.projectPath
+      ? await reconcileProject(next.projectPath, { remoteTtlMs: config.reconcileRemoteTtlMs })
+      : null;
     logger.info('conversation-configured', {
       conversationId,
       operationClass: next.operationClass,
@@ -400,7 +431,10 @@ async function route(req, res, ctx) {
     const current = parsed.value.conversationId ? store.getConfig(parsed.value.conversationId) : {};
     const project = current.projectId ? store.getProject(current.projectId) : null;
     const projectPath = parsed.value.projectPath || project?.projectPath || current.projectPath;
-    const reconciliation = await reconcileProject(projectPath);
+    const reconciliation = await reconcileProject(projectPath, {
+      remoteTtlMs: config.reconcileRemoteTtlMs,
+      forceRemote: true
+    });
     return json(res, reconciliation.ok ? 200 : 422, { ok: reconciliation.ok, reconciliation });
   }
 
@@ -435,16 +469,21 @@ async function route(req, res, ctx) {
   }
 
   if (req.method === 'POST' && url.pathname === '/signal') {
+    const receiptKey = signalReceiptKey(ctx);
+    const cached = getSignalReceipt(ctx.signalReceipts, receiptKey);
+    if (cached) return json(res, 200, { ...cached, replayed: true });
     const body = await readJson(req, config.maxBodyBytes);
     const parsed = validateSignal(body);
     if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
-    return handleSignal(res, parsed.value, ctx);
+    const result = await handleSignal(parsed.value, ctx);
+    setSignalReceipt(ctx.signalReceipts, receiptKey, result);
+    return json(res, 200, result);
   }
 
   return json(res, 404, { ok: false, error: 'not-found', requestId: id });
 }
 
-async function handleSignal(res, signal, ctx) {
+async function handleSignal(signal, ctx) {
   const { store, logger } = ctx;
   const id = signal.conversationId;
   const previous = store.getSession(id);
@@ -470,11 +509,19 @@ async function handleSignal(res, signal, ctx) {
   const effectiveOperationClass = config.operationClass !== undefined && config.operationClass !== ''
     ? config.operationClass
     : (project?.operationClass || config.operationClass);
-  const reconciliation = projectPath ? await reconcileProject(projectPath) : null;
+  const reconciliation = projectPath
+    ? await reconcileProject(projectPath, { remoteTtlMs: ctx.config.reconcileRemoteTtlMs })
+    : null;
   const checkpointFresh = projectPath
     ? isFreshCheckpoint(reconciliation)
     : Boolean(signal.checkpointFresh);
-  const sideEffectRisk = classifySideEffectRisk({ signal, reconciliation, previous, policy: { ...project, ...config, operationClass: effectiveOperationClass } });
+  const sideEffect = sideEffectEvidence({
+    signal,
+    reconciliation,
+    previous,
+    policy: { ...project, ...config, operationClass: effectiveOperationClass }
+  });
+  const sideEffectRisk = sideEffect.risk;
 
   const merged = {
     ...previous,
@@ -487,6 +534,7 @@ async function handleSignal(res, signal, ctx) {
     reconciliation,
     checkpointFresh,
     sideEffectRisk,
+    sideEffectReasons: sideEffect.reasons,
     updatedAt: new Date().toISOString()
   };
 
@@ -506,7 +554,7 @@ async function handleSignal(res, signal, ctx) {
     remoteHead: reconciliation?.remoteHead
   });
 
-  return json(res, 200, {
+  return {
     ok: true,
     decision,
     reconciliation,
@@ -514,8 +562,42 @@ async function handleSignal(res, signal, ctx) {
     project: project || null,
     projectPath,
     sideEffectRisk,
+    sideEffectReasons: sideEffect.reasons,
     checkpointFresh
-  });
+  };
+}
+
+function signalReceiptKey(ctx = {}) {
+  const client = String(ctx.auth?.origin || ctx.auth?.client || 'local');
+  return `${client}|${String(ctx.id || '')}`;
+}
+
+function getSignalReceipt(receipts, key, now = Date.now()) {
+  const row = receipts?.get?.(key);
+  if (!row) return null;
+  if (now - Number(row.createdAt || 0) > SIGNAL_RECEIPT_TTL_MS) {
+    receipts.delete(key);
+    return null;
+  }
+  return row.result || null;
+}
+
+function setSignalReceipt(receipts, key, result, now = Date.now()) {
+  if (!receipts?.set || !key) return;
+  receipts.set(key, { createdAt: now, result });
+  pruneSignalReceipts(receipts, now);
+}
+
+function pruneSignalReceipts(receipts, now = Date.now()) {
+  if (!receipts?.entries) return;
+  for (const [key, row] of receipts) {
+    if (now - Number(row?.createdAt || 0) > SIGNAL_RECEIPT_TTL_MS) receipts.delete(key);
+  }
+  while (receipts.size > MAX_SIGNAL_RECEIPTS) {
+    const oldest = receipts.keys().next().value;
+    if (oldest === undefined) break;
+    receipts.delete(oldest);
+  }
 }
 
 function projectRows(store) {

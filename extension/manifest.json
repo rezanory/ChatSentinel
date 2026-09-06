@@ -45,6 +45,7 @@
       "js": [
         "components/runtime-context-guard/controller.js",
         "components/request-rate-limit/controller.js",
+        "components/chat-experience-guard/controller.js",
         "components/tab-launch-guard/controller.js",
         "components/message-delivery-recovery/controller.js",
         "components/prompt-delivery/controller.js",

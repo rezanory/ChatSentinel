@@ -40,6 +40,13 @@ export function validateSignal(body) {
     connectionInterrupted: Boolean(body.connectionInterrupted),
     conversationDead: Boolean(body.conversationDead),
     uiFrozen: Boolean(body.uiFrozen),
+    genericUiFailure: Boolean(body.genericUiFailure),
+    pageCrashed: Boolean(body.pageCrashed),
+    workSelected: Boolean(body.workSelected),
+    workModeCorrected: Boolean(body.workModeCorrected),
+    lastAssistantText: cleanString(body.lastAssistantText || '', 2200),
+    lastAssistantFingerprint: cleanString(body.lastAssistantFingerprint || '', 120),
+    assistantSettledMs: finiteNumber(body.assistantSettledMs, 0, 24 * 60 * 60 * 1000),
     externalActivity: Boolean(body.externalActivity)
   };
   if (body.projectId !== undefined) value.projectId = cleanString(body.projectId, 120);
