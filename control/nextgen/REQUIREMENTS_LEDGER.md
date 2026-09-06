@@ -229,3 +229,20 @@ It may sequence decisions, but authoritative logic must live behind explicit sub
 
 A Component review must reject responsibility accumulation that makes one controller the hidden owner of unrelated domains.
 Code size alone is not a gate, but cross-domain decision authority without a contract boundary is a design defect.
+## R-021 Component-First Multi-Lane Execution Topology
+
+The controller conversation/session is coordination authority only; it MUST NOT become the default author for every Component.
+For every maximum-safe DAG frontier, independent Components are materialized into separate worktrees/lane identities and may run concurrently within WIP/resource/risk limits.
+
+Required separation:
+- one controller/orchestration lane;
+- separate authoring lane per admitted Component;
+- separate independent validation lane/worktree for each frozen source candidate;
+- separate reuse/research lanes where prior-art scans can proceed without blocking authoring;
+- one serialized Pack Integration Spine per affected shared integration scope.
+
+A temporary tooling outage may force one human/AI session to coordinate several lanes, but that is degraded execution, not the target topology.
+It must be recorded as `DEGRADED_SINGLE_SESSION_COORDINATION` and may not be used as justification to serialize independent DAG work.
+
+Ready source code/public prior art should be investigated by dedicated reuse lanes in parallel, then exact-pinned and handed to the owning Component.
+The controller should spend context on scheduling, reconciliation, blocker proof and handoff—not on serially implementing every independent Component.

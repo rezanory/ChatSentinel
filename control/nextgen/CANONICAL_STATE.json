@@ -112,5 +112,12 @@
                                                "NO_SILENT_PROJECT_STOP",
                                                "RUNTIME_VERSION_COHERENCE",
                                                "THIN_ORCHESTRATOR_SEPARATED_RESPONSIBILITIES"
-                                           ]
+                                           ],
+    "execution_topology":  {
+                               "mode":  "DEGRADED_SINGLE_SESSION_COORDINATION",
+                               "target":  "CONTROLLER_PLUS_INDEPENDENT_COMPONENT_WORKERS",
+                               "reason":  "v1.3.4 supervisor disabled after reliability regression; chat-level worker automation not currently trusted",
+                               "serialization_allowed_only_when":  "DAG/resource/risk/authority requires it",
+                               "controller_default_author":  false
+                           }
 }
