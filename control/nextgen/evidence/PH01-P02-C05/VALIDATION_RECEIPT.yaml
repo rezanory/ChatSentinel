@@ -1,0 +1,66 @@
+validation_receipt:
+  schema_version: "1.0"
+  component_id: PH01-P02-C05
+  component_name: ModuleRegistryFeatureToggle
+  validation_role: INDEPENDENT_EXACT_VALIDATOR
+  verdict: GREEN
+  validated_source:
+    sha: d9dd64783af37cb99eb4d6da1352b2ae1e126c1c
+    tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
+    branch: feat/ph01-p02-c05-module-registry-v1
+  validation_branch: validation/ph01-p02-c05-exact-v1
+  admission:
+    branch: governance/ph01-p02-c05-admission-v1
+    sha: f58365285e2e6eff3dc311c96f0202ed5353b9cc
+  baseline:
+    sha: 75897faf9220da13389044b8080f3ee2a2473733
+    tree: 1194a4b92881b5d10603db249066388a56f84263
+  source_scope_verified:
+    - src/core/modules/registry.js
+    - test/module-registry.test.js
+  source_mutated_by_validator: false
+  exact_identity_verified: true
+  worktree_clean_before_validation: true
+  focused_results:
+    module_registry_tests: "11 passed / 0 failed"
+    syntax: PASS  collect_all_results:
+    npm_test: "244 passed / 0 failed"
+    policy_check: PASS
+    shell_check: PASS
+    browser_e2e: PASS
+    production_smoke: PASS
+    security_audit: "0 vulnerabilities"
+    release_validate: PASS
+  final_release_validate_environment:
+    CHATSENTINEL_E2E_CDP_TIMEOUT_MS: 30000
+    CHATSENTINEL_E2E_WAIT_MS: 180000
+  environment_classification:
+    initial_observations:
+      - "One earlier production-smoke temporary git push was terminated by SIGTERM."
+      - "Two default-timeout browser E2E attempts hit CDP/DOM wait timeouts under current machine browser load."
+    source_relation: NON_SOURCE_ENVIRONMENTAL_FLAKE
+    disposition: >-
+      No source patch was made. Exact source was rerun with the existing test harness
+      configurable wait/CDP budgets only. Browser E2E then passed completely, followed
+      by production smoke and npm audit; a final full release-validate passed end-to-end.
+  independence:
+    validator_worktree_separate: true
+    validator_branch_separate: true
+    validator_source_patch: false
+  terminal_evidence:
+    tests: GREEN
+    source_scope: GREEN
+    policy: GREEN
+    browser_e2e: GREEN
+    production_smoke: GREEN
+    security_audit: GREEN
+  commands:
+    - "node --test test/module-registry.test.js"
+    - "node --check src/core/modules/registry.js"
+    - "npm test"
+    - "npm run policy-check"
+    - "npm run prod-smoke"
+    - "npm run security-audit"
+    - "CHATSENTINEL_E2E_CDP_TIMEOUT_MS=30000 CHATSENTINEL_E2E_WAIT_MS=180000 npm run e2e"
+    - "CHATSENTINEL_E2E_CDP_TIMEOUT_MS=30000 CHATSENTINEL_E2E_WAIT_MS=180000 npm run release-validate"
+  ready_for_readiness_evaluation: true
