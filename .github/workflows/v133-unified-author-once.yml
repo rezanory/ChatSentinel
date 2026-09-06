@@ -25,7 +25,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply unified source patch
-        run: python3 scripts/v133-unified-author.py
+        run: |
+          python3 scripts/v133-unified-author.py
+          python3 scripts/v133-unified-test-fix.py
       - name: Bind version 1.3.3
         shell: bash
         run: |
@@ -63,7 +65,7 @@ jobs:
         run: |
           git config user.name 'rezanory'
           git config user.email '62356000+rezanory@users.noreply.github.com'
-          git rm scripts/v133-unified-author.py
+          git rm scripts/v133-unified-author.py scripts/v133-unified-test-fix.py
           git add -A
           git commit -m 'fix: unify recovery controls and suppress routine wait noise'
           git push origin HEAD:fix/v1.3.3-unified-recovery-panel-history
