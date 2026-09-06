@@ -1,0 +1,60 @@
+source_receipt:
+  schema_version: "1.0"
+  component_id: PH01-P02-C05
+  component_name: ModuleRegistryFeatureToggle
+  admission_ref: governance/ph01-p02-c05-admission-v1
+  admission_sha: f58365285e2e6eff3dc311c96f0202ed5353b9cc
+  baseline_sha: 75897faf9220da13389044b8080f3ee2a2473733
+  baseline_tree: 1194a4b92881b5d10603db249066388a56f84263
+  source_sha: d9dd64783af37cb99eb4d6da1352b2ae1e126c1c
+  source_tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
+  branch: feat/ph01-p02-c05-module-registry-v1
+  status: SOURCE_FROZEN_GREEN
+  changed_files:
+    - src/core/modules/registry.js
+    - test/module-registry.test.js
+  contract_summary:
+    - immutable normalized descriptors
+    - deterministic transitive dependency resolution
+    - cycle and conflict rejection
+    - explicit desired-state feature toggles
+    - mandatory project-profile enforcement
+    - lifecycle/authority/resource metadata preservation
+    - canonical snake_case input compatibility
+    - atomic bulk registration
+    - deterministic snapshots
+  tests:
+    focused_module_registry:
+      command: node --test test/module-registry.test.js
+      result: PASS
+      summary: 11 passed, 0 failed
+    focused_syntax:
+      command: node --check src/core/modules/registry.js
+      result: PASS
+    full_release_validation:
+      command: npm run release-validate
+      result: PASS
+      summary:
+        - version surfaces PASS
+        - node test suite 244 passed, 0 failed
+        - syntax/check chain PASS
+        - security policy PASS
+        - shell parse PASS
+        - browser E2E PASS
+        - production smoke PASS
+        - npm audit 0 vulnerabilities
+    diff_check:
+      command: git diff --cached --check
+      result: PASS
+  scope:
+    package_manifest_changed: false
+    runtime_dependency_added: false
+    browser_dom_logic_changed: false
+    git_mutation_logic_changed: false
+  handoff:
+    next_authority: independent_exact_validation_only
+    validate_exact_source_sha: d9dd64783af37cb99eb4d6da1352b2ae1e126c1c
+    validate_exact_source_tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
+    validator_may_patch_source: false
+    on_validation_failure: return_to_authoring_for_fix_forward_and_new_source_identity
+    successor_authority_granted: false
