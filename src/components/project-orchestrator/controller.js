@@ -152,7 +152,17 @@ export async function tickProjectOrchestration(store, projectId, { logger } = {}
       projectDecision = decideProjectAction(rows);
     }
   } else {
-    projectDecision = decideProjectAction(rows);
+    if (shouldSuperviseDirectContinuation(rows, effectivePlan.integrationLane)) {
+      integrationRow = await inspectContinuationLaneRow(
+        store, projectId, effectivePlan, effectivePlan.integrationLane
+      );
+      auxiliaryCommands.push(...await superviseTerminalCandidates(store, project, [integrationRow]));
+      projectDecision = integrationRow.decision?.action !== OrchestratorAction.WAIT
+        ? integrationRow.decision
+        : { action: OrchestratorAction.WAIT, reason: 'direct-wave-continuation-active' };
+    } else {
+      projectDecision = decideProjectAction(rows);
+    }
   }
 
   const allRows = integrationRow ? [...rows, integrationRow] : rows;
@@ -191,6 +201,46 @@ export async function tickProjectOrchestration(store, projectId, { logger } = {}
       ? { ...summarizeWorkflow(workflow), stageId: stage?.stageId, stageState, transition: emitted?.workflowTransition || null }
       : null
   };
+}
+
+async function inspectContinuationLaneRow(store, projectId, plan, lane) {
+  const configEntry = Object.entries(store.configs)
+    .find(([, cfg]) => cfg?.projectId === projectId && cfg?.laneId === lane.laneId);
+  const conversationId = configEntry?.[0];
+  const session = conversationId
+    ? { ...store.getSession(conversationId), conversationId }
+    : {};
+  const laneCommands = Object.values(store.commands)
+    .filter(cmd => cmd?.payload?.projectId === projectId && cmd?.payload?.laneId === lane.laneId)
+    .sort((a, b) => Date.parse(b.updatedAt || b.createdAt || 0) - Date.parse(a.updatedAt || a.createdAt || 0));
+  const activeCommand = laneCommands.find(cmd => ['pending', 'running'].includes(cmd.status));
+  const lastCommand = laneCommands[0] || null;
+  const history = deriveLaneCommandHistory(laneCommands, { projectId, laneId: lane.laneId });
+  const effectiveLane = { ...lane, ...history };
+  const completion = { complete: false, reason: 'continuation-pending' };
+  const decision = decideLaneAction({
+    lane: effectiveLane,
+    session,
+    completion,
+    activeCommand,
+    lastCommand
+  });
+  return {
+    lane: effectiveLane,
+    conversationId,
+    session,
+    git: { remoteHead: null, localHead: null, clean: true },
+    completion,
+    decision,
+    activeCommand,
+    lastCommand
+  };
+}
+
+export function shouldSuperviseDirectContinuation(rows = [], integrationLane = null) {
+  if (!integrationLane) return false;
+  const requiredRows = rows.filter(row => row?.lane?.required !== false);
+  return requiredRows.length > 0 && requiredRows.every(row => row?.completion?.complete === true);
 }
 
 async function inspectLaneRow(store, projectId, plan, lane) {

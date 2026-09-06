@@ -41,7 +41,9 @@ export function decideLaneAction({ lane = {}, session = {}, completion = {}, act
   if (['SAFE_RETRY', 'CONTINUE_SAME_CHAT', 'RELOAD_AND_RECHECK'].includes(recovery)) {
     return fixOrReplace(lane, `recovery-${recovery.toLowerCase()}`);
   }
-  if (session.state === 'IDLE' && completion.reason === 'branch-not-advanced' && lastCommand?.status === 'succeeded') {
+  if (session.state === 'IDLE' &&
+      ['branch-not-advanced', 'continuation-pending'].includes(completion.reason) &&
+      lastCommand?.status === 'succeeded') {
     const commandAtMs = Date.parse(lastCommand.completedAt || lastCommand.updatedAt || '');
     const idleKickAfterMs = Number(lane.idleKickAfterMs || 120000);
     if (Number.isFinite(commandAtMs) && Date.now() - commandAtMs >= idleKickAfterMs) {

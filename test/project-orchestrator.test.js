@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { detectLaneCompletion, decideLaneAction, decideProjectAction, OrchestratorAction } from '../src/components/project-orchestrator/decision.js';
-import { deriveLaneCommandHistory, laneCreateIdempotencyKey, selectIndependentLaneRows } from '../src/components/project-orchestrator/controller.js';
+import { deriveLaneCommandHistory, laneCreateIdempotencyKey, selectIndependentLaneRows, shouldSuperviseDirectContinuation } from '../src/components/project-orchestrator/controller.js';
 
 const lane = { laneId: 'C1', branch: 'feat/c1', baselineSha: 'base', prompt: 'go' };
 
@@ -153,4 +153,37 @@ test('terminal FIX and REPLACE history advances deterministic generations', () =
   ], { projectId: 'p1', laneId: 'C1' });
   assert.equal(history.fixAttempts, 2);
   assert.equal(history.replaceAttempts, 1);
+});
+
+test('direct-wave continuation is supervised only after every required worker is complete', () => {
+  const integrationLane = { laneId: 'WAVEADV', role: 'orchestration' };
+  const rows = [
+    { lane: { laneId: 'A', required: true }, completion: { complete: true } },
+    { lane: { laneId: 'B', required: true }, completion: { complete: true } }
+  ];
+  assert.equal(shouldSuperviseDirectContinuation(rows, integrationLane), true);
+  rows[1].completion.complete = false;
+  assert.equal(shouldSuperviseDirectContinuation(rows, integrationLane), false);
+  assert.equal(shouldSuperviseDirectContinuation(rows, null), false);
+});
+
+test('idle direct-wave continuation is kicked when it did not reconfigure the next wave', () => {
+  const session = {
+    state: 'IDLE',
+    progressAgeMs: 1,
+    updatedAt: new Date().toISOString(),
+    decision: { action: 'WAIT' }
+  };
+  const lastCommand = {
+    status: 'succeeded',
+    completedAt: new Date(Date.now() - 180000).toISOString()
+  };
+  const result = decideLaneAction({
+    lane: { ...lane, laneId: 'WAVEADV', idleKickAfterMs: 30000 },
+    session,
+    completion: { complete: false, reason: 'continuation-pending' },
+    lastCommand
+  });
+  assert.equal(result.action, OrchestratorAction.FIX);
+  assert.equal(result.reason, 'idle-no-branch-progress');
 });
