@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $runner = Join-Path $PSScriptRoot 'run-watchdog.ps1'
+$protocolInstaller = Join-Path $PSScriptRoot 'register-recovery-protocol.ps1'
 $taskName = 'ChatSentinelWatchdog'
 $dataRoot = if ($env:CHATSENTINEL_DATA_DIR) { $env:CHATSENTINEL_DATA_DIR } else { Join-Path $env:LOCALAPPDATA 'ChatSentinel' }
 $targetVersion = '1.3.2'
@@ -9,12 +10,18 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw 'Node.js is required but was not found in PATH.'
 }
 if (-not (Test-Path $runner)) { throw "Runner not found: $runner" }
+if (-not (Test-Path $protocolInstaller)) { throw "Recovery protocol installer not found: $protocolInstaller" }
 
 New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
 Set-Location $root
 Write-Host '[ChatSentinel] running production release validation...'
 npm run release-validate
 if ($LASTEXITCODE -ne 0) { throw 'Production release validation failed.' }
+
+# Install the bounded per-user protocol from the same interactive context as persistence.
+# The protocol accepts no command input and always dispatches recover-runtime.ps1.
+& $protocolInstaller
+if ($LASTEXITCODE -ne 0) { throw 'ChatSentinel recovery protocol registration failed.' }
 
 $quotedRunner = '"' + $runner + '"'
 $taskCommand = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $quotedRunner"
@@ -85,5 +92,6 @@ if (-not $healthy) {
 }
 
 Write-Host "[ChatSentinel] production watchdog v$targetVersion healthy. Data: $dataRoot"
+Write-Host '[ChatSentinel] one-click runtime recovery protocol: chatsentinel-recover://runtime'
 Write-Host '[ChatSentinel] Chrome extension folder: C:\ChatSentinel\extension'
 Write-Host '[ChatSentinel] Reload the unpacked extension once in chrome://extensions after an extension-code upgrade.'
