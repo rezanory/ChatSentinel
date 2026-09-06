@@ -20,6 +20,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install testable Chromium for extension E2E
+        shell: powershell
+        run: |
+          npx --yes playwright@1.55.0 install chromium
+          if ($LASTEXITCODE -ne 0) { throw "Playwright Chromium install failed: $LASTEXITCODE" }
+          $cache = Join-Path $env:LOCALAPPDATA 'ms-playwright'
+          $browser = Get-ChildItem $cache -Filter chrome.exe -Recurse -ErrorAction Stop |
+            Where-Object { $_.FullName -match 'chromium-' } |
+            Select-Object -First 1
+          if (-not $browser) { throw 'Testable Chromium executable was not found in the Playwright cache.' }
+          Write-Host "TESTABLE_CHROMIUM=$($browser.FullName)"
       - name: Focused recovery tests
         run: node --test test/offline-recovery.test.js test/runtime-recovery-script.test.js
       - name: Parse all PowerShell scripts
