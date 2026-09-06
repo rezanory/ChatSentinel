@@ -4,6 +4,7 @@
   const DRAFT_KEY = 'chatsentinel:offline-recovery:draft';
   const STATUS_KEY = 'chatsentinel:offline-recovery:last-status';
   const REPAIR_COMMAND = 'powershell -ExecutionPolicy Bypass -File C:\\ChatSentinel\\scripts\\recover-runtime.ps1';
+  const RECOVERY_URI = 'chatsentinel-recover://runtime';
 
   function classify(runtimeAlive, health) {
     if (!runtimeAlive) return { state: 'extension-disconnected', recoverableByReload: true };
@@ -68,6 +69,30 @@
     return true;
   }
 
+  function launchRecoveryProtocol(openFn = globalThis.open) {
+    if (typeof openFn !== 'function') return false;
+    try {
+      // This must be called synchronously from the user's button gesture. Windows resolves
+      // the fixed chatsentinel-recover:// handler in the interactive user's HKCU context.
+      openFn(RECOVERY_URI, '_blank', 'noopener,noreferrer');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function copyRepairCommand(clipboard = globalThis.navigator?.clipboard) {
+    try {
+      const pending = clipboard?.writeText?.(REPAIR_COMMAND);
+      if (pending?.catch) pending.catch(() => {});
+      return Boolean(pending);
+    } catch { return false; }
+  }
+
+  function openRepairPage(runtime = globalThis.chrome?.runtime) {
+    try { runtime?.openOptionsPage?.(); return true; } catch { return false; }
+  }
+
   async function diagnose() {
     const guard = globalThis.ChatSentinelRuntimeContext;
     const runtimeAlive = Boolean(guard?.isAlive?.());
@@ -90,11 +115,11 @@
       return { ok: true, action: 'reload-tab', state: status.state };
     }
     if (status.state === 'watchdog-offline') {
-      try { await navigator.clipboard.writeText(REPAIR_COMMAND); } catch {}
-      try { chrome.runtime.openOptionsPage(); } catch {}
-      return { ok: false, action: 'open-repair', state: status.state, repairCommand: REPAIR_COMMAND };
+      copyRepairCommand();
+      openRepairPage();
+      return { ok: false, action: 'open-repair', state: status.state, repairCommand: REPAIR_COMMAND, recoveryUri: RECOVERY_URI };
     }
-    try { chrome.runtime.openOptionsPage(); } catch {}
+    openRepairPage();
     return { ok: false, action: 'open-repair', state: status.state };
   }
 
@@ -111,13 +136,49 @@
     const header = shadow?.querySelector('.header');
     if (!header || shadow.getElementById(BUTTON_ID)) return false;
     const button = document.createElement('button');
+    let currentStatus = { state: 'extension-disconnected' };
     button.id = BUTTON_ID;
-    button.textContent = 'Check connection';
+    button.textContent = 'Checking…';
     button.title = 'Diagnose and recover ChatSentinel connectivity';
+    button.disabled = true;
     button.addEventListener('click', async () => {
       button.disabled = true;
+
+      // External protocols require a user gesture in Chromium. The known offline state is
+      // therefore dispatched synchronously before any await. A bounded health re-check then
+      // either confirms recovery or exposes the existing manual repair fallback.
+      if (currentStatus.state === 'watchdog-offline') {
+        button.textContent = 'Starting recovery…';
+        const launched = launchRecoveryProtocol();
+        copyRepairCommand();
+        if (!launched) {
+          openRepairPage();
+          button.textContent = 'Repair command copied';
+          button.disabled = false;
+          return;
+        }
+        button.textContent = 'Recovery requested';
+        setTimeout(async () => {
+          currentStatus = await diagnose().catch(() => ({ state: 'extension-disconnected' }));
+          renderStatus(currentStatus);
+          if (currentStatus.state === 'online') {
+            button.textContent = 'Connected';
+            setTimeout(() => {
+              button.disabled = false;
+              button.textContent = 'Connected · Check';
+            }, 1200);
+            return;
+          }
+          openRepairPage();
+          button.textContent = 'Manual repair copied';
+          button.disabled = false;
+        }, 3500);
+        return;
+      }
+
       button.textContent = 'Checking…';
       const result = await recover(document);
+      currentStatus = { state: result.state || currentStatus.state };
       if (result.action === 'wait') {
         button.textContent = 'Response running';
         button.disabled = false;
@@ -135,11 +196,13 @@
     });
     header.insertBefore(button, shadow.getElementById('close'));
     diagnose().then(status => {
+      currentStatus = status;
       renderStatus(status);
       button.textContent = buttonLabel(status);
       button.disabled = false;
     }).catch(() => {
-      renderStatus({ state: 'extension-disconnected' });
+      currentStatus = { state: 'extension-disconnected' };
+      renderStatus(currentStatus);
       button.textContent = 'Reconnect ChatSentinel';
       button.disabled = false;
     });
@@ -163,8 +226,9 @@
   }
 
   globalThis.ChatSentinelOfflineRecovery = Object.freeze({
-    HOST_ID, BUTTON_ID, DRAFT_KEY, STATUS_KEY, REPAIR_COMMAND,
+    HOST_ID, BUTTON_ID, DRAFT_KEY, STATUS_KEY, REPAIR_COMMAND, RECOVERY_URI,
     classify, statusLabel, renderStatus, isGenerationRunning, preserveDraft, restoreDraft,
+    launchRecoveryProtocol, copyRepairCommand, openRepairPage,
     diagnose, recover, buttonLabel, installButton
   });
 
