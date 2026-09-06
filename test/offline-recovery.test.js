@@ -17,6 +17,7 @@ function loadContext(overrides = {}) {
     location: { href: 'https://chatgpt.com/c/test', reload() { this.reloaded = true; } },
     navigator: { clipboard: { async writeText(value) { sandbox.copied = value; } } },
     chrome: { runtime: { openOptionsPage() { sandbox.optionsOpened = true; } } },
+    open(...args) { sandbox.opened = args; return {}; },
     setTimeout,
     Date,
     Event: class { constructor(type) { this.type = type; } },
@@ -45,12 +46,30 @@ test('recovery button labels stay actionable across health changes', () => {
   assert.equal(api.buttonLabel({ state: 'pairing-mismatch' }), 'Repair pairing');
   assert.equal(api.buttonLabel({ state: 'online' }), 'Connected · Check');
   assert.match(api.REPAIR_COMMAND, /recover-runtime\.ps1$/i);
+  assert.equal(api.RECOVERY_URI, 'chatsentinel-recover://runtime');
+});
+
+test('one-click watchdog recovery launches only the bounded external protocol and keeps manual command copied', async () => {
+  const { api, sandbox } = loadContext();
+  assert.equal(api.launchRecoveryProtocol(), true);
+  assert.deepEqual(Array.from(sandbox.opened), ['chatsentinel-recover://runtime', '_blank', 'noopener,noreferrer']);
+  assert.equal(api.copyRepairCommand(), true);
+  await Promise.resolve();
+  assert.match(sandbox.copied, /C:\\ChatSentinel\\scripts\\recover-runtime\.ps1$/i);
+  assert.match(source, /currentStatus\.state === 'watchdog-offline'[\s\S]*const launched = launchRecoveryProtocol\(\);/);
+});
+
+test('one-click protocol failure keeps the existing repair page fallback', () => {
+  const { api, sandbox } = loadContext({ open: undefined });
+  assert.equal(api.launchRecoveryProtocol(), false);
+  assert.equal(api.openRepairPage(), true);
+  assert.equal(sandbox.optionsOpened, true);
 });
 
 test('generation detection prevents destructive reload while an answer is still running', () => {
   const api = loadApi();
   const running = { querySelectorAll() { return [{ getAttribute() { return 'Stop generating'; }, textContent: '' }]; } };
-  const idle = { querySelectorAll() { return [{ getAttribute() { return 'Send'; }, textContent: '' }]; } };
+  const idle = { querySelectorAll() { return [{ getAttribute() { return 'Send'; }, textContent: '' }]; };
   assert.equal(api.isGenerationRunning(running), true);
   assert.equal(api.isGenerationRunning(idle), false);
 });
