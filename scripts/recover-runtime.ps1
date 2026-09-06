@@ -36,8 +36,11 @@ Set-Location $root
 # Recovery is running in the interactive user's context. Refresh the per-user protocol
 # registration first so the in-chat Repair button can self-start this same bounded path
 # the next time the watchdog is offline.
-& $protocolInstaller
-if ($LASTEXITCODE -ne 0) { throw 'ChatSentinel recovery protocol registration failed.' }
+try {
+  & $protocolInstaller
+} catch {
+  throw "ChatSentinel recovery protocol registration failed: $($_.Exception.Message)"
+}
 
 $before = Get-ChatSentinelHealth
 $persistence = Ensure-Persistence
