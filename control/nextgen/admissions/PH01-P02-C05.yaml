@@ -1,0 +1,81 @@
+admission:
+  schema_version: "1.0"
+  component_id: PH01-P02-C05
+  component_name: ModuleRegistryFeatureToggle
+  decision: ADMITTED_FOR_BOUNDED_AUTHORING
+  issued_at: 2026-09-06T15:35:00Z
+  normative_workflow:
+    version: "3.0.1"
+    sha256: cf74c19b44f7b0230dba9ee6b045de2a1a953168ae142b7b8af51312ad9d4b07
+  project_workflow:
+    version: "1.1"
+    sha256: 65e3841457035810c980568d195912f87c6bbf0b8378ad77153a1652a2a24803
+  target_architecture:
+    version: "1.1"
+    sha256: 8e0bdf7fa121b00fb53f0acf8ea9c52ba3d679a590dfe31e179b320ce715141d
+  project_profile:
+    version: "1.1"
+    sha256: c0deb91efeaaf8c51870cc60fa00035aad7db61bec0a0fd2e93d10376cbf3440
+  exact_baseline:
+    source_sha: 75897faf9220da13389044b8080f3ee2a2473733
+    source_tree: 1194a4b92881b5d10603db249066388a56f84263
+  predecessor_lineage:
+    - component_id: PH00-P03-C07
+      evidence: target architecture freeze hash above
+      status: READY_FOR_BOOTSTRAP_AUTHORING
+  component_contract:
+    purpose: >-
+      Provide the central deterministic module registry and feature-toggle resolution layer
+      used by Desktop/Core/Browser Bridge without loading heavy capabilities by default.
+    required_capabilities:
+      - register immutable module descriptors
+      - deterministic dependency resolution
+      - dependency-cycle rejection
+      - conflict rejection
+      - unknown-module fail-closed behavior
+      - explicit enabled/disabled desired state
+      - profile-required module activation
+      - lifecycle metadata: always_on|lazy|on_demand
+      - authority_scope and resource_budget metadata preservation
+      - deterministic resolved snapshot for evidence/debugging
+    forbidden:
+      - no Electron dependency
+      - no SQLite dependency
+      - no browser/DOM logic
+      - no Git mutation logic
+      - no dynamic remote code loading
+      - no authority widening from module metadata
+  risk_freeze:
+    class: HIGH
+    primary_risks:
+      - dependency cycles
+      - silent auto-enable of unrelated modules
+      - configuration drift
+      - feature toggle bypass of mandatory profile capability
+      - mutable shared descriptor state
+  owned_paths:
+    - src/core/modules/**
+    - test/module-registry.test.js
+    - control/nextgen/evidence/PH01-P02-C05/**
+  shared_resources:
+    migration_writer: false
+    package_manifest_writer: false
+  required_tests:
+    focused:
+      - node --test test/module-registry.test.js
+      - node --check src/core/modules/registry.js
+    predecessor_system:
+      - npm test
+      - npm run policy-check
+    full_before_source_freeze:
+      - npm run release-validate
+  source_freeze_rule: >-
+    Freeze a new source SHA only after collect-all focused/full suites are green,
+    source scope is clean, and the exact branch is pushed. Independent validation
+    must materialize that exact source SHA; the authoring worker cannot validate itself.
+  portability_gap:
+    status: NON_BLOCKING_FOR_THIS_BOUNDED_COMPONENT
+    note: >-
+      Full v1.1 bootstrap artifacts are hash-pinned in BOOTSTRAP_START but still need
+      repository vendoring before PH00 portability closure. This component may author
+      against the exact hashes but cannot advance terminal project assurance on that basis alone.
