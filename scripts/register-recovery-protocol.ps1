@@ -31,5 +31,5 @@ if ($registered -ne $handlerCommand) {
   throw 'ChatSentinel recovery protocol registration verification failed.'
 }
 
-Write-Host "[ChatSentinel] recovery protocol registered for current user: $protocol://runtime"
+Write-Host "[ChatSentinel] recovery protocol registered for current user: ${protocol}://runtime"
 Write-Host "[ChatSentinel] recovery handler: $recover"
