@@ -12,6 +12,26 @@
     return { state: reason.includes('origin-mismatch') ? 'pairing-mismatch' : 'watchdog-offline', recoverableByReload: false };
   }
 
+  function statusLabel(status) {
+    if (status?.state === 'online') return status?.health?.version ? `v${status.health.version} online` : 'online';
+    if (status?.state === 'extension-disconnected') return 'extension disconnected';
+    if (status?.state === 'pairing-mismatch') return 'pairing mismatch';
+    return 'watchdog offline';
+  }
+
+  function renderStatus(status) {
+    const shadow = document.getElementById(HOST_ID)?.shadowRoot;
+    const health = shadow?.getElementById('health');
+    const footer = shadow?.getElementById('footerVersion');
+    const label = statusLabel(status);
+    if (health) {
+      health.textContent = label;
+      health.className = status?.state === 'online' ? 'badge ok' : 'badge bad';
+    }
+    if (footer && status?.state !== 'online') footer.textContent = label;
+    return label;
+  }
+
   function isGenerationRunning(root = document) {
     return [...root.querySelectorAll('button')].some(button => {
       const label = `${button.getAttribute('aria-label') || ''} ${button.textContent || ''}`.toLowerCase();
@@ -60,6 +80,7 @@
 
   async function recover(root = document) {
     const status = await diagnose();
+    renderStatus(status);
     try { sessionStorage.setItem(STATUS_KEY, JSON.stringify({ ...status, at: new Date().toISOString() })); } catch {}
     if (status.state === 'online') return { ok: true, action: 'none', state: status.state };
     if (status.state === 'extension-disconnected') {
@@ -114,9 +135,11 @@
     });
     header.insertBefore(button, shadow.getElementById('close'));
     diagnose().then(status => {
+      renderStatus(status);
       button.textContent = buttonLabel(status);
       button.disabled = false;
     }).catch(() => {
+      renderStatus({ state: 'extension-disconnected' });
       button.textContent = 'Reconnect ChatSentinel';
       button.disabled = false;
     });
@@ -128,7 +151,7 @@
     installButton();
     const observer = new MutationObserver(() => {
       restoreDraft();
-      if (installButton()) return;
+      installButton();
       const host = document.getElementById(HOST_ID);
       if (host?.shadowRoot?.getElementById(BUTTON_ID)) {
         let pending = '';
@@ -141,7 +164,8 @@
 
   globalThis.ChatSentinelOfflineRecovery = Object.freeze({
     HOST_ID, BUTTON_ID, DRAFT_KEY, STATUS_KEY, REPAIR_COMMAND,
-    classify, isGenerationRunning, preserveDraft, restoreDraft, diagnose, recover, buttonLabel, installButton
+    classify, statusLabel, renderStatus, isGenerationRunning, preserveDraft, restoreDraft,
+    diagnose, recover, buttonLabel, installButton
   });
 
   if (globalThis.document?.documentElement) boot();
