@@ -3,38 +3,54 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 export const RDC_TASK_NAME = 'DesktopCommander.RemoteAgent';
+export const RDC_TASK_PATH = '\\';
 
 const STATUS_SCRIPT = String.raw`
 $ErrorActionPreference='Stop'
-$task=Get-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -ErrorAction SilentlyContinue
+$task=Get-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -TaskPath '\' -ErrorAction SilentlyContinue
 if(-not $task){
-  [pscustomobject]@{ok=$true;supported=$true;installed=$false;validated=$false;running=$false;state='Missing';processCount=0} | ConvertTo-Json -Compress
+  [pscustomobject]@{ok=$true;supported=$true;installed=$false;validated=$false;running=$false;state='Missing';processCount=0;taskName='DesktopCommander.RemoteAgent';taskPath='\'} | ConvertTo-Json -Compress
   exit 0
 }
 $action=$task.Actions | Select-Object -First 1
-$args=[string]$action.Arguments
+$actionArgs=[string]$action.Arguments
 $exe=[string]$action.Execute
-$validated=($exe -match '(?i)(^|[\\/])node\.exe$') -and ($args -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js') -and ($args -match '(^|\s)remote(\s|$)')
-$processCount=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { ([string]$_.CommandLine -match '@wonderwhy-er[\\/]desktop-commander') -and ([string]$_.CommandLine -match '(^|\s)remote(\s|$)') }).Count
-[pscustomobject]@{ok=$validated;supported=$true;installed=$true;validated=$validated;running=(($task.State -eq 'Running') -or ($processCount -gt 0));state=[string]$task.State;processCount=$processCount} | ConvertTo-Json -Compress
+$validated=($exe -match '(?i)(^|[\\/])node\.exe$') -and ($actionArgs -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js') -and ($actionArgs -match '(^|\s)remote(\s|$)')
+$processCount=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+  ([string]$_.Name -ieq 'node.exe') -and ([string]$_.ExecutablePath -ieq $exe) -and
+  ([string]$_.CommandLine -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js') -and
+  ([string]$_.CommandLine -match '(^|\s)remote(\s|$)')
+}).Count
+$running=$validated -and ($task.State -eq 'Running') -and ($processCount -gt 0)
+[pscustomobject]@{ok=$validated;supported=$true;installed=$true;validated=$validated;running=$running;state=[string]$task.State;processCount=$processCount;taskName='DesktopCommander.RemoteAgent';taskPath='\'} | ConvertTo-Json -Compress
 `;
 
 const RECOVER_SCRIPT = String.raw`
 $ErrorActionPreference='Stop'
-$task=Get-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -ErrorAction Stop
+$task=Get-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -TaskPath '\' -ErrorAction Stop
 $action=$task.Actions | Select-Object -First 1
-$args=[string]$action.Arguments
+$actionArgs=[string]$action.Arguments
 $exe=[string]$action.Execute
-$validated=($exe -match '(?i)(^|[\\/])node\.exe$') -and ($args -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js') -and ($args -match '(^|\s)remote(\s|$)')
+$validated=($exe -match '(?i)(^|[\\/])node\.exe$') -and ($actionArgs -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js') -and ($actionArgs -match '(^|\s)remote(\s|$)')
 if(-not $validated){ throw 'remote-desktop-commander-task-validation-failed' }
-Stop-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -ErrorAction SilentlyContinue
+Stop-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -TaskPath '\' -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
-Start-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -ErrorAction Stop
-Start-Sleep -Milliseconds 900
-$task=Get-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -ErrorAction Stop
-$processCount=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { ([string]$_.CommandLine -match '@wonderwhy-er[\\/]desktop-commander') -and ([string]$_.CommandLine -match '(^|\s)remote(\s|$)') }).Count
-$running=(($task.State -eq 'Running') -or ($processCount -gt 0))
-[pscustomobject]@{ok=$running;supported=$true;installed=$true;validated=$true;running=$running;state=[string]$task.State;processCount=$processCount;restarted=$true} | ConvertTo-Json -Compress
+Start-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -TaskPath '\' -ErrorAction Stop
+$running=$false
+$processCount=0
+$state='Unknown'
+for($i=0;$i -lt 20;$i++){
+  Start-Sleep -Milliseconds 250
+  $task=Get-ScheduledTask -TaskName 'DesktopCommander.RemoteAgent' -TaskPath '\' -ErrorAction Stop
+  $state=[string]$task.State
+  $processCount=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    ([string]$_.Name -ieq 'node.exe') -and ([string]$_.ExecutablePath -ieq $exe) -and
+    ([string]$_.CommandLine -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js') -and
+    ([string]$_.CommandLine -match '(^|\s)remote(\s|$)')
+  }).Count
+  if(($state -eq 'Running') -and ($processCount -gt 0)){ $running=$true; break }
+}
+[pscustomobject]@{ok=$running;supported=$true;installed=$true;validated=$true;running=$running;state=$state;processCount=$processCount;restarted=$true;taskName='DesktopCommander.RemoteAgent';taskPath='\'} | ConvertTo-Json -Compress
 `;
 
 async function runPowerShell(script) {
@@ -65,8 +81,8 @@ export async function recoverRemoteDesktopCommander(options = {}) {
   if (!status.validated) return { ...status, recovered: false, error: 'remote-desktop-commander-task-untrusted' };
   try {
     const result = await (options.run || runPowerShell)(RECOVER_SCRIPT);
-    return { ...result, recovered: Boolean(result?.ok && result?.running), taskName: RDC_TASK_NAME };
+    return { ...result, recovered: Boolean(result?.ok && result?.running), taskName: RDC_TASK_NAME, taskPath: RDC_TASK_PATH };
   } catch (error) {
-    return { ...status, ok: false, recovered: false, error: String(error?.message || error), taskName: RDC_TASK_NAME };
+    return { ...status, ok: false, recovered: false, error: String(error?.message || error), taskName: RDC_TASK_NAME, taskPath: RDC_TASK_PATH };
   }
 }
