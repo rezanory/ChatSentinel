@@ -1,0 +1,299 @@
+from pathlib import Path
+
+
+def read(path):
+    return Path(path).read_text(encoding='utf-8')
+
+
+def write(path, text):
+    Path(path).write_text(text, encoding='utf-8', newline='\n')
+
+
+def replace_once(path, old, new):
+    text = read(path)
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f'{path}: expected exactly one match, found {count}')
+    write(path, text.replace(old, new, 1))
+
+
+def replace_between(path, start_marker, end_marker, replacement):
+    text = read(path)
+    start = text.find(start_marker)
+    if start < 0:
+        raise SystemExit(f'{path}: start marker missing: {start_marker}')
+    end = text.find(end_marker, start)
+    if end < 0:
+        raise SystemExit(f'{path}: end marker missing: {end_marker}')
+    write(path, text[:start] + replacement + text[end:])
+
+
+AUDIT_SOURCE = """const DEFAULT_LIMIT = 200;
+const MAX_HISTORY = 500;
+
+export function isRoutineRecoveryEvent(event) {
+  return String(event?.type || '').trim().toLowerCase() === 'recovery'
+    && String(event?.action || '').trim().toUpperCase() === 'WAIT'
+    && String(event?.reason || '').trim().toLowerCase() === 'no-recovery-needed';
+}
+
+export function appendAuditEvent(store, event, now = new Date()) {
+  const rawHistory = Array.isArray(store.meta.auditHistory) ? store.meta.auditHistory : [];
+  const history = rawHistory.filter(row => !isRoutineRecoveryEvent(row));
+  if (isRoutineRecoveryEvent(event)) {
+    if (history.length !== rawHistory.length) store.setMeta('auditHistory', history.slice(-MAX_HISTORY));
+    return null;
+  }
+  const row = {
+    id: `${now.getTime()}:${history.length}`,
+    at: now.toISOString(),
+    type: clean(event.type, 40) || 'action',
+    action: clean(event.action, 80) || 'unknown',
+    outcome: clean(event.outcome, 40) || 'recorded',
+    projectId: clean(event.projectId, 120) || undefined,
+    projectName: clean(event.projectName, 120) || undefined,
+    conversationId: clean(event.conversationId, 200) || undefined,
+    reason: clean(event.reason, 300) || undefined
+  };
+  store.setMeta('auditHistory', [...history, row].slice(-MAX_HISTORY));
+  return row;
+}
+
+export function listAuditEvents(store, { projectId, limit = DEFAULT_LIMIT } = {}) {
+  const rows = (Array.isArray(store.meta.auditHistory) ? store.meta.auditHistory : [])
+    .filter(row => !isRoutineRecoveryEvent(row));
+  const bounded = Math.max(1, Math.min(Number(limit) || DEFAULT_LIMIT, MAX_HISTORY));
+  return rows
+    .filter(row => !projectId || row.projectId === projectId)
+    .slice(-bounded)
+    .reverse();
+}
+
+function clean(value, max) {
+  if (value === undefined || value === null) return '';
+  const text = String(value).trim();
+  return text.length <= max ? text : text.slice(0, max);
+}
+"""
+write('src/audit-history.js', AUDIT_SOURCE)
+
+replace_once(
+    'src/server.js',
+    "  const decision = decideRecovery(merged);\n  appendAuditEvent(store, { type: 'recovery', action: decision.action, outcome: 'decided', projectId: config.projectId, projectName: project?.name, conversationId: id, reason: decision.reason });\n  const record = { ...merged, decision };",
+    "  const decision = decideRecovery(merged);\n  const auditEvent = appendAuditEvent(store, { type: 'recovery', action: decision.action, outcome: 'decided', projectId: config.projectId, projectName: project?.name, conversationId: id, reason: decision.reason });\n  const record = { ...merged, decision };"
+)
+replace_once('src/server.js', "  logger.info('recovery-decision', {", "  if (auditEvent) logger.info('recovery-decision', {")
+
+replace_once(
+    'extension/project-console.js',
+    "  const HOST_ID = 'chatsentinel-project-console-host';\n  const MIN_WIDTH = 330;",
+    "  const HOST_ID = 'chatsentinel-project-console-host';\n  const RECOVERY_BUTTON_ID = 'chatsentinel-runtime-recovery';\n  const MIN_WIDTH = 330;"
+)
+replace_once(
+    'extension/project-console.js',
+    "    if (host?.shadowRoot) {\n      shadow = host.shadowRoot;\n      bindPanelEventsOnce();\n      return;\n    }",
+    "    if (host?.shadowRoot) {\n      shadow = host.shadowRoot;\n      ensureRecoveryButtonSlot();\n      bindPanelEventsOnce();\n      return;\n    }"
+)
+replace_once(
+    'extension/project-console.js',
+    "    document.documentElement.appendChild(host);\n    bindPanelEventsOnce();",
+    "    document.documentElement.appendChild(host);\n    ensureRecoveryButtonSlot();\n    bindPanelEventsOnce();"
+)
+replace_once(
+    'extension/project-console.js',
+    "  function template() {",
+    "  function ensureRecoveryButtonSlot() {\n    const header = shadow?.querySelector('.header');\n    if (!header || shadow.getElementById(RECOVERY_BUTTON_ID)) return false;\n    const button = document.createElement('button');\n    button.id = RECOVERY_BUTTON_ID;\n    button.textContent = 'Check connection';\n    button.title = 'Diagnose and recover ChatSentinel connectivity';\n    header.insertBefore(button, shadow.getElementById('close'));\n    return true;\n  }\n\n  function template() {"
+)
+replace_once(
+    'extension/project-console.js',
+    "          <div class=\"badge\" id=\"health\">connecting…</div>\n          <button id=\"close\" title=\"Close\">×</button>",
+    "          <div class=\"badge\" id=\"health\">connecting…</div>\n          <button id=\"chatsentinel-runtime-recovery\" title=\"Diagnose and recover ChatSentinel connectivity\">Check connection</button>\n          <button id=\"close\" title=\"Close\">×</button>"
+)
+
+HISTORY_BLOCK = """  function isRoutineHistoryEvent(event) {
+    return String(event?.type || '').toLowerCase() === 'recovery'
+      && String(event?.action || '').toUpperCase() === 'WAIT'
+      && String(event?.reason || '').toLowerCase() === 'no-recovery-needed';
+  }
+
+  function renderHistory(project) {
+    const card = shadow.getElementById('historyCard');
+    const scoped = state.history.filter(event => !project || event.projectId === project.projectId);
+    const routineHidden = scoped.filter(isRoutineHistoryEvent).length;
+    const events = scoped.filter(event => !isRoutineHistoryEvent(event)).slice(0, 30);
+    card.innerHTML = `<h3>${project ? escapeHtml(project.name) + ' · ' : ''}Action / Recovery History</h3>${routineHidden ? `<div class="muted">${routineHidden} routine healthy WAIT check${routineHidden === 1 ? '' : 's'} hidden.</div>` : ''}<div id="historyList"></div>`;
+    const list = card.querySelector('#historyList');
+    if (!events.length) {
+      list.innerHTML = '<div class="muted">No recorded actions or recovery decisions yet.</div>';
+      return;
+    }
+    for (const event of events) {
+      const row = document.createElement('div');
+      row.className = 'history-row';
+      row.innerHTML = `<div><strong>${escapeHtml(event.action)}</strong> <span class="muted">${escapeHtml(event.outcome)}</span></div><div class="muted">${escapeHtml(event.projectName || event.conversationId || 'global')} · ${escapeHtml(event.at || '')}</div>${event.reason ? `<div class="muted">${escapeHtml(event.reason)}</div>` : ''}`;
+      list.append(row);
+    }
+  }
+"""
+replace_between('extension/project-console.js', '  function renderHistory(project) {', '\n  function renderSearchPortable()', HISTORY_BLOCK)
+
+replace_once(
+    'extension/components/offline-recovery/controller.js',
+    "  const REPAIR_COMMAND = 'powershell -ExecutionPolicy Bypass -File C:\\\\ChatSentinel\\\\scripts\\\\recover-runtime.ps1';",
+    "  const REPAIR_COMMAND = 'powershell -ExecutionPolicy Bypass -File C:\\\\ChatSentinel\\\\scripts\\\\recover-runtime.ps1';\n  let boundButton = null;"
+)
+
+INSTALL_BUTTON = """  function installButton() {
+    const host = document.getElementById(HOST_ID);
+    const shadow = host?.shadowRoot;
+    const header = shadow?.querySelector('.header');
+    if (!header) return false;
+    let button = shadow.getElementById(BUTTON_ID);
+    if (!button) {
+      button = document.createElement('button');
+      button.id = BUTTON_ID;
+      button.textContent = 'Check connection';
+      button.title = 'Diagnose and recover ChatSentinel connectivity';
+      header.insertBefore(button, shadow.getElementById('close'));
+    }
+    if (boundButton !== button) {
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.textContent = 'Checking…';
+        const result = await recover(document);
+        if (result.action === 'wait') {
+          button.textContent = 'Response running';
+          button.disabled = false;
+          return;
+        }
+        if (result.action === 'open-repair') {
+          button.textContent = 'Repair command copied';
+          button.disabled = false;
+          return;
+        }
+        if (result.action === 'none') {
+          button.textContent = 'Connected';
+          setTimeout(() => { button.disabled = false; button.textContent = 'Connected · Check'; }, 1500);
+        }
+      });
+      boundButton = button;
+    }
+    diagnose().then(status => {
+      renderStatus(status);
+      button.textContent = buttonLabel(status);
+      button.disabled = false;
+    }).catch(() => {
+      renderStatus({ state: 'extension-disconnected' });
+      button.textContent = 'Reconnect ChatSentinel';
+      button.disabled = false;
+    });
+    return true;
+  }
+"""
+replace_between('extension/components/offline-recovery/controller.js', '  function installButton() {', '\n  function boot() {', INSTALL_BUTTON)
+
+background = read('extension/background.js')
+marker = "const DEFAULT_WATCHDOG = 'http://127.0.0.1:4317';"
+files_block = """const CONTENT_SCRIPT_FILES = Object.freeze([
+  'components/runtime-context-guard/controller.js',
+  'components/request-rate-limit/controller.js',
+  'components/tab-launch-guard/controller.js',
+  'components/message-delivery-recovery/controller.js',
+  'components/prompt-delivery/controller.js',
+  'components/response-completion-recovery/controller.js',
+  'identity.js',
+  'actuator.js',
+  'content.js',
+  'components/project-chat-lifecycle/controller.js',
+  'components/full-project-mode/controller.js',
+  'project-console.js',
+  'components/offline-recovery/controller.js'
+]);
+
+"""
+if background.count(marker) != 1:
+    raise SystemExit(f'background watchdog marker count={background.count(marker)}')
+background = background.replace(marker, files_block + marker, 1)
+click_marker = "chrome.action.onClicked.addListener(tab => togglePanelInTab(tab));"
+if background.count(click_marker) != 1:
+    raise SystemExit(f'background action marker count={background.count(click_marker)}')
+background = background.replace(click_marker, click_marker + "\nrehydrateOpenChatGptTabs('service-worker-start').catch(error => console.warn('ChatSentinel tab rehydrate failed', error));", 1)
+old_files = "files: ['components/runtime-context-guard/controller.js', 'components/request-rate-limit/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js', 'components/offline-recovery/controller.js']"
+if background.count(old_files) != 1:
+    raise SystemExit(f'background injection list count={background.count(old_files)}')
+background = background.replace(old_files, 'files: CONTENT_SCRIPT_FILES', 1)
+rehydrate_marker = 'async function detachRemovedProjectMemberships(tabId) {'
+rehydrate_source = """async function rehydrateOpenChatGptTabs(reason = 'manual') {
+  const tabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' }).catch(() => []);
+  const result = { reason, checked: 0, injected: 0, alreadyLive: 0, failed: 0 };
+  for (const tab of tabs) {
+    if (!tab?.id) continue;
+    result.checked += 1;
+    const live = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_GET_IDENTITY' }).catch(() => null);
+    if (live?.ok) {
+      result.alreadyLive += 1;
+      continue;
+    }
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: CONTENT_SCRIPT_FILES });
+      result.injected += 1;
+    } catch (error) {
+      result.failed += 1;
+      console.warn('ChatSentinel could not rehydrate tab', tab.id, error);
+    }
+  }
+  return result;
+}
+
+"""
+if background.count(rehydrate_marker) != 1:
+    raise SystemExit(f'background rehydrate marker count={background.count(rehydrate_marker)}')
+background = background.replace(rehydrate_marker, rehydrate_source + rehydrate_marker, 1)
+write('extension/background.js', background)
+
+TEST_SOURCE = r"""import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { appendAuditEvent, isRoutineRecoveryEvent, listAuditEvents } from '../src/audit-history.js';
+
+test('routine healthy WAIT decisions never fill durable action history and old noise is pruned', () => {
+  const meta = { auditHistory: [
+    { type: 'recovery', action: 'WAIT', reason: 'no-recovery-needed', conversationId: 'c1' },
+    { type: 'action', action: 'PROJECT_CREATED', outcome: 'success', projectId: 'p1' },
+    { type: 'recovery', action: 'WAIT', reason: 'no-recovery-needed', conversationId: 'c2' }
+  ] };
+  const store = { meta, setMeta(key, value) { meta[key] = value; } };
+  const routine = { type: 'recovery', action: 'WAIT', outcome: 'decided', conversationId: 'c1', reason: 'no-recovery-needed' };
+  assert.equal(isRoutineRecoveryEvent(routine), true);
+  assert.equal(appendAuditEvent(store, routine, new Date('2026-09-06T00:00:00Z')), null);
+  assert.deepEqual(listAuditEvents(store).map(row => row.action), ['PROJECT_CREATED']);
+  assert.equal(meta.auditHistory.length, 1);
+  appendAuditEvent(store, { type: 'recovery', action: 'SAFE_RETRY', outcome: 'decided', conversationId: 'c1', reason: 'native retry visible' }, new Date('2026-09-06T00:00:01Z'));
+  assert.deepEqual(listAuditEvents(store).map(row => row.action), ['SAFE_RETRY', 'PROJECT_CREATED']);
+});
+
+test('project console always owns a visible recovery-button slot and filters legacy routine WAIT rows', () => {
+  const source = fs.readFileSync(new URL('../extension/project-console.js', import.meta.url), 'utf8');
+  assert.match(source, /RECOVERY_BUTTON_ID = 'chatsentinel-runtime-recovery'/);
+  assert.match(source, /ensureRecoveryButtonSlot\(\)/);
+  assert.match(source, /id="chatsentinel-runtime-recovery"/);
+  assert.match(source, /function isRoutineHistoryEvent/);
+  assert.match(source, /routine healthy WAIT check/);
+});
+
+test('offline recovery rebinds an existing stale DOM button in each fresh extension context', () => {
+  const source = fs.readFileSync(new URL('../extension/components/offline-recovery/controller.js', import.meta.url), 'utf8');
+  assert.match(source, /let boundButton = null;/);
+  assert.match(source, /if \(boundButton !== button\)/);
+  assert.match(source, /boundButton = button;/);
+});
+
+test('background self-rehydrates already-open ChatGPT tabs after extension service-worker restart', () => {
+  const source = fs.readFileSync(new URL('../extension/background.js', import.meta.url), 'utf8');
+  assert.match(source, /rehydrateOpenChatGptTabs\('service-worker-start'\)/);
+  assert.match(source, /CHATSENTINEL_GET_IDENTITY/);
+  assert.match(source, /files: CONTENT_SCRIPT_FILES/);
+  assert.match(source, /https:\/\/chatgpt\.com\/\*/);
+});
+"""
+write('test/panel-repair-history-noise.test.js', TEST_SOURCE)
