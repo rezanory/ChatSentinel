@@ -1,0 +1,8 @@
+{
+  "status": "SUPERSEDED_STOP",
+  "supersededBranch": "fix/v1.3.3-panel-repair-history-noise",
+  "canonicalContinuationBranch": "fix/v1.3.3-unified-recovery-panel-history",
+  "reason": "This lane contained CI/authoring scaffolding only. Canonical continuation preserves the concurrent Remote Desktop Commander recovery commit and carries the repair-button/history-noise fix in a single lane.",
+  "authority": "single-lane-only",
+  "createdAt": "2026-09-06T02:20:41Z"
+}
