@@ -58,7 +58,7 @@ test('setup MCP exposes read/plan/apply/runner tools with approval semantics', a
   assert.equal(response.result.structuredContent.action, 'uninstall');
   assert.ok(response.result.structuredContent.steps.some(step => step.id === 'service:watchdog:remove'));
 
-  mcp.send({ jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'runner_plan', arguments: { repo: 'rezanory/ChatSentinel', labels: ['project-local'] } });
+  mcp.send({ jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'runner_plan', arguments: { repo: 'rezanory/ChatSentinel', labels: ['project-local'] } } });
   response = await mcp.read();
   assert.equal(response.result.isError, false);
   assert.equal(response.result.structuredContent.repo, 'rezanory/ChatSentinel');
