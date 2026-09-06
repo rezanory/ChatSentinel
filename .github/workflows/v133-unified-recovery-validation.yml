@@ -1,0 +1,72 @@
+name: v1.3.3 Unified Recovery Validation
+
+on:
+  push:
+    branches:
+      - validation/v1.3.3-unified-recovery-20260906-v3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install testable Chromium
+        shell: powershell
+        run: |
+          npx --yes playwright@1.55.0 install chromium
+          if ($LASTEXITCODE -ne 0) { throw "Playwright Chromium install failed: $LASTEXITCODE" }
+          $cache = Join-Path $env:LOCALAPPDATA 'ms-playwright'
+          $browser = Get-ChildItem $cache -Filter chrome.exe -Recurse -ErrorAction Stop | Where-Object { $_.FullName -match 'chromium-' } | Select-Object -First 1
+          if (-not $browser) { throw 'Testable Chromium executable was not found.' }
+          "CHROME_BIN=$($browser.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Focused unified recovery tests
+        run: node --test test/offline-recovery.test.js test/runtime-recovery-script.test.js test/remote-desktop-commander-recovery.test.js test/setup-mcp.test.js
+      - name: Parse all PowerShell scripts
+        shell: powershell
+        run: |
+          $failures = 0
+          Get-ChildItem scripts -Filter *.ps1 | ForEach-Object {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { $failures += $errors.Count; $errors | ForEach-Object { Write-Host $_.Message } }
+          }
+          if ($failures) { throw "PowerShell parse failures=$failures" }
+      - name: Full release validation
+        run: npm run release-validate
+
+  verify-macos:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Full release validation
+        run: npm run release-validate
+      - name: Install launchd watchdog
+        run: bash scripts/install-autostart-macos.sh
+      - name: Verify live health
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4317/health > health.json; then break; fi
+            sleep 1
+          done
+          cat health.json
+          node -e "const h=require('./health.json'),p=require('./package.json'); if(!h.ok||h.version!==p.version||!h.pid) process.exit(1)"
+      - name: Cleanup launchd service
+        if: always()
+        run: bash scripts/uninstall-autostart-macos.sh
