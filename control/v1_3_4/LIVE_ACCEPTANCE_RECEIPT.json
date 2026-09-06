@@ -1,0 +1,70 @@
+{
+  "status": "ACCEPTED_LIVE",
+  "release": "1.3.4",
+  "sourceCommit": "c86036d9d0999afb5b807d05dc36a5a0ff926a8e",
+  "branch": "fix/v1.3.4-orchestrator-anti-loop-fair-dispatch",
+  "watchdog": {
+    "before": {
+      "version": "1.3.3",
+      "pid": 20116
+    },
+    "after": {
+      "version": "1.3.4",
+      "pid": 61324
+    },
+    "activation": "official upgrade-aware install-autostart.ps1 via UAC"
+  },
+  "browserExtension": {
+    "extensionId": "pcidbmcahljjpbmaecjmfmpbpfnpoepc",
+    "path": "C:\\ChatSentinel\\extension",
+    "serviceWorkerVersionBefore": "1.3.3",
+    "serviceWorkerVersionAfter": "1.3.4",
+    "reloadControl": "chrome://extensions dev-reload-button"
+  },
+  "heartbeatAcceptance": [
+    {
+      "laneId": "P8C15",
+      "conversationId": "WEB:000aa0d7-9349-497b-a51b-ce51038ee546",
+      "worktreePath": "C:\\Users\\Radlina\\workspace\\chat-project-ph8-c15",
+      "branch": "feat/ph8-p05-c15-add-on-entitlement-service-v1",
+      "result": "PASS"
+    },
+    {
+      "laneId": "P8C19V",
+      "conversationId": "WEB:18bb50c3-cc1f-4aac-b990-ddeaf3f92ff8",
+      "worktreePath": "C:\\Users\\Radlina\\workspace\\chat-project-ph8-c19-validation",
+      "branch": "validation/ph8-c19-exact-v1",
+      "result": "PASS"
+    }
+  ],
+  "antiLoopAcceptance": {
+    "poisonCommandId": "cmd:fa9305b2-8d6d-4901-8afd-7b77afef6803",
+    "laneId": "P8C18",
+    "terminalStatus": "succeeded",
+    "historicalFixCommandCount": 1,
+    "newFixGenerationObservedAfterV134": false,
+    "result": "PASS"
+  },
+  "fairDispatchAcceptance": {
+    "completedIndependentFixes": [
+      "P8C19V:cmd:7a7dc09b-ea20-4db9-b912-78411b5065f3",
+      "P9C13V:cmd:3ce1498b-beef-4008-8e8b-67e15857860c",
+      "P10C35:cmd:100c42b7-fe10-4570-9c89-62508cc41887"
+    ],
+    "additionalIndependentQueuedLane": "P105C04:cmd:23ad1a33-6d3c-4ba7-b5bc-1f479d4dcb35",
+    "capacityBehavior": "bounded pending/running lanes consume maxParallelLanes slots; blocked/stalled lanes do not monopolize project action",
+    "result": "PASS"
+  },
+  "validation": {
+    "nodeTests": "233/233 PASS",
+    "versionCheck": "PASS",
+    "syntaxCheck": "PASS",
+    "securityPolicy": "PASS",
+    "shellCheck": "PASS",
+    "productionSmoke": "PASS",
+    "npmAudit": "0 vulnerabilities",
+    "diffCheck": "PASS",
+    "browserE2E": "PASS on isolated exact-SHA rerun",
+    "browserE2ENote": "One prior aggregate exact release-validate attempt hit a CDP Runtime.evaluate timeout after non-browser gates had passed; isolated exact-SHA E2E rerun passed with exit 0."
+  }
+}

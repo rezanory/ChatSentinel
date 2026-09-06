@@ -38,3 +38,13 @@ Pre-freeze Windows validation is green:
 - `git diff --check`: PASS
 
 The running watchdog observed during the incident predates this source and must be deliberately restarted after the exact candidate is pushed. Live acceptance is not complete until `/health` reports `1.3.4`, the project heartbeat shows lane-specific worktree branches for existing/new lanes, and a stalled FIX lane no longer prevents independent lane creation.
+
+## Post-push live acceptance
+
+Live activation is complete. The pre-upgrade listener was confirmed as v1.3.3 PID 20116. The official upgrade-aware installer recycled it through the existing supervisor and `/health` now reports v1.3.4 PID 61324 with the persisted project/session state retained.
+
+The unpacked Chrome extension was then reloaded through its exact `dev-reload-button`. Chrome `Secure Preferences` now records ChatSentinel service-worker registration version `1.3.4` at `C:\ChatSentinel\extension`. Existing C15 and C19V chats backfilled their lane worktrees on the next signal and recovery now reports their exact lane branches instead of the generic PH7 root branch.
+
+The historical P8C18 poison FIX remains one terminal command only (`cmd:fa9305b2-8d6d-4901-8afd-7b77afef6803`); no new P8C18 FIX generation appeared after activation. After the extension reload, previously pending independent P8C19V/P9C13V FIX commands completed, P10C35 advanced, and P105C04 remained independently queued under bounded capacity. This is the expected non-starving fair-dispatch behavior.
+
+Structured live evidence is frozen in `control/v1_3_4/LIVE_ACCEPTANCE_RECEIPT.json`.
