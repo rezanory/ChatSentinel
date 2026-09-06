@@ -21,9 +21,12 @@ One Project MUST have one canonical state; Groups are virtual views, not state s
 
 ## R-002 Strangler migration
 
-The working v1.3.4 system remains usable until each replacement Component has exact Admission,
-source freeze, independent validation, integration and readiness evidence. No big-bang rewrite.
-Working fallback: backup/v1.3.4-working-20260906 @ 874112cff9d77837f93cdd616abe620d1aa2e4dd.
+The user reported v1.3.4 as not working correctly and temporarily returned to the v1.2 family.
+Therefore v1.3.4 MUST NOT be used as trusted NextGen supervisor or working fallback.
+Exact stable v1.2 reference: backup/v1.2.1-working-reference-20260906 @ 05d7370a43087845d806389f5ae867f81b82df73.
+The current C:\\ChatSentinel worktree is observed mixed/dirty and MUST NOT be automatically reset, cleaned or treated as an exact rollback.
+Until a replacement supervisor is independently GREEN, NextGen development uses Direct RDC + exact Git worktrees.
+Strangler migration still applies to product code: preserve proven behavior and replace component-by-component; no big-bang rewrite.
 
 ## R-003 Direct-wave continuation / WAVEADV
 
