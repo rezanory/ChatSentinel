@@ -11,9 +11,6 @@ function Get-ChatSentinelHealth {
 }
 
 function Ensure-Persistence {
-  $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-  if ($task) { return @{ mode = 'scheduled-task'; installed = $true } }
-
   $quotedRunner = '"' + $runner + '"'
   $taskCommand = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $quotedRunner"
   $previous = $ErrorActionPreference
@@ -47,19 +44,12 @@ if ($listener) {
   $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
   $command = [string]$process.CommandLine
   if ($command -notmatch '(?i)ChatSentinel|local-watchdog\.js') {
-    throw "Port 4317 is owned by an unrelated process PID $($listener.OwningProcess); refusing to terminate it."
+    throw "Port 4317 is owned by an unrelated process PID $($listener.OwningProcess); refusing recovery."
   }
-  Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
-  Start-Sleep -Milliseconds 750
+  Write-Host "[ChatSentinel] port 4317 already has a ChatSentinel-owned listener PID $($listener.OwningProcess); leaving it untouched and starting the supervisor only."
 }
 
-$supervisors = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object {
-  $_.ProcessId -ne $PID -and $_.CommandLine -match '(?i)ChatSentinel' -and $_.CommandLine -match '(?i)run-watchdog\.ps1'
-})
-foreach ($supervisor in $supervisors) {
-  Stop-Process -Id $supervisor.ProcessId -Force -ErrorAction SilentlyContinue
-}
-
+# Safe with an existing supervisor: run-watchdog.ps1 owns a named mutex and duplicate supervisors exit.
 Start-Process -WindowStyle Hidden powershell.exe -ArgumentList '-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',"`"$runner`""
 
 $health = $null
@@ -68,6 +58,6 @@ for ($i = 0; $i -lt 30; $i++) {
   $health = Get-ChatSentinelHealth
   if ($health -and $health.ok) { break }
 }
-if (-not $health -or -not $health.ok) { throw 'ChatSentinel runtime recovery did not restore /health.' }
+if (-not $health -or -not $health.ok) { throw 'ChatSentinel runtime recovery did not restore /health; deeper diagnosis is required.' }
 
 Write-Host "[ChatSentinel] recovered v$($health.version) pid=$($health.pid); persistence=$($persistence.mode)"
