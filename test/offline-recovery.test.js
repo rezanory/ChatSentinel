@@ -112,6 +112,14 @@ test('offline recovery is loaded by manifest and every bounded reinjection path'
   assert.match(executor, /project-console\.js', 'components\/offline-recovery\/controller\.js'/);
 });
 
+test('stale project panel listeners are rebound once in a newly injected MV3 context', () => {
+  const panel = fs.readFileSync(new URL('../extension/project-console.js', import.meta.url), 'utf8');
+  assert.match(panel, /let boundShadow = null;/);
+  assert.match(panel, /if \(host\?\.shadowRoot\)[\s\S]*shadow = host\.shadowRoot;[\s\S]*bindPanelEventsOnce\(\);/);
+  assert.match(panel, /function bindPanelEventsOnce\(\)[\s\S]*boundShadow === shadow/);
+  assert.match(panel, /bindEvents\(\);[\s\S]*restorePanelWidth\(\);[\s\S]*boundShadow = shadow;/);
+});
+
 test('Setup Assistant exposes the bounded runtime recovery action', () => {
   const html = fs.readFileSync(new URL('../extension/setup.html', import.meta.url), 'utf8');
   const setup = fs.readFileSync(new URL('../extension/setup.js', import.meta.url), 'utf8');
