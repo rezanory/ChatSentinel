@@ -157,6 +157,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
         laneName: payload.laneName,
         branch: payload.branch,
         baselineSha: payload.baselineSha,
+        worktreePath: payload.worktreePath,
         role: payload.role
       });
       if (!attached?.ok) throw new Error(attached?.error || 'project-attach-failed');
@@ -211,6 +212,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
         laneName: payload.laneName,
         branch: payload.branch,
         baselineSha: payload.baselineSha,
+        worktreePath: payload.worktreePath,
         role: payload.role
       });
       if (stableAttach?.ok) {

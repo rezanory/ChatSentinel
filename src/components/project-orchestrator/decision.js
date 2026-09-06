@@ -21,6 +21,7 @@ export function detectLaneCompletion({ lane = {}, session = {}, git = {} } = {})
   if (session.decision?.action === 'ESCALATE') return { complete: false, reason: 'chat-escalated' };
   return { complete: true, reason: 'remote-advanced-clean-idle', head: git.remoteHead };
 }
+
 export function decideLaneAction({ lane = {}, session = {}, completion = {}, activeCommand = null, lastCommand = null } = {}) {
   if (completion.complete) return { action: OrchestratorAction.WAIT, reason: 'lane-complete' };
   if (completion.reason === 'lane-contract-incomplete') return { action: OrchestratorAction.BLOCKED, reason: 'lane-contract-incomplete' };
@@ -31,32 +32,27 @@ export function decideLaneAction({ lane = {}, session = {}, completion = {}, act
     return { action: OrchestratorAction.NEXT, reason: 'lane-chat-missing' };
   }
   if (session.conversationDead) {
-    return { action: OrchestratorAction.REPLACE, reason: 'conversation-dead' };
+    return replaceOrBlock(lane, 'conversation-dead');
   }
   const recovery = session.decision?.action;
   if (recovery === 'CONTINUE_NEW_CHAT' || recovery === 'ESCALATE') {
-    return { action: OrchestratorAction.REPLACE, reason: `recovery-${String(recovery).toLowerCase()}` };
+    return replaceOrBlock(lane, `recovery-${String(recovery).toLowerCase()}`);
   }
   if (['SAFE_RETRY', 'CONTINUE_SAME_CHAT', 'RELOAD_AND_RECHECK'].includes(recovery)) {
-    const fixes = Number(lane.fixAttempts || 0);
-    if (fixes >= Number(lane.maxFixAttempts || 2)) {
-      return { action: OrchestratorAction.REPLACE, reason: 'fix-budget-exhausted' };
-    }
-    return { action: OrchestratorAction.FIX, reason: `recovery-${recovery.toLowerCase()}` };
+    return fixOrReplace(lane, `recovery-${recovery.toLowerCase()}`);
   }
   if (session.state === 'IDLE' && completion.reason === 'branch-not-advanced' && lastCommand?.status === 'succeeded') {
     const commandAtMs = Date.parse(lastCommand.completedAt || lastCommand.updatedAt || '');
     const idleKickAfterMs = Number(lane.idleKickAfterMs || 120000);
     if (Number.isFinite(commandAtMs) && Date.now() - commandAtMs >= idleKickAfterMs) {
-      if (Number(lane.fixAttempts || 0) >= Number(lane.maxFixAttempts || 2)) return { action: OrchestratorAction.REPLACE, reason: 'fix-budget-exhausted' };
-      return { action: OrchestratorAction.FIX, reason: 'idle-no-branch-progress' };
+      return fixOrReplace(lane, 'idle-no-branch-progress');
     }
   }
   const updatedAtMs = Date.parse(session.updatedAt || '');
   const silenceAgeMs = Number.isFinite(updatedAtMs) ? Math.max(0, Date.now() - updatedAtMs) : 0;
   const effectiveProgressAgeMs = Math.max(Number(session.progressAgeMs || 0), silenceAgeMs);
   if (effectiveProgressAgeMs >= Number(lane.stallAfterMs || 300000)) {
-    return { action: OrchestratorAction.FIX, reason: 'lane-stalled' };
+    return fixOrReplace(lane, 'lane-stalled');
   }
   return { action: OrchestratorAction.WAIT, reason: completion.reason || 'lane-active' };
 }
@@ -66,6 +62,23 @@ export function decideProjectAction(lanes = []) {
   if (required.length && required.every(row => row.completion?.complete)) {
     return { action: OrchestratorAction.INTEGRATE, reason: 'all-required-lanes-complete' };
   }
-  const actionable = lanes.find(row => row.decision?.action && row.decision.action !== OrchestratorAction.WAIT);
-  return actionable?.decision || { action: OrchestratorAction.WAIT, reason: 'no-project-action' };
+  const actionable = required.filter(row => row.decision?.action && row.decision.action !== OrchestratorAction.WAIT);
+  const runnable = actionable.find(row => row.decision.action !== OrchestratorAction.BLOCKED);
+  return runnable?.decision || actionable[0]?.decision || { action: OrchestratorAction.WAIT, reason: 'no-project-action' };
+}
+
+function fixOrReplace(lane, reason) {
+  const fixes = Number(lane.fixAttempts || 0);
+  if (fixes < Number(lane.maxFixAttempts || 2)) {
+    return { action: OrchestratorAction.FIX, reason };
+  }
+  return replaceOrBlock(lane, 'fix-budget-exhausted');
+}
+
+function replaceOrBlock(lane, reason) {
+  const replacements = Number(lane.replaceAttempts || 0);
+  if (replacements >= Number(lane.maxReplaceAttempts || 2)) {
+    return { action: OrchestratorAction.BLOCKED, reason: 'replace-budget-exhausted' };
+  }
+  return { action: OrchestratorAction.REPLACE, reason };
 }

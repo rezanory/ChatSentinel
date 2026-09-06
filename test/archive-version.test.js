@@ -12,7 +12,8 @@ test('version archiver creates source, extension, bundle, manifest and checksums
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'chatsentinel-archive-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }).catch(() => {}));
   const ref = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: path.resolve('.'), encoding: 'utf8' })).stdout.trim();
-  const expectedExtensionVersion = JSON.parse(await fs.readFile('extension/manifest.json', 'utf8')).version;
+  const exactManifest = (await execFileAsync('git', ['show', ref + ':extension/manifest.json'], { cwd: path.resolve('.'), encoding: 'utf8' })).stdout;
+  const expectedExtensionVersion = JSON.parse(exactManifest).version;
   const version = '1.2.0-test';
   const { stdout } = await execFileAsync(process.execPath, [
     'scripts/archive-version.mjs', '--version', version, '--ref', ref, '--destination', dir

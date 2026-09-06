@@ -522,6 +522,7 @@ async function migrateTabIdentity(tabId, conversationId, signal) {
         laneId: fallback.config.laneId,
         laneName: fallback.config.laneName,
         branch: fallback.config.branch,
+        worktreePath: fallback.config.worktreePath,
         role: fallback.config.role
       });
     }

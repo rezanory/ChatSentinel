@@ -96,3 +96,45 @@ test('claim can skip rate-sensitive commands without consuming their attempts', 
   assert.equal(store.commands[blocked.command.commandId].attempts, 0);
   assert.equal(store.commands[blocked.command.commandId].status, 'pending');
 });
+
+test('retry budget exhaustion is terminally quarantined instead of looping', async t => {
+  const { dir, store } = await makeStore();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const queued = await enqueueCommand(store, {
+    type: 'SEND_PROMPT',
+    payload: { conversationId: 'chat:1', prompt: 'fix' },
+    maxAttempts: 1
+  });
+  const claimed = await claimCommand(store, { workerId: 'worker-a', leaseMs: 5000 });
+  assert.equal(claimed.commandId, queued.command.commandId);
+  const completed = await completeCommand(store, {
+    commandId: claimed.commandId,
+    outcome: 'retry',
+    error: 'still-broken',
+    retryAfterMs: 1
+  });
+  assert.equal(completed.status, 'failed');
+  assert.equal(completed.quarantined, true);
+  assert.equal(completed.retryExhausted, true);
+  assert.equal(completed.terminalReason, 'retry-budget-exhausted');
+  assert.equal(await claimCommand(store, { workerId: 'worker-b', leaseMs: 5000 }), null);
+});
+
+test('expired running command at max attempts is quarantined before another claim', async t => {
+  const { dir, store } = await makeStore();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const queued = await enqueueCommand(store, {
+    type: 'SEND_PROMPT',
+    payload: { conversationId: 'chat:2', prompt: 'fix' },
+    maxAttempts: 1
+  });
+  store.commands[queued.command.commandId].status = 'running';
+  store.commands[queued.command.commandId].attempts = 1;
+  store.commands[queued.command.commandId].leaseUntil = new Date(Date.now() - 1000).toISOString();
+  const next = await claimCommand(store, { workerId: 'worker-b', leaseMs: 5000 });
+  assert.equal(next, null);
+  const exhausted = store.commands[queued.command.commandId];
+  assert.equal(exhausted.status, 'failed');
+  assert.equal(exhausted.quarantined, true);
+  assert.equal(exhausted.terminalReason, 'retry-budget-exhausted');
+});

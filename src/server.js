@@ -394,7 +394,7 @@ async function route(req, res, ctx) {
     const body = await readJson(req, config.maxBodyBytes);
     const parsed = validateConversationConfig(body);
     if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
-    const { conversationId, projectId, projectPath, operationClass, tabId, title, url: conversationUrl } = parsed.value;
+    const { conversationId, projectId, projectPath, worktreePath, operationClass, tabId, title, url: conversationUrl } = parsed.value;
     const existing = store.getConfig(conversationId);
     const linkedProject = projectId ? store.getProject(projectId) : null;
     if (projectId && !linkedProject) return json(res, 404, { ok: false, error: 'project-not-found', requestId: id });
@@ -402,14 +402,16 @@ async function route(req, res, ctx) {
       ...existing,
       ...(projectId ? { projectId } : {}),
       ...(linkedProject?.projectPath ? { projectPath: linkedProject.projectPath } : projectPath ? { projectPath } : {}),
+      ...(worktreePath ? { worktreePath } : {}),
       ...(operationClass !== undefined ? { operationClass } : linkedProject?.operationClass !== undefined ? { operationClass: linkedProject.operationClass } : {}),
       ...(tabId !== undefined ? { tabId } : {}),
       ...(title ? { title } : {}),
       ...(conversationUrl ? { url: conversationUrl } : {})
     };
     await store.setConfig(conversationId, next);
-    const reconciliation = next.projectPath
-      ? await reconcileProject(next.projectPath, { remoteTtlMs: config.reconcileRemoteTtlMs })
+    const reconciliationPath = next.worktreePath || next.projectPath;
+    const reconciliation = reconciliationPath
+      ? await reconcileProject(reconciliationPath, { remoteTtlMs: config.reconcileRemoteTtlMs })
       : null;
     logger.info('conversation-configured', {
       conversationId,
@@ -430,7 +432,7 @@ async function route(req, res, ctx) {
     if (!parsed.ok) return json(res, 400, { ok: false, error: parsed.error, requestId: id });
     const current = parsed.value.conversationId ? store.getConfig(parsed.value.conversationId) : {};
     const project = current.projectId ? store.getProject(current.projectId) : null;
-    const projectPath = parsed.value.projectPath || project?.projectPath || current.projectPath;
+    const projectPath = parsed.value.projectPath || current.worktreePath || project?.projectPath || current.projectPath;
     const reconciliation = await reconcileProject(projectPath, {
       remoteTtlMs: config.reconcileRemoteTtlMs,
       forceRemote: true
@@ -505,14 +507,20 @@ async function handleSignal(signal, ctx) {
   }
 
   const project = config.projectId ? store.getProject(config.projectId) : null;
+  const inferredWorktreePath = config.worktreePath || laneWorktreePath(project, config);
+  if (inferredWorktreePath && inferredWorktreePath !== config.worktreePath) {
+    config = { ...config, worktreePath: inferredWorktreePath };
+    await store.setConfig(id, config);
+  }
   const projectPath = project?.projectPath || config.projectPath;
+  const recoveryPath = config.worktreePath || projectPath;
   const effectiveOperationClass = config.operationClass !== undefined && config.operationClass !== ''
     ? config.operationClass
     : (project?.operationClass || config.operationClass);
-  const reconciliation = projectPath
-    ? await reconcileProject(projectPath, { remoteTtlMs: ctx.config.reconcileRemoteTtlMs })
+  const reconciliation = recoveryPath
+    ? await reconcileProject(recoveryPath, { remoteTtlMs: ctx.config.reconcileRemoteTtlMs })
     : null;
-  const checkpointFresh = projectPath
+  const checkpointFresh = recoveryPath
     ? isFreshCheckpoint(reconciliation)
     : Boolean(signal.checkpointFresh);
   const sideEffect = sideEffectEvidence({
@@ -527,6 +535,7 @@ async function handleSignal(signal, ctx) {
     ...previous,
     ...signal,
     projectPath,
+    worktreePath: config.worktreePath,
     projectId: config.projectId,
     projectName: project?.name,
     operationClass: effectiveOperationClass,
@@ -561,10 +570,30 @@ async function handleSignal(signal, ctx) {
     projectId: config.projectId,
     project: project || null,
     projectPath,
+    worktreePath: config.worktreePath,
     sideEffectRisk,
     sideEffectReasons: sideEffect.reasons,
     checkpointFresh
   };
+}
+
+function laneWorktreePath(project = {}, config = {}) {
+  const orchestration = project?.orchestration || {};
+  const stages = Array.isArray(orchestration.workflow?.stages) ? orchestration.workflow.stages : [];
+  const lanes = [
+    ...(Array.isArray(orchestration.lanes) ? orchestration.lanes : []),
+    ...(orchestration.integrationLane ? [orchestration.integrationLane] : []),
+    ...stages.flatMap(stage => [
+      ...(Array.isArray(stage?.lanes) ? stage.lanes : []),
+      ...(stage?.integrationLane ? [stage.integrationLane] : [])
+    ])
+  ];
+  const laneId = String(config?.laneId || '').trim();
+  const branch = String(config?.branch || '').trim();
+  const match = lanes.find(lane =>
+    (laneId && String(lane?.laneId || '').trim() === laneId) ||
+    (branch && String(lane?.branch || '').trim() === branch));
+  return String(match?.worktreePath || '').trim();
 }
 
 function signalReceiptKey(ctx = {}) {
@@ -617,6 +646,7 @@ function projectRows(store) {
             laneName: config.laneName,
             branch: config.branch,
             baselineSha: config.baselineSha,
+            worktreePath: config.worktreePath,
             role: config.role,
             attachedAt: config.attachedAt,
             state: session.state,
@@ -643,6 +673,7 @@ function supervisorRows(sessions) {
     projectId: row.projectId,
     projectName: row.projectName,
     projectPath: row.projectPath,
+    worktreePath: row.worktreePath,
     operationClass: row.operationClass,
     autoRecovery: row.autoRecovery,
     branch: row.reconciliation?.branch,

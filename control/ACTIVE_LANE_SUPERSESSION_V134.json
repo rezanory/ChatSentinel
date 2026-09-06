@@ -1,0 +1,9 @@
+{
+  "status": "ACTIVE_CANONICAL_CONTINUATION",
+  "supersededBranch": "fix/v1.3.3-unified-recovery-panel-history",
+  "baseline": "75bb61fff81cb54eed574da1c1fdf9ab58b2dff6",
+  "canonicalContinuationBranch": "fix/v1.3.4-orchestrator-anti-loop-fair-dispatch",
+  "reason": "Fix-forward live orchestrator terminal-FIX dedupe starvation, fair multi-lane dispatch, retry quarantine, and lane-worktree heartbeat attribution.",
+  "authority": "single-canonical-hotfix-lane",
+  "createdAt": "2026-09-06T05:32:00Z"
+}

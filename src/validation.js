@@ -18,10 +18,12 @@ export function validateConversationConfig(body) {
     return invalid('operationClass-invalid');
   }
   const projectId = body.projectId === undefined ? undefined : cleanString(body.projectId, 120);
+  const worktreePath = body.worktreePath === undefined ? undefined : cleanString(body.worktreePath, 2048);
+  if (body.worktreePath !== undefined && !worktreePath) return invalid('worktreePath-invalid');
   const tabId = body.tabId === undefined ? undefined : finiteNumber(body.tabId, 0, 2 ** 31 - 1);
   const title = body.title === undefined ? undefined : cleanString(body.title, 300);
   const url = body.url === undefined ? undefined : cleanString(body.url, 4096);
-  return { ok: true, value: { conversationId, projectId, projectPath, operationClass, tabId, title, url } };
+  return { ok: true, value: { conversationId, projectId, projectPath, worktreePath, operationClass, tabId, title, url } };
 }
 
 export function validateSignal(body) {
@@ -102,6 +104,7 @@ export function validateProjectAttach(body) {
     laneName: body.laneName === undefined ? undefined : cleanString(body.laneName, 160),
     branch: body.branch === undefined ? undefined : cleanString(body.branch, 240),
     baselineSha: body.baselineSha === undefined ? undefined : cleanString(body.baselineSha, 40),
+    worktreePath: body.worktreePath === undefined ? undefined : cleanString(body.worktreePath, 2048),
     role: body.role === undefined ? undefined : cleanString(body.role, 120)
   } };
 }
@@ -186,6 +189,7 @@ function validateCommandPayload(type, payload) {
     laneName: payload.laneName === undefined ? undefined : cleanString(payload.laneName, 160),
     branch: payload.branch === undefined ? undefined : cleanString(payload.branch, 240),
     baselineSha: payload.baselineSha === undefined ? undefined : cleanString(payload.baselineSha, 40),
+    worktreePath: payload.worktreePath === undefined ? undefined : cleanString(payload.worktreePath, 2048),
     role: payload.role === undefined ? undefined : cleanString(payload.role, 120),
     closeOld: Boolean(payload.closeOld)
   } };

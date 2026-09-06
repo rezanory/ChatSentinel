@@ -71,15 +71,18 @@ test('command claim and completion schemas are bounded', () => {
 
 test('lane baseline evidence survives command and project-attach validation', () => {
   const baselineSha = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+  const worktreePath = 'C:\\\\Work\\\\lane-c1';
   const command = validateCommandEnqueue({
     type: 'CREATE_LANE_CHAT',
-    payload: { projectId: 'p1', prompt: 'seed', laneId: 'C1', branch: 'feat/c1', baselineSha }
+    payload: { projectId: 'p1', prompt: 'seed', laneId: 'C1', branch: 'feat/c1', baselineSha, worktreePath }
   });
   assert.equal(command.ok, true);
   assert.equal(command.value.payload.baselineSha, baselineSha);
+  assert.equal(command.value.payload.worktreePath, worktreePath);
   const attach = validateProjectAttach({
-    projectId: 'p1', conversationId: 'chat:1', laneId: 'C1', branch: 'feat/c1', baselineSha
+    projectId: 'p1', conversationId: 'chat:1', laneId: 'C1', branch: 'feat/c1', baselineSha, worktreePath
   });
   assert.equal(attach.ok, true);
   assert.equal(attach.value.baselineSha, baselineSha);
+  assert.equal(attach.value.worktreePath, worktreePath);
 });

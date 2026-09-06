@@ -19,6 +19,7 @@
       laneName: existing?.laneName || payload.laneName,
       branch: existing?.branch || payload.branch,
       baselineSha: existing?.baselineSha || payload.baselineSha,
+      worktreePath: existing?.worktreePath || payload.worktreePath,
       role: existing?.role || payload.role
     });
     if (!attached?.ok) throw new Error(attached?.error || 'stale-focus-reattach-failed');

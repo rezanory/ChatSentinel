@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createWatchdogServer } from '../src/server.js';
+
+const execFileAsync = promisify(execFile);
 
 async function testConfig() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'chatsentinel-server-'));
@@ -25,6 +29,18 @@ async function testConfig() {
   };
 }
 
+async function initGitRepo(repoPath, branch) {
+  await fs.mkdir(repoPath, { recursive: true });
+  const git = async (...args) => execFileAsync('git', args, { cwd: repoPath });
+  await git('init');
+  await git('config', 'user.email', 'chatsentinel-test@example.invalid');
+  await git('config', 'user.name', 'ChatSentinel Test');
+  await fs.writeFile(path.join(repoPath, 'seed.txt'), branch + '\n');
+  await git('add', 'seed.txt');
+  await git('commit', '-m', 'seed');
+  await git('branch', '-M', branch);
+  await git('remote', 'add', 'origin', repoPath);
+}
 async function listen(app) {
   await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
   const address = app.server.address();
@@ -192,6 +208,95 @@ test('multi-project registry isolates parallel chat groups and persists them', a
   const context = await fetch(`${base}/project/context?conversationId=alpha-2`).then(r => r.json());
   assert.equal(context.project.projectId, alpha.projectId);
   assert.equal(context.config.tabId, 12);
+  await app.close();
+});
+
+test('lane worktree path owns heartbeat reconciliation branch instead of project root', async t => {
+  const { dir, config } = await testConfig();
+  t.after(() => cleanupDir(dir));
+  const projectRepo = path.join(dir, 'project-root');
+  const laneWorktree = path.join(dir, 'lane-worktree');
+  await initGitRepo(projectRepo, 'fix/general-project-branch');
+  await initGitRepo(laneWorktree, 'feat/ph8-c15-lane');
+
+  const app = await createWatchdogServer(config);
+  const base = await listen(app);
+  const post = async (route, body) => {
+    const response = await fetch(`${base}${route}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+    });
+    const json = await response.json();
+    assert.equal(response.status, 200, `${route}: ${JSON.stringify(json)}`);
+    return json;
+  };
+
+  const project = (await post('/projects/upsert', {
+    name: 'Lane Attribution', projectPath: projectRepo, operationClass: 'write', autoRecovery: true, groupTabs: true, color: 'blue'
+  })).project;
+  await post('/projects/attach', {
+    projectId: project.projectId,
+    conversationId: 'lane-chat',
+    tabId: 515,
+    laneId: 'C15',
+    branch: 'feat/ph8-c15-lane',
+    baselineSha: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    worktreePath: laneWorktree
+  });
+
+  const signal = await post('/signal', { conversationId: 'lane-chat', state: 'IDLE', tabId: 515 });
+  assert.equal(signal.projectPath, projectRepo);
+  assert.equal(signal.worktreePath, laneWorktree);
+  assert.equal(signal.reconciliation.projectPath, laneWorktree);
+  assert.equal(signal.reconciliation.branch, 'feat/ph8-c15-lane');
+
+  const supervisor = await fetch(`${base}/supervisor`).then(r => r.json());
+  assert.equal(supervisor.sessions[0].branch, 'feat/ph8-c15-lane');
+  assert.equal(supervisor.sessions[0].worktreePath, laneWorktree);
+  await app.close();
+});
+test('heartbeat backfills a missing lane worktree path from the orchestrator contract', async t => {
+  const { dir, config } = await testConfig();
+  t.after(() => cleanupDir(dir));
+  const projectRepo = path.join(dir, 'project-root-backfill');
+  const laneWorktree = path.join(dir, 'lane-worktree-backfill');
+  await initGitRepo(projectRepo, 'fix/general-project-branch');
+  await initGitRepo(laneWorktree, 'validation/ph8-c19-exact-v1');
+
+  const app = await createWatchdogServer(config);
+  const base = await listen(app);
+  const post = async (route, body) => {
+    const response = await fetch(`${base}${route}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+    });
+    const json = await response.json();
+    assert.equal(response.status, 200, `${route}: ${JSON.stringify(json)}`);
+    return json;
+  };
+
+  const project = (await post('/projects/upsert', {
+    name: 'Lane Backfill', projectPath: projectRepo, operationClass: 'write', autoRecovery: true, groupTabs: true, color: 'blue'
+  })).project;
+  await post('/orchestrator/configure', {
+    projectId: project.projectId,
+    repoPath: projectRepo,
+    lanes: [{
+      laneId: 'C19V', branch: 'validation/ph8-c19-exact-v1',
+      baselineSha: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+      worktreePath: laneWorktree, prompt: 'validate exact lane'
+    }]
+  });
+  await post('/projects/attach', {
+    projectId: project.projectId, conversationId: 'lane-backfill-chat', tabId: 519,
+    laneId: 'C19V', branch: 'validation/ph8-c19-exact-v1',
+    baselineSha: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+  });
+
+  const signal = await post('/signal', { conversationId: 'lane-backfill-chat', state: 'IDLE', tabId: 519 });
+  assert.equal(signal.worktreePath, laneWorktree);
+  assert.equal(signal.reconciliation.projectPath, laneWorktree);
+  assert.equal(signal.reconciliation.branch, 'validation/ph8-c19-exact-v1');
+  const context = await fetch(`${base}/project/context?conversationId=lane-backfill-chat`).then(r => r.json());
+  assert.equal(context.config.worktreePath, laneWorktree);
   await app.close();
 });
 

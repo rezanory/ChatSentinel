@@ -149,3 +149,11 @@ The `Too many requests` ChatGPT limit is now a distinct bounded recovery mode. A
 Exact Windows acceptance is green at 184/184 tests plus release validation, browser E2E with real modal auto-dismiss evidence, production smoke, zero-vulnerability audit, 7/7 PowerShell parser and 0 repository-boundary matches. macOS Live Acceptance run `33992650575` is SUCCESS on the same SHA, including live 1.3.1 health and launchd KeepAlive restart from PID 19466 to 19790. Canonical evidence is `control/v1_3_1/ADAPTIVE_RATE_LIMIT_ACCEPTANCE_RECEIPT.json` and `control/v1_3_1/ADAPTIVE_RATE_LIMIT_ACCEPTANCE_HANDOFF.md`.
 
 The docs-bound final commit must repeat exact release validation before ancestry-safe promotion/deployment. The production extension must then be actually reloaded from `C:\ChatSentinel\extension`; copying source files alone is not acceptance.
+
+## v1.3.4 Orchestrator anti-loop / fair-dispatch — 2026-09-06
+
+Live production-state inspection exposed a terminal-command dedupe loop: the same successful FIX command could be returned on every orchestrator tick because its idempotency key was bound to an unchanged stale session timestamp. Since project action selection materialized only the first actionable lane, that stale lane could starve independent `CREATE_LANE_CHAT` work.
+
+v1.3.4 replaces timestamp-bound FIX/REPLACE retries with terminal-history generations, bounds FIX/REPLACE escalation to deterministic BLOCKED, quarantines retry-exhausted durable commands, and materializes multiple independent lane actions per tick with priority `NEXT > REPLACE > FIX`. It also carries each lane `worktreePath` end-to-end and makes heartbeat/recovery reconciliation use that worktree, with orchestrator-contract backfill for legacy chat configs that lack the field.
+
+Pre-freeze Windows gates are fully green at 233/233 tests plus version consistency, syntax, security policy, shell parsing, browser E2E, production smoke, zero-vulnerability npm audit and diff-check. Canonical detailed evidence is `control/v1_3_4/ORCHESTRATOR_ANTI_LOOP_FAIR_DISPATCH_HANDOFF.md`. Runtime acceptance additionally requires restarting the pre-v1.3.4 watchdog process and verifying live `/health`, lane branch attribution, and non-starvation behavior.

@@ -48,6 +48,7 @@ export async function configureOrchestration(store, projectId, plan) {
   const orchestration = {
     enabled: plan.enabled !== false,
     repoPath,
+    maxParallelLanes: Math.max(1, Math.min(10, Number(plan.maxParallelLanes || workflow.maxParallelLanes || 2))),
     integrationLane: stage?.integrationLane
       ? normalizeLane(stage.integrationLane)
       : (plan.integrationLane ? normalizeLane(plan.integrationLane) : null),
@@ -224,6 +225,15 @@ async function inspectLaneRow(store, projectId, plan, lane) {
 }
 
 async function materializeDecision(store, project, plan, rows, decision, context = {}) {
+  const laneRows = selectIndependentLaneRows(rows, maxParallelLaneCommands(plan, context.workflow));
+  if (laneRows.length && ![
+    OrchestratorAction.COMPLETE,
+    OrchestratorAction.ADVANCE,
+    OrchestratorAction.REPLAN,
+    OrchestratorAction.INTEGRATE
+  ].includes(decision.action)) {
+    return materializeLaneRows(store, project, laneRows);
+  }
   if ([OrchestratorAction.WAIT, OrchestratorAction.BLOCKED].includes(decision.action)) return null;
   if (decision.action === OrchestratorAction.COMPLETE) {
     return completeWorkflow(store, project, plan, context.workflow, context.stage, decision);
@@ -248,12 +258,52 @@ async function materializeDecision(store, project, plan, rows, decision, context
         laneName: lane.laneName,
         branch: lane.branch,
         baselineSha: lane.baselineSha,
+        worktreePath: lane.worktreePath,
         role: lane.role
       }
     });
   }
-  const row = rows.find(item => item.decision.action === decision.action);
-  if (!row) return null;
+  return null;
+}
+
+export function selectIndependentLaneRows(rows = [], maxParallelLanes = 2) {
+  const limit = Math.max(1, Math.min(10, Number(maxParallelLanes) || 2));
+  const activeCount = rows.filter(row => ['pending', 'running'].includes(row?.activeCommand?.status)).length;
+  const available = Math.max(0, limit - activeCount);
+  if (!available) return [];
+  const priority = new Map([
+    [OrchestratorAction.NEXT, 0],
+    [OrchestratorAction.REPLACE, 1],
+    [OrchestratorAction.FIX, 2]
+  ]);
+  return rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => priority.has(row?.decision?.action))
+    .sort((a, b) => {
+      const actionDelta = priority.get(a.row.decision.action) - priority.get(b.row.decision.action);
+      if (actionDelta) return actionDelta;
+      const attemptDelta = Number(a.row.lane?.fixAttempts || a.row.lane?.replaceAttempts || 0) -
+        Number(b.row.lane?.fixAttempts || b.row.lane?.replaceAttempts || 0);
+      return attemptDelta || a.index - b.index;
+    })
+    .slice(0, available)
+    .map(({ row }) => row);
+}
+
+function maxParallelLaneCommands(plan = {}, workflow = {}) {
+  return Math.max(1, Math.min(10, Number(workflow?.maxParallelLanes || plan?.maxParallelLanes || 2)));
+}
+
+async function materializeLaneRows(store, project, rows = []) {
+  const commands = [];
+  for (const row of rows) {
+    const emitted = await materializeLaneRowDecision(store, project, row);
+    if (emitted?.command && emitted.deduplicated !== true) commands.push(emitted.command);
+  }
+  return { command: commands[0] || null, commands };
+}
+
+async function materializeLaneRowDecision(store, project, row) {
   const lane = row.lane;
   const common = {
     projectId: project.projectId,
@@ -261,19 +311,21 @@ async function materializeDecision(store, project, plan, rows, decision, context
     laneName: lane.laneName,
     branch: lane.branch,
     baselineSha: lane.baselineSha,
+    worktreePath: lane.worktreePath,
     role: lane.role
   };
-  if (decision.action === OrchestratorAction.NEXT) {
+  if (row.decision.action === OrchestratorAction.NEXT) {
     return enqueueCommand(store, {
       type: 'CREATE_LANE_CHAT',
       idempotencyKey: laneCreateIdempotencyKey(project.projectId, lane),
       payload: { ...common, prompt: lane.prompt }
     });
   }
-  if (decision.action === OrchestratorAction.REPLACE) {
+  if (row.decision.action === OrchestratorAction.REPLACE) {
+    const generation = Math.max(0, Number(lane.replaceAttempts || 0));
     return enqueueCommand(store, {
       type: 'REPLACE_CHAT',
-      idempotencyKey: `orchestrator:${project.projectId}:${lane.laneId}:replace:${row.session?.updatedAt || 'none'}`,
+      idempotencyKey: `orchestrator:${project.projectId}:${lane.laneId}:replace:${generation}`,
       payload: {
         ...common,
         conversationId: row.conversationId,
@@ -282,13 +334,14 @@ async function materializeDecision(store, project, plan, rows, decision, context
       }
     });
   }
-  if (decision.action === OrchestratorAction.FIX) {
+  if (row.decision.action === OrchestratorAction.FIX) {
     const type = row.session?.decision?.action === 'RELOAD_AND_RECHECK'
       ? 'RELOAD_CHAT'
       : 'SEND_PROMPT';
+    const generation = Math.max(0, Number(lane.fixAttempts || 0));
     return enqueueCommand(store, {
       type,
-      idempotencyKey: `orchestrator:${project.projectId}:${lane.laneId}:fix:${row.session?.updatedAt || 'none'}`,
+      idempotencyKey: `orchestrator:${project.projectId}:${lane.laneId}:fix:${generation}`,
       payload: type === 'RELOAD_CHAT'
         ? { ...common, conversationId: row.conversationId }
         : {
@@ -301,7 +354,6 @@ async function materializeDecision(store, project, plan, rows, decision, context
   }
   return null;
 }
-
 async function superviseTerminalCandidates(store, project, rows = []) {
   const commands = [];
   const row = rows.find(item => terminalCandidate(item, item.lastCommand));
@@ -329,6 +381,7 @@ async function superviseTerminalCandidates(store, project, rows = []) {
         laneName: candidate.laneName,
         branch: candidate.branch,
         baselineSha: candidate.baselineSha,
+        worktreePath: row.lane?.worktreePath,
         role: row.lane?.role || 'worker',
         closeOld: true
       }
@@ -456,6 +509,7 @@ export async function advanceWorkflow(store, project, plan, workflow, decision) 
         laneName: lane.laneName,
         branch: lane.branch,
         baselineSha: lane.baselineSha,
+        worktreePath: lane.worktreePath,
         role: lane.role
       }
     });
@@ -516,6 +570,7 @@ export async function replanWorkflow(store, project, workflow, stage, decision) 
       laneName: planner.laneName || 'Workflow Continuation Review',
       branch: planner.branch,
       baselineSha: planner.baselineSha,
+      worktreePath: planner.worktreePath,
       role: planner.role || 'governance'
     }
   });
@@ -547,17 +602,20 @@ function buildWorkflowReplanPrompt(workflow, stage, completed) {
 }
 
 export function deriveLaneCommandHistory(laneCommands = [], { projectId, laneId } = {}) {
+  const terminal = new Set(['succeeded', 'failed', 'cancelled']);
   const fixPrefix = `orchestrator:${projectId}:${laneId}:fix:`;
+  const replacePrefix = `orchestrator:${projectId}:${laneId}:replace:`;
   const fixAttempts = laneCommands.filter(cmd =>
-    String(cmd?.idempotencyKey || '').startsWith(fixPrefix) &&
-    ['succeeded', 'failed'].includes(cmd?.status)
+    String(cmd?.idempotencyKey || '').startsWith(fixPrefix) && terminal.has(cmd?.status)
+  ).length;
+  const replaceAttempts = laneCommands.filter(cmd =>
+    String(cmd?.idempotencyKey || '').startsWith(replacePrefix) && terminal.has(cmd?.status)
   ).length;
   const createGeneration = laneCommands.filter(cmd =>
     cmd?.type === 'CREATE_LANE_CHAT' && cmd?.status === 'succeeded'
   ).length;
-  return { fixAttempts, createGeneration };
+  return { fixAttempts, replaceAttempts, createGeneration };
 }
-
 export function laneCreateIdempotencyKey(projectId, lane = {}) {
   const generation = Math.max(0, Number(lane.createGeneration || 0));
   return `orchestrator:${projectId}:${lane.laneId}:create:${generation}`;

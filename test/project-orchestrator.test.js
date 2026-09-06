@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { detectLaneCompletion, decideLaneAction, decideProjectAction, OrchestratorAction } from '../src/components/project-orchestrator/decision.js';
-import { deriveLaneCommandHistory, laneCreateIdempotencyKey } from '../src/components/project-orchestrator/controller.js';
+import { deriveLaneCommandHistory, laneCreateIdempotencyKey, selectIndependentLaneRows } from '../src/components/project-orchestrator/controller.js';
 
 const lane = { laneId: 'C1', branch: 'feat/c1', baselineSha: 'base', prompt: 'go' };
 
@@ -96,4 +96,61 @@ test('missing exact lane contract blocks instead of launching with an unknown ba
   });
   assert.equal(decision.action, OrchestratorAction.BLOCKED);
   assert.equal(decision.reason, 'lane-contract-incomplete');
+});
+
+test('stalled lane advances through bounded FIX then REPLACE then BLOCKED instead of looping', () => {
+  const session = {
+    state: 'RUNNING',
+    updatedAt: new Date(Date.now() - 600000).toISOString(),
+    decision: { action: 'WAIT' }
+  };
+  let result = decideLaneAction({
+    lane: { ...lane, fixAttempts: 1, maxFixAttempts: 2, replaceAttempts: 0, maxReplaceAttempts: 2 },
+    session,
+    completion: { complete: false, reason: 'chat-not-idle' }
+  });
+  assert.equal(result.action, OrchestratorAction.FIX);
+  result = decideLaneAction({
+    lane: { ...lane, fixAttempts: 2, maxFixAttempts: 2, replaceAttempts: 0, maxReplaceAttempts: 2 },
+    session,
+    completion: { complete: false, reason: 'chat-not-idle' }
+  });
+  assert.equal(result.action, OrchestratorAction.REPLACE);
+  result = decideLaneAction({
+    lane: { ...lane, fixAttempts: 2, maxFixAttempts: 2, replaceAttempts: 2, maxReplaceAttempts: 2 },
+    session,
+    completion: { complete: false, reason: 'chat-not-idle' }
+  });
+  assert.equal(result.action, OrchestratorAction.BLOCKED);
+  assert.equal(result.reason, 'replace-budget-exhausted');
+});
+
+test('project action skips a blocked lane when another independent lane can advance', () => {
+  const rows = [
+    { lane: { laneId: 'poison' }, completion: { complete: false }, decision: { action: OrchestratorAction.BLOCKED, reason: 'replace-budget-exhausted' } },
+    { lane: { laneId: 'fresh' }, completion: { complete: false }, decision: { action: OrchestratorAction.NEXT, reason: 'lane-chat-missing' } }
+  ];
+  assert.equal(decideProjectAction(rows).action, OrchestratorAction.NEXT);
+});
+
+test('fair dispatcher prioritizes fresh independent lanes and preserves capacity', () => {
+  const rows = [
+    { lane: { laneId: 'fix', fixAttempts: 1 }, decision: { action: OrchestratorAction.FIX } },
+    { lane: { laneId: 'new-a' }, decision: { action: OrchestratorAction.NEXT } },
+    { lane: { laneId: 'new-b' }, decision: { action: OrchestratorAction.NEXT } }
+  ];
+  assert.deepEqual(selectIndependentLaneRows(rows, 2).map(row => row.lane.laneId), ['new-a', 'new-b']);
+  rows[1].activeCommand = { status: 'running' };
+  rows[1].decision = { action: OrchestratorAction.WAIT };
+  assert.deepEqual(selectIndependentLaneRows(rows, 2).map(row => row.lane.laneId), ['new-b']);
+});
+
+test('terminal FIX and REPLACE history advances deterministic generations', () => {
+  const history = deriveLaneCommandHistory([
+    { type: 'SEND_PROMPT', status: 'succeeded', idempotencyKey: 'orchestrator:p1:C1:fix:legacy-time' },
+    { type: 'SEND_PROMPT', status: 'failed', idempotencyKey: 'orchestrator:p1:C1:fix:1' },
+    { type: 'REPLACE_CHAT', status: 'cancelled', idempotencyKey: 'orchestrator:p1:C1:replace:0' }
+  ], { projectId: 'p1', laneId: 'C1' });
+  assert.equal(history.fixAttempts, 2);
+  assert.equal(history.replaceAttempts, 1);
 });

@@ -35,6 +35,8 @@ export async function enqueueCommand(store, input) {
 export async function claimCommand(store, { workerId, leaseMs = 60000, excludeTypes = [] }) {
   pruneCommands(store);
   const nowMs = Date.now();
+  const quarantined = quarantineExhaustedCommands(store, nowMs);
+  if (quarantined) await store.saveNow();
   const excluded = new Set((excludeTypes || []).map(value => String(value || '').toUpperCase()));
   const candidates = Object.values(store.commands)
     .filter(command => isClaimable(command, nowMs) && !excluded.has(String(command.type || '').toUpperCase()))
@@ -83,7 +85,13 @@ export async function completeCommand(store, { commandId, outcome, result, error
     command.lastError = error || 'command-failed';
     command.result = result || {};
     command.completedAt = now.toISOString();
+    if (outcome === 'retry') {
+      command.retryExhausted = true;
+      command.quarantined = true;
+      command.terminalReason = 'retry-budget-exhausted';
+    }
     delete command.leaseUntil;
+    delete command.workerId;
   }
   command.updatedAt = now.toISOString();
   await store.saveNow();
@@ -109,6 +117,33 @@ export function listCommands(store, { status, limit = 100 } = {}) {
     .slice(0, Math.max(1, Math.min(500, Number(limit) || 100)));
 }
 
+function quarantineExhaustedCommands(store, nowMs) {
+  let changed = false;
+  for (const command of Object.values(store.commands || {})) {
+    if (!command || TERMINAL.has(command.status)) continue;
+    const attempts = Number(command.attempts || 0);
+    const maxAttempts = Number(command.maxAttempts || 5);
+    if (attempts < maxAttempts) continue;
+    if (command.status === 'running') {
+      const lease = Date.parse(command.leaseUntil || 0);
+      if (Number.isFinite(lease) && lease > nowMs) continue;
+    } else if (command.status !== 'pending') {
+      continue;
+    }
+    const now = new Date(nowMs).toISOString();
+    command.status = 'failed';
+    command.lastError = command.lastError || 'retry-budget-exhausted';
+    command.retryExhausted = true;
+    command.quarantined = true;
+    command.terminalReason = 'retry-budget-exhausted';
+    command.completedAt = now;
+    command.updatedAt = now;
+    delete command.leaseUntil;
+    delete command.workerId;
+    changed = true;
+  }
+  return changed;
+}
 function isClaimable(command, nowMs) {
   if (!command || TERMINAL.has(command.status)) return false;
   const notBefore = Date.parse(command.notBefore || command.createdAt || 0);
