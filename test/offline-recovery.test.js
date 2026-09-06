@@ -30,12 +30,13 @@ test('offline recovery distinguishes extension invalidation from watchdog and pa
   assert.equal(api.classify(true, { ok: true }).state, 'online');
 });
 
-test('recovery button labels are explicit and not a generic refresh', () => {
+test('recovery button labels stay actionable across health changes', () => {
   const api = loadApi();
   assert.equal(api.buttonLabel({ state: 'extension-disconnected' }), 'Reconnect ChatSentinel');
   assert.equal(api.buttonLabel({ state: 'watchdog-offline' }), 'Repair ChatSentinel');
   assert.equal(api.buttonLabel({ state: 'pairing-mismatch' }), 'Repair pairing');
-  assert.equal(api.buttonLabel({ state: 'online' }), 'Connected');
+  assert.equal(api.buttonLabel({ state: 'online' }), 'Connected · Check');
+  assert.match(api.REPAIR_COMMAND, /recover-runtime\.ps1$/i);
 });
 
 test('generation detection prevents destructive reload while an answer is still running', () => {
