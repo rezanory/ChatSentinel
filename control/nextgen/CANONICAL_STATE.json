@@ -1,7 +1,7 @@
 ﻿{
   "schema_version": "1.0",
   "project": "ChatSentinel NextGen",
-  "updated_at": "2026-09-06T16:58:00Z",
+  "updated_at": "2026-09-06T18:14:18Z",
   "normative_workflow": {
     "name": "Canonical Software Engineering Workflow",
     "version": "3.0.1",
@@ -27,8 +27,8 @@
   },
   "repo": "rezanory/ChatSentinel",
   "canonical_trunk": "feat/nextgen-ep2-l5-v1",
-  "state_parent_head": "c0d3ee56d276bc4defe3855f07a98d0373db069e",
-  "state_parent_tree": "eb7e3e07df50896bfb0e1bf0e1b9407e63e88df4",
+  "state_parent_head": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
+  "state_parent_tree": "10554c301355c13f470d8636186532e9f5271162",
   "legacy_working_backup": {
     "branch": "backup/v1.3.4-working-20260906",
     "sha": "874112cff9d77837f93cdd616abe620d1aa2e4dd",
@@ -38,7 +38,8 @@
     "branch": "backup/v1.3.2-working-20260906",
     "sha": "09710ff1071e64ab10ce89ed6b755c20771d5013",
     "tree": "2f78cae91771ebc72edd92430f0bd515e4bbe0b2"
-  },  "components": {
+  },
+  "components": {
     "PH01-P02-C05": {
       "name": "ModuleRegistryFeatureToggle",
       "status": "READY_AND_INTEGRATED",
@@ -81,6 +82,24 @@
   },
   "canonical_requirements_file": "control/nextgen/REQUIREMENTS_LEDGER.md",
   "spec_index_file": "control/nextgen/spec/SPEC_INDEX.yaml",
-  "frontier_file": "control/nextgen/dag/FRONTIER.json"
+  "frontier_file": "control/nextgen/dag/FRONTIER.json",
+  "orchestration_controller": {
+    "branch": "orchestration/nextgen-continuation-v1",
+    "worktree": "C:\\Users\\Radlina\\workspace\\chatsentinel-nextgen-orchestration",
+    "baseline_commit": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
+    "baseline_tree": "10554c301355c13f470d8636186532e9f5271162",
+    "reconciled_remote_commit": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
+    "canonical_trunk_commit": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
+    "wave_id": "NEXTGEN-WAVE-0002",
+    "status": "READY_TO_MATERIALIZE_ADMISSIONS",
+    "handoff_file": "control/nextgen/orchestration/NEXTGEN_CONTINUATION_HANDOFF.md",
+    "required_fresh_controller_lane": true,
+    "supervisor": {
+      "mode": "STRANGLER_V1_3_4",
+      "backup_branch": "backup/v1.3.4-working-20260906",
+      "backup_commit": "874112cff9d77837f93cdd616abe620d1aa2e4dd",
+      "backup_tree": "05acb3a515206b5ed24e0be48b406b830b715a31",
+      "reuse_first": true
+    }
+  }
 }
-

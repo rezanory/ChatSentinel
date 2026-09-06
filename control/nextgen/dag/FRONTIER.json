@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "project": "ChatSentinel NextGen",
   "dag_epoch": 1,
-  "computed_from_trunk": "c0d3ee56d276bc4defe3855f07a98d0373db069e",
-  "computed_at": "2026-09-06T17:02:00Z",
+  "computed_from_trunk": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
+  "computed_at": "2026-09-06T18:14:18Z",
   "completed_ready": [
     {
       "component_id": "PH01-P02-C05",
@@ -16,23 +16,35 @@
     {
       "component_id": "PH01-P02-C06",
       "name": "CoreProcessLifecycle",
-      "direct_predecessors": ["PH01-P02-C05", "PH00-P01-C02"],
+      "direct_predecessors": [
+        "PH01-P02-C05",
+        "PH00-P01-C02"
+      ],
       "status": "CANDIDATE_REQUIRES_EXACT_ADMISSION",
-      "priority": "CRITICAL_PATH_HIGH"
+      "priority": "CRITICAL_PATH_HIGH",
+      "dispatch_state": "ACTIVE_ADMISSION_SLOT_1"
     },
     {
       "component_id": "PH01-P02-C07",
       "name": "TransactionalStateAdapter",
-      "direct_predecessors": ["PH01-P02-C05", "PH00-P02-C04"],
+      "direct_predecessors": [
+        "PH01-P02-C05",
+        "PH00-P02-C04"
+      ],
       "status": "CANDIDATE_REQUIRES_EXACT_ADMISSION",
-      "priority": "CRITICAL_PATH_HIGH"
+      "priority": "CRITICAL_PATH_HIGH",
+      "dispatch_state": "MATERIALIZED_WAITING_WIP_GOVERNANCE_1"
     },
     {
       "component_id": "PH01-P01-C01",
       "name": "DesktopHostElectron",
-      "direct_predecessors": ["PH00-P02-C06", "PH00-P03-C07"],
+      "direct_predecessors": [
+        "PH00-P02-C06",
+        "PH00-P03-C07"
+      ],
       "status": "CANDIDATE_REQUIRES_EXACT_ADMISSION",
-      "priority": "PARALLEL_FOUNDATION"
+      "priority": "PARALLEL_FOUNDATION",
+      "dispatch_state": "ADMISSION_RESEARCH_ONLY_NO_AUTHORING"
     }
   ],
   "wip_limits": {
@@ -48,6 +60,54 @@
   "notes": [
     "Candidate status is not authority. Independent Admission is still required.",
     "PH00 predecessor evidence is hash-pinned in bootstrap bundle/spec index and must be materialized or explicitly referenced in each Admission.",
-    "No phase barrier: any exact-ready component may start when WIP/resource/authority gates permit."
-  ]
+    "No phase barrier: any exact-ready component may start when WIP/resource/authority gates permit.",
+    "Controller wave NEXTGEN-WAVE-0002 is materialized as an authority-fenced dispatch plan; lane state is not component authority."
+  ],
+  "dispatch_plan": {
+    "wave_id": "NEXTGEN-WAVE-0002",
+    "controller_lane": {
+      "logical_lane_id": "NEXTGEN-CTRL-WAVE-0002",
+      "required": true,
+      "fresh": true,
+      "supervise_on_later_ticks": true
+    },
+    "lanes": [
+      {
+        "lane_id": "C06-ADMISSION",
+        "component_id": "PH01-P02-C06",
+        "state": "ACTIVE",
+        "wip_class": "governance"
+      },
+      {
+        "lane_id": "C07-ADMISSION",
+        "component_id": "PH01-P02-C07",
+        "state": "WAITING_WIP",
+        "wip_class": "governance"
+      },
+      {
+        "lane_id": "C06-AUTHOR",
+        "component_id": "PH01-P02-C06",
+        "state": "WAITING_ADMISSION",
+        "wip_class": "authoring"
+      },
+      {
+        "lane_id": "C07-AUTHOR",
+        "component_id": "PH01-P02-C07",
+        "state": "WAITING_ADMISSION",
+        "wip_class": "authoring"
+      },
+      {
+        "lane_id": "C01-ADMISSION-RESEARCH",
+        "component_id": "PH01-P01-C01",
+        "state": "QUEUED_LOW_PRIORITY",
+        "wip_class": "research_reuse"
+      }
+    ],
+    "rules": [
+      "No authoring authority exists until that component has its own exact independent Admission receipt.",
+      "Governance WIP limit is 1; C06 and C07 admission evaluations remain independent and are serialized.",
+      "C01 may remain admission/research only until high-risk WIP capacity permits authoring.",
+      "WAVEADV continuation is a supervised logical lane and must be inspected on later ticks."
+    ]
+  }
 }
