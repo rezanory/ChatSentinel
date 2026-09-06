@@ -46,7 +46,7 @@ let EXTENSION_WORKER;
 try {
   await waitUrl(`${FIXTURE}/idle`);
   const health = await waitJson(`${WATCHDOG}/health`);
-  assert.equal(health.version, '1.3.1', 'v1.3.1 watchdog must be running');
+  assert.equal(health.version, '1.3.2', 'v1.3.2 watchdog must be running');
 
   chrome = spawn(CHROME, [
     `--user-data-dir=${profile}`,
@@ -285,7 +285,7 @@ async function projectConsoleSuite() {
   assert.equal(toggle?.open, true, `panel did not become open: ${JSON.stringify(toggle)}`);
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.style.display === 'block'");
   await waitEval(pageA, "Boolean(document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('newProject'))");
-  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('footerVersion')?.textContent.includes('v1.3.1')");
+  await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('footerVersion')?.textContent.includes('v1.3.2')");
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('setupCard')?.textContent.includes('Environment Setup')");
   await waitEval(pageA, "document.getElementById('chatsentinel-project-console-host')?.shadowRoot?.getElementById('bootstrapCommand')?.value.includes('bootstrap-')");
   assert.ok(await evalValue(pageA, "Boolean(document.getElementById('chatsentinel-project-console-host').shadowRoot.getElementById('openSetupAssistant'))"));
@@ -293,7 +293,7 @@ async function projectConsoleSuite() {
   const setupOpened = await workerValue("chrome.runtime.openOptionsPage().then(()=>({ok:true})).catch(error=>({ok:false,error:String(error)}))");
   assert.equal(setupOpened?.ok, true, `Setup Assistant open failed: ${JSON.stringify(setupOpened)}`);
   const setupTarget = await waitTarget(row => row.type === 'page' && row.url.includes('/setup.html'));
-  await waitEval(setupTarget, "document.getElementById('version')?.textContent.includes('v1.3.1')");
+  await waitEval(setupTarget, "document.getElementById('version')?.textContent.includes('v1.3.2')");
   await waitEval(setupTarget, "document.getElementById('prerequisites')?.textContent.includes('Node.js')");
   const setupTab = await workerValue("(async()=>{const tabs=await chrome.tabs.query({});const t=tabs.find(x=>x.url?.includes('/setup.html'));return t?{id:t.id}:null})()");
   if (setupTab?.id) await workerValue(`chrome.tabs.remove(${setupTab.id}).then(()=>true).catch(()=>false)`);

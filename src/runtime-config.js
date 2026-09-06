@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { defaultDataDir } from './components/setup/device-profile.js';
 
-export const VERSION = '1.3.1';
+export const VERSION = '1.3.2';
 
 const dataDir = process.env.CHATSENTINEL_DATA_DIR || defaultDataDir();
 

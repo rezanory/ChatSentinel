@@ -29,7 +29,7 @@ async function handle(request) {
     return ok(id, {
       protocolVersion: params.protocolVersion || '2025-03-26',
       capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: 'chatsentinel-setup', version: '1.3.1' }
+      serverInfo: { name: 'chatsentinel-setup', version: '1.3.2' }
     });
   }
   if (method === 'tools/list') return ok(id, { tools: toolDefinitions() });

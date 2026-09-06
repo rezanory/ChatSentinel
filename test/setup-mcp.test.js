@@ -29,7 +29,7 @@ test('setup MCP exposes read/plan/apply/runner tools with approval semantics', a
   mcp.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } });
   let response = await mcp.read();
   assert.equal(response.result.serverInfo.name, 'chatsentinel-setup');
-  assert.equal(response.result.serverInfo.version, '1.3.1');
+  assert.equal(response.result.serverInfo.version, '1.3.2');
   assert.equal(response.result.protocolVersion, '2025-03-26');
 
   mcp.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
