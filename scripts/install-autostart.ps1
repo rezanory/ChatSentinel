@@ -20,8 +20,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Production release validation failed.' }
 
 # Install the bounded per-user protocol from the same interactive context as persistence.
 # The protocol accepts no command input and always dispatches recover-runtime.ps1.
-& $protocolInstaller
-if ($LASTEXITCODE -ne 0) { throw 'ChatSentinel recovery protocol registration failed.' }
+try {
+  & $protocolInstaller
+} catch {
+  throw "ChatSentinel recovery protocol registration failed: $($_.Exception.Message)"
+}
 
 $quotedRunner = '"' + $runner + '"'
 $taskCommand = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $quotedRunner"
