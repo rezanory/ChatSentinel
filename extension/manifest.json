@@ -54,7 +54,8 @@
         "content.js",
         "components/project-chat-lifecycle/controller.js",
         "components/full-project-mode/controller.js",
-        "project-console.js"
+        "project-console.js",
+        "components/offline-recovery/controller.js"
       ],
       "run_at": "document_idle"
     }
