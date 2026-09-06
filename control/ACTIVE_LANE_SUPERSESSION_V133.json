@@ -1,0 +1,9 @@
+{
+  "status": "SUPERSEDED_STOP",
+  "supersededBranch": "feat/rdc-recovery-button-v1",
+  "preservedSourceCommit": "f7683a0bc48fec7ca2bd983994b8cba73ba8c33d",
+  "canonicalContinuationBranch": "fix/v1.3.3-unified-recovery-panel-history",
+  "reason": "Concurrent overlap on extension/project-console.js and src/server.js with the ChatSentinel repair-button/history-noise hotfix. Stop authoring on this branch; reconcile before any further push.",
+  "authority": "single-lane-only",
+  "createdAt": "2026-09-06T02:20:41Z"
+}
