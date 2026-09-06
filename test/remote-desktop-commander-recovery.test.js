@@ -1,6 +1,9 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RDC_TASK_NAME, remoteDesktopCommanderStatus, recoverRemoteDesktopCommander } from '../src/remote-desktop-commander-recovery.js';
+import fs from 'node:fs';
+import { RDC_TASK_NAME, RDC_TASK_PATH, remoteDesktopCommanderStatus, recoverRemoteDesktopCommander } from '../src/remote-desktop-commander-recovery.js';
+
+const source = fs.readFileSync(new URL('../src/remote-desktop-commander-recovery.js', import.meta.url), 'utf8');
 
 test('RDC recovery is Windows-only and fails closed elsewhere', async () => {
   const status = await remoteDesktopCommanderStatus({ platform: 'linux' });
@@ -38,5 +41,17 @@ test('RDC recovery restarts only a validated lightweight agent task', async () =
   assert.equal(calls, 2);
   assert.equal(result.recovered, true);
   assert.equal(result.taskName, RDC_TASK_NAME);
+  assert.equal(result.taskPath, RDC_TASK_PATH);
   assert.equal(result.running, true);
+});
+
+test('RDC PowerShell contract binds the root task and a real node remote-agent process', () => {
+  assert.equal(RDC_TASK_NAME, 'DesktopCommander.RemoteAgent');
+  assert.equal(RDC_TASK_PATH, '\\');
+  assert.match(source, /-TaskPath '\\'/);
+  assert.match(source, /Name -ieq 'node\.exe'/);
+  assert.match(source, /ExecutablePath -ieq \$exe/);
+  assert.match(source, /dist\[\\\\\/\]index\\\.js/);
+  assert.match(source, /\$running=\$validated -and \(\$task\.State -eq 'Running'\) -and \(\$processCount -gt 0\)/);
+  assert.match(source, /for\(\$i=0;\$i -lt 20;\$i\+\+\)/);
 });
