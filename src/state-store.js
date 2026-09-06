@@ -122,7 +122,7 @@ export class StateStore {
   async saveNow() {
     this.prune();
     const snapshot = JSON.stringify(this.state, null, 2);
-    this.saving = this.saving.then(async () => {
+    this.saving = this.saving.catch(() => {}).then(async () => {
       await fs.mkdir(path.dirname(this.file), { recursive: true });
       const temp = `${this.file}.${process.pid}.tmp`;
       await fs.writeFile(temp, snapshot, { encoding: 'utf8', mode: 0o600 });
@@ -200,11 +200,22 @@ function isRecord(value) {
 }
 
 async function replaceFile(temp, target) {
-  try {
-    await fs.rename(temp, target);
-  } catch (error) {
-    if (!['EEXIST', 'EPERM'].includes(error.code)) throw error;
-    await fs.rm(target, { force: true });
-    await fs.rename(temp, target);
+  const retryable = new Set(['EEXIST', 'EPERM', 'EBUSY']);
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      await fs.rename(temp, target);
+      return;
+    } catch (error) {
+      if (!retryable.has(error.code)) throw error;
+    }
+
+    try {
+      await fs.rm(target, { force: true });
+      await fs.rename(temp, target);
+      return;
+    } catch (error) {
+      if (!retryable.has(error.code) || attempt === 5) throw error;
+      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)));
+    }
   }
 }

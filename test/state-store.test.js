@@ -77,3 +77,15 @@ test('v1 single-project configs migrate into v1.1 project registry', async t => 
   assert.equal(store.getConfig('a').projectId, project.projectId);
   assert.equal(store.getConfig('b').projectId, project.projectId);
 });
+
+test('state store recovers its save queue after a transient prior failure', async t => {
+  const { dir, file, store } = await tempStore();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const transient = Object.assign(new Error('transient state replace failure'), { code: 'EBUSY' });
+  store.saving = Promise.reject(transient);
+  await store.setProject('project:recovered', { projectId: 'project:recovered', name: 'Recovered' });
+
+  const restored = new StateStore({ file });
+  await restored.load();
+  assert.equal(restored.getProject('project:recovered').name, 'Recovered');
+});
