@@ -6,6 +6,7 @@
 (() => {
   document.documentElement.dataset.chatsentinelConsoleReady = '1';
   const HOST_ID = 'chatsentinel-project-console-host';
+  const RECOVERY_BUTTON_ID = 'chatsentinel-runtime-recovery';
   const MIN_WIDTH = 330;
   const MAX_WIDTH = 680;
   let host;
@@ -46,6 +47,7 @@
     host = document.getElementById(HOST_ID);
     if (host?.shadowRoot) {
       shadow = host.shadowRoot;
+      ensureRecoveryButtonSlot();
       bindPanelEventsOnce();
       return;
     }
@@ -55,6 +57,7 @@
     shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = template();
     document.documentElement.appendChild(host);
+    ensureRecoveryButtonSlot();
     bindPanelEventsOnce();
   }
 
@@ -63,6 +66,17 @@
     bindEvents();
     restorePanelWidth();
     boundShadow = shadow;
+  }
+
+  function ensureRecoveryButtonSlot() {
+    const header = shadow?.querySelector('.header');
+    if (!header || shadow.getElementById(RECOVERY_BUTTON_ID)) return false;
+    const button = document.createElement('button');
+    button.id = RECOVERY_BUTTON_ID;
+    button.textContent = 'Check connection';
+    button.title = 'Diagnose and recover ChatSentinel connectivity';
+    header.insertBefore(button, shadow.getElementById('close'));
+    return true;
   }
 
   function template() {
@@ -108,6 +122,7 @@
         <div class="header">
           <div class="title">ChatSentinel</div>
           <div class="badge" id="health">connecting…</div>
+          <button id="chatsentinel-runtime-recovery" title="Diagnose and recover ChatSentinel connectivity">Check connection</button>
           <button id="close" title="Close">×</button>
         </div>
         <div class="body">
@@ -503,10 +518,18 @@
     }
   }
 
+  function isRoutineHistoryEvent(event) {
+    return String(event?.type || '').toLowerCase() === 'recovery'
+      && String(event?.action || '').toUpperCase() === 'WAIT'
+      && String(event?.reason || '').toLowerCase() === 'no-recovery-needed';
+  }
+
   function renderHistory(project) {
     const card = shadow.getElementById('historyCard');
-    const events = state.history.filter(event => !project || event.projectId === project.projectId).slice(0, 30);
-    card.innerHTML = `<h3>${project ? escapeHtml(project.name) + ' · ' : ''}Action / Recovery History</h3><div id="historyList"></div>`;
+    const scoped = state.history.filter(event => !project || event.projectId === project.projectId);
+    const routineHidden = scoped.filter(isRoutineHistoryEvent).length;
+    const events = scoped.filter(event => !isRoutineHistoryEvent(event)).slice(0, 30);
+    card.innerHTML = `<h3>${project ? escapeHtml(project.name) + ' · ' : ''}Action / Recovery History</h3>${routineHidden ? `<div class="muted">${routineHidden} routine healthy WAIT check${routineHidden === 1 ? '' : 's'} hidden.</div>` : ''}<div id="historyList"></div>`;
     const list = card.querySelector('#historyList');
     if (!events.length) {
       list.innerHTML = '<div class="muted">No recorded actions or recovery decisions yet.</div>';

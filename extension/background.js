@@ -1,5 +1,21 @@
 importScripts('components/project-chat-lifecycle/controller.js', 'session-snapshot-store.js', 'session-restore-controller.js');
 
+const CONTENT_SCRIPT_FILES = Object.freeze([
+  'components/runtime-context-guard/controller.js',
+  'components/request-rate-limit/controller.js',
+  'components/tab-launch-guard/controller.js',
+  'components/message-delivery-recovery/controller.js',
+  'components/prompt-delivery/controller.js',
+  'components/response-completion-recovery/controller.js',
+  'identity.js',
+  'actuator.js',
+  'content.js',
+  'components/project-chat-lifecycle/controller.js',
+  'components/full-project-mode/controller.js',
+  'project-console.js',
+  'components/offline-recovery/controller.js'
+]);
+
 const DEFAULT_WATCHDOG = 'http://127.0.0.1:4317';
 const CLIENT_HEADERS = Object.freeze({
   'content-type': 'application/json',
@@ -19,6 +35,7 @@ const crashRecoveryInFlight = new Set();
 const crashRecoveryPending = new Map();
 
 chrome.action.onClicked.addListener(tab => togglePanelInTab(tab));
+rehydrateOpenChatGptTabs('service-worker-start').catch(error => console.warn('ChatSentinel tab rehydrate failed', error));
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   const guard = globalThis.ChatSentinelTabLaunchGuard;
   chrome.storage.local.remove([`pendingProject:${tabId}`, guard?.crashRecoveryKey?.(tabId)]).catch(() => {});
@@ -43,6 +60,28 @@ chrome.tabs.onDetached.addListener(() => sessionRestoreController.scheduleCaptur
 chrome.tabGroups.onCreated.addListener(() => sessionRestoreController.scheduleCaptureAll('group-created'));
 chrome.tabGroups.onUpdated.addListener(() => sessionRestoreController.scheduleCaptureAll('group-updated'));
 chrome.tabGroups.onMoved.addListener(() => sessionRestoreController.scheduleCaptureAll('group-moved'));
+
+async function rehydrateOpenChatGptTabs(reason = 'manual') {
+  const tabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' }).catch(() => []);
+  const result = { reason, checked: 0, injected: 0, alreadyLive: 0, failed: 0 };
+  for (const tab of tabs) {
+    if (!tab?.id) continue;
+    result.checked += 1;
+    const live = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_GET_IDENTITY' }).catch(() => null);
+    if (live?.ok) {
+      result.alreadyLive += 1;
+      continue;
+    }
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: CONTENT_SCRIPT_FILES });
+      result.injected += 1;
+    } catch (error) {
+      result.failed += 1;
+      console.warn('ChatSentinel could not rehydrate tab', tab.id, error);
+    }
+  }
+  return result;
+}
 
 async function detachRemovedProjectMemberships(tabId) {
   const projects = await apiRequest('/projects').catch(() => null);
@@ -246,7 +285,7 @@ async function togglePanelInTab(tab) {
   if (response?.ok) return response;
   await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    files: ['components/runtime-context-guard/controller.js', 'components/request-rate-limit/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js', 'components/offline-recovery/controller.js']
+    files: CONTENT_SCRIPT_FILES
   });
   response = await chrome.tabs.sendMessage(tab.id, { type: 'CHATSENTINEL_TOGGLE_PANEL' }).catch(error => ({ ok: false, error: String(error) }));
   return response || { ok: false, error: 'panel-toggle-failed' };

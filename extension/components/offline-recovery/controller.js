@@ -4,6 +4,7 @@
   const DRAFT_KEY = 'chatsentinel:offline-recovery:draft';
   const STATUS_KEY = 'chatsentinel:offline-recovery:last-status';
   const REPAIR_COMMAND = 'powershell -ExecutionPolicy Bypass -File C:\\ChatSentinel\\scripts\\recover-runtime.ps1';
+  let boundButton = null;
 
   function classify(runtimeAlive, health) {
     if (!runtimeAlive) return { state: 'extension-disconnected', recoverableByReload: true };
@@ -109,31 +110,37 @@
     const host = document.getElementById(HOST_ID);
     const shadow = host?.shadowRoot;
     const header = shadow?.querySelector('.header');
-    if (!header || shadow.getElementById(BUTTON_ID)) return false;
-    const button = document.createElement('button');
-    button.id = BUTTON_ID;
-    button.textContent = 'Check connection';
-    button.title = 'Diagnose and recover ChatSentinel connectivity';
-    button.addEventListener('click', async () => {
-      button.disabled = true;
-      button.textContent = 'Checking…';
-      const result = await recover(document);
-      if (result.action === 'wait') {
-        button.textContent = 'Response running';
-        button.disabled = false;
-        return;
-      }
-      if (result.action === 'open-repair') {
-        button.textContent = 'Repair command copied';
-        button.disabled = false;
-        return;
-      }
-      if (result.action === 'none') {
-        button.textContent = 'Connected';
-        setTimeout(() => { button.disabled = false; button.textContent = 'Connected · Check'; }, 1500);
-      }
-    });
-    header.insertBefore(button, shadow.getElementById('close'));
+    if (!header) return false;
+    let button = shadow.getElementById(BUTTON_ID);
+    if (!button) {
+      button = document.createElement('button');
+      button.id = BUTTON_ID;
+      button.textContent = 'Check connection';
+      button.title = 'Diagnose and recover ChatSentinel connectivity';
+      header.insertBefore(button, shadow.getElementById('close'));
+    }
+    if (boundButton !== button) {
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.textContent = 'Checking…';
+        const result = await recover(document);
+        if (result.action === 'wait') {
+          button.textContent = 'Response running';
+          button.disabled = false;
+          return;
+        }
+        if (result.action === 'open-repair') {
+          button.textContent = 'Repair command copied';
+          button.disabled = false;
+          return;
+        }
+        if (result.action === 'none') {
+          button.textContent = 'Connected';
+          setTimeout(() => { button.disabled = false; button.textContent = 'Connected · Check'; }, 1500);
+        }
+      });
+      boundButton = button;
+    }
     diagnose().then(status => {
       renderStatus(status);
       button.textContent = buttonLabel(status);

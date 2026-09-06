@@ -108,7 +108,8 @@ test('offline recovery is loaded by manifest and every bounded reinjection path'
 
   const background = fs.readFileSync(new URL('../extension/background.js', import.meta.url), 'utf8');
   const executor = fs.readFileSync(new URL('../extension/command-executor.js', import.meta.url), 'utf8');
-  assert.match(background, /project-console\.js', 'components\/offline-recovery\/controller\.js'/);
+  assert.match(background, /const CONTENT_SCRIPT_FILES = Object\.freeze\([\s\S]*'project-console\.js',[\s\S]*'components\/offline-recovery\/controller\.js'/);
+  assert.match(background, /files: CONTENT_SCRIPT_FILES/);
   assert.match(executor, /project-console\.js', 'components\/offline-recovery\/controller\.js'/);
 });
 

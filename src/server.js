@@ -491,10 +491,10 @@ async function handleSignal(res, signal, ctx) {
   };
 
   const decision = decideRecovery(merged);
-  appendAuditEvent(store, { type: 'recovery', action: decision.action, outcome: 'decided', projectId: config.projectId, projectName: project?.name, conversationId: id, reason: decision.reason });
+  const auditEvent = appendAuditEvent(store, { type: 'recovery', action: decision.action, outcome: 'decided', projectId: config.projectId, projectName: project?.name, conversationId: id, reason: decision.reason });
   const record = { ...merged, decision };
   store.setSession(id, record);
-  logger.info('recovery-decision', {
+  if (auditEvent) logger.info('recovery-decision', {
     conversationId: id,
     action: decision.action,
     reason: decision.reason,
