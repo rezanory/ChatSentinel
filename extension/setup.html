@@ -24,6 +24,12 @@
       <div id="prerequisites">Checking local Watchdog…</div>
     </section>
     <section class="card">
+      <h2>Runtime Recovery</h2>
+      <p id="recoveryHelp">Diagnose the local Watchdog and prepare the smallest safe recovery action.</p>
+      <div class="row"><button id="recoverRuntime">Recover ChatSentinel</button><span id="recoveryStatus"></span></div>
+      <p class="note">If the Watchdog is offline on Windows, the button copies the bounded recovery command. It never terminates an unrelated process on port 4317.</p>
+    </section>
+    <section class="card">
       <h2>Bootstrap</h2>
       <p id="bootstrapHelp"></p>
       <div class="command"><code id="bootstrapCommand"></code><button id="copyBootstrap">Copy</button></div>
