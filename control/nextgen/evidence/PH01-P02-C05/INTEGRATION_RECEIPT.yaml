@@ -1,0 +1,45 @@
+integration_receipt:
+  schema_version: "1.0"
+  component_id: PH01-P02-C05
+  component_name: ModuleRegistryFeatureToggle
+  pack_id: PH01-P02
+  verdict: GREEN
+  integration_branch: integration/ph01-p02-spine-v1
+  integration_candidate:
+    commit: 36a7ba4f1586956d849a81c15b582006170704ee
+    tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
+  exact_source:
+    commit: d9dd64783af37cb99eb4d6da1352b2ae1e126c1c
+    tree: b133e73a40ac7b781ff9805ccdedb5d0ec146d5f
+  independent_validation:
+    receipt_commit: a511eafba34e1f6fd51cb1d77a2d969326f67de3
+    receipt_tree: 8b3f7e16a1ae7ee34f2ac4ffb404f779bcf99c28
+    verdict: GREEN
+  baseline:
+    commit: 75897faf9220da13389044b8080f3ee2a2473733
+    tree: 1194a4b92881b5d10603db249066388a56f84263
+  integration_method: CHERRY_PICK_EXACT_SOURCE
+  source_tree_preserved: true
+  conflicts: []
+  focused:
+    module_registry_tests: "11 passed / 0 failed"
+    syntax: PASS
+    policy: PASS
+  full_integration_validation:
+    npm_test: "244 passed / 0 failed"
+    syntax: PASS
+    policy_check: PASS
+    shell_check: PASS
+    browser_e2e: PASS
+    production_smoke: PASS
+    security_audit: "0 vulnerabilities"
+    release_validate: PASS
+  validation_environment:
+    CHATSENTINEL_E2E_CDP_TIMEOUT_MS: 30000
+    CHATSENTINEL_E2E_WAIT_MS: 180000
+  changed_paths:
+    - src/core/modules/registry.js
+    - test/module-registry.test.js
+  pack_spine_state: GREEN
+  last_green_checkpoint: 36a7ba4f1586956d849a81c15b582006170704ee
+  ready_for_component_readiness: true
