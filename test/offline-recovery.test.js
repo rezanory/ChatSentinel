@@ -127,3 +127,12 @@ test('Setup Assistant exposes the bounded runtime recovery action', () => {
   assert.match(setup, /recover-runtime\.ps1/);
   assert.match(setup, /Watchdog is offline/);
 });
+
+
+test('project console exposes bounded Remote Desktop Commander recovery controls', () => {
+  const panel = fs.readFileSync(new URL('../extension/project-console.js', import.meta.url), 'utf8');
+  assert.match(panel, /id="rdcRecoveryCard"/);
+  assert.match(panel, /Recover Remote Desktop Commander/);
+  assert.match(panel, /\/recovery\/remote-desktop-commander/);
+  assert.match(panel, /lightweight @wonderwhy-er\/desktop-commander agent/);
+});

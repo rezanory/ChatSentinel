@@ -17,6 +17,7 @@ import { appendAuditEvent, listAuditEvents } from './audit-history.js';
 import { buildProjectTree } from './project-tree.js';
 import { detectPrerequisites } from './components/setup/prerequisite-detector.js';
 import { buildSetupPlan, applySetupPlan } from './components/setup/install-plan.js';
+import { remoteDesktopCommanderStatus, recoverRemoteDesktopCommander } from './remote-desktop-commander-recovery.js';
 export async function createWatchdogServer(config) {
   const logger = createLogger({ dir: config.logDir });
   const store = new StateStore({
@@ -118,6 +119,25 @@ async function route(req, res, ctx) {
 
   if (req.method === 'GET' && url.pathname === '/ready') {
     return json(res, 200, { ok: true, ready: true, version: config.version });
+  }
+
+
+  if (req.method === 'GET' && url.pathname === '/recovery/remote-desktop-commander') {
+    const result = await remoteDesktopCommanderStatus();
+    return json(res, result.ok ? 200 : 503, result);
+  }
+
+  if (req.method === 'POST' && url.pathname === '/recovery/remote-desktop-commander') {
+    const result = await recoverRemoteDesktopCommander();
+    logger.info('remote-desktop-commander-recovery', {
+      requestId: id,
+      ok: result.ok,
+      recovered: result.recovered,
+      running: result.running,
+      state: result.state,
+      error: result.error
+    });
+    return json(res, result.ok ? 200 : 503, result);
   }
 
   if (req.method === 'GET' && url.pathname === '/setup/status') {

@@ -24,7 +24,8 @@
     searchResults: [],
     importBundle: null,
     importPreview: null,
-    setupPlan: null
+    setupPlan: null,
+    rdcStatus: null
   };
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -112,6 +113,7 @@
         <div class="body">
           <div class="card" id="currentCard"></div>
           <div class="card" id="setupCard"></div>
+          <div class="card" id="rdcRecoveryCard"></div>
           <div class="card">
             <h3>Projects</h3>
             <div class="projects" id="projectList"></div>
@@ -161,6 +163,7 @@
     else if (state.selectedProjectId && !state.projects.some(project => project.projectId === state.selectedProjectId)) state.selectedProjectId = context.project?.projectId || null;
 
     state.setupPlan = await api('/setup/plan?service=1');
+    state.rdcStatus = await api('/recovery/remote-desktop-commander').catch(() => ({ ok: false, supported: true, running: false }));
     const health = await api('/health');
     const healthEl = shadow.getElementById('health');
     healthEl.textContent = health.ok ? `v${health.version} online` : 'offline';
@@ -170,6 +173,7 @@
 
     renderCurrent();
     renderSetup();
+    renderRemoteDesktopCommanderRecovery();
     renderProjects();
     renderProjectEditor(selectedProject());
     renderChatGroup(selectedProject());
@@ -266,6 +270,58 @@
       if (!text) return;
       try { await navigator.clipboard.writeText(text); }
       catch { input?.select?.(); document.execCommand?.('copy'); }
+    });
+  }
+
+
+  function renderRemoteDesktopCommanderRecovery() {
+    const card = shadow.getElementById('rdcRecoveryCard');
+    if (!card) return;
+    const status = state.rdcStatus || {};
+    const supported = status.supported === true;
+    const running = Boolean(status.running);
+    const trusted = status.validated === true && status.installed === true;
+    const stateLabel = status.ok === false && status.error
+      ? status.error
+      : !supported
+      ? 'Unsupported on this platform'
+      : !status.installed
+        ? 'Lightweight agent task not found'
+        : !status.validated
+          ? 'Agent task failed safety validation'
+          : running ? 'Connected agent process is running' : `Agent is ${status.state || 'offline'}`;
+    const cls = running ? 'ok' : (trusted ? 'warn' : 'bad');
+    card.innerHTML = `
+      <h3>Remote Desktop Commander</h3>
+      <div class="${cls}" id="rdcRecoveryStatus">${escapeHtml(stateLabel)}</div>
+      <div class="muted" style="margin-top:6px">Use after Chrome/site session cleanup, lost pairing, or when Remote Desktop Commander stops receiving commands.</div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="recoverRdc" ${supported && trusted ? '' : 'disabled'}>Recover Remote Desktop Commander</button>
+        <button id="checkRdc">Check</button>
+      </div>
+      <div class="muted" style="margin-top:6px">Recovery only restarts the validated lightweight @wonderwhy-er/desktop-commander agent. It does not launch Desktop Commander GUI.</div>`;
+
+    shadow.getElementById('checkRdc')?.addEventListener('click', async () => {
+      const statusEl = shadow.getElementById('rdcRecoveryStatus');
+      if (statusEl) { statusEl.textContent = 'Checking...'; statusEl.className = 'muted'; }
+      state.rdcStatus = await api('/recovery/remote-desktop-commander').catch(error => ({ ok: false, error: String(error) }));
+      renderRemoteDesktopCommanderRecovery();
+    });
+
+    shadow.getElementById('recoverRdc')?.addEventListener('click', async () => {
+      const button = shadow.getElementById('recoverRdc');
+      const statusEl = shadow.getElementById('rdcRecoveryStatus');
+      if (button) button.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Restarting lightweight agent...'; statusEl.className = 'muted'; }
+      const result = await api('/recovery/remote-desktop-commander', 'POST', { reason: 'manual-panel-recovery' }).catch(error => ({ ok: false, error: String(error) }));
+      state.rdcStatus = result;
+      if (result.ok && result.running) {
+        if (statusEl) { statusEl.textContent = 'Agent restarted. Complete browser authorization if prompted.'; statusEl.className = 'ok'; }
+        setTimeout(() => refresh().catch(() => {}), 1200);
+        return;
+      }
+      if (statusEl) { statusEl.textContent = result.error || 'Recovery failed'; statusEl.className = 'bad'; }
+      if (button) button.disabled = false;
     });
   }
 
