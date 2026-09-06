@@ -108,3 +108,22 @@ test('post-cooldown request gap is enforced and healthy time decays pacing level
   assert.equal(open.level, 0);
   assert.equal(open.allowed, true);
 });
+
+
+test('historical conversation text never activates request rate limiting without a live UI container', () => {
+  const api = loadApi();
+  const root = { body: { innerText: "Earlier: Too many requests. Please wait a few minutes before trying again." }, querySelectorAll() { return []; } };
+  const result = api.inspect(root);
+  assert.equal(result.active, false);
+  assert.equal(result.reason, 'rate-limit-ui-not-present');
+});
+
+test('same incident cannot extend its own active cooldown after the short dedupe window', async () => {
+  const api = loadApi();
+  const store = storage();
+  const first = await api.recordRateLimit(store, 'incident-sticky', () => 100_000);
+  const duplicate = await api.recordRateLimit(store, 'incident-sticky', () => 170_001);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.cooldownUntil, first.cooldownUntil);
+  assert.equal(duplicate.lastRateLimitAt, first.lastRateLimitAt);
+});

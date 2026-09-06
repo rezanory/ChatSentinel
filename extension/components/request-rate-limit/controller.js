@@ -30,10 +30,7 @@
       const button = findDismissButton(container);
       return activeObservation(container, text, button);
     }
-    const bodyText = normalizedText(root.body || root.documentElement || root);
-    if (!isRateLimitText(bodyText)) return inactive('rate-limit-not-present');
-    const button = findDismissButton(root);
-    return activeObservation(root.body || root, bodyText, button);
+    return inactive('rate-limit-ui-not-present');
   }
 
   function dismiss(root = globalThis.document, now = Date.now()) {
@@ -55,7 +52,7 @@
     const now = Number(nowFn());
     const stored = await storage.get(STATE_KEY);
     const previous = normalizeState(stored?.[STATE_KEY], now);
-    if (previous.lastIncidentKey === incidentKey && now - previous.lastIncidentAt < INCIDENT_DEDUPE_MS) {
+    if (previous.lastIncidentKey === incidentKey && (now < previous.cooldownUntil || now - previous.lastIncidentAt < INCIDENT_DEDUPE_MS)) {
       return { ...previous, duplicate: true };
     }
     const level = Math.min(MAX_LEVEL, Math.max(1, previous.level + 1));
@@ -142,7 +139,7 @@
   }
 
   function modalContainers(root) {
-    const selectors = '[role="dialog"], [aria-modal="true"], [data-radix-dialog-content]';
+    const selectors = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], [data-radix-dialog-content], [role="alert"]';
     const rows = [...(root.querySelectorAll?.(selectors) || [])];
     return rows.length ? rows : [];
   }
