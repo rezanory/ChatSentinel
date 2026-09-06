@@ -1,0 +1,40 @@
+name: v1.3.2 Windows Verify
+
+on:
+  push:
+    branches:
+      - fix/v1.3.2-offline-recovery-control
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Focused recovery tests
+        run: node --test test/offline-recovery.test.js test/runtime-recovery-script.test.js
+      - name: Parse all PowerShell scripts
+        shell: powershell
+        run: |
+          $failures = 0
+          Get-ChildItem scripts -Filter *.ps1 | ForEach-Object {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) {
+              $failures += $errors.Count
+              Write-Host "PS_PARSE FAIL $($_.Name)"
+              $errors | ForEach-Object { Write-Host $_.Message }
+            } else { Write-Host "PS_PARSE PASS $($_.Name)" }
+          }
+          if ($failures) { throw "PowerShell parse failures=$failures" }
+      - name: Full release validation
+        run: npm run release-validate
