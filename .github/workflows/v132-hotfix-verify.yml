@@ -1,0 +1,26 @@
+name: v1.3.2 Hotfix Verify
+
+on:
+  push:
+    branches:
+      - fix/v1.3.2-offline-recovery-control
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Focused offline recovery tests
+        run: node --test test/offline-recovery.test.js
+      - name: Full release validation
+        run: npm run release-validate
