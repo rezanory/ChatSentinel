@@ -1,0 +1,64 @@
+name: v1.3.2 Release Once
+
+on:
+  push:
+    branches:
+      - fix/v1.3.2-offline-recovery-control
+    paths:
+      - .github/workflows/v132-release-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RELEASE_SHA: 09710ff1071e64ab10ce89ed6b755c20771d5013
+      RELEASE_VERSION: 1.3.2
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify exact accepted identity
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(node -p "require('./package.json').version")" = "$RELEASE_VERSION"
+          npm run version-check
+      - name: Build immutable archive
+        shell: bash
+        run: |
+          dest="$RUNNER_TEMP/ChatSentinel-$RELEASE_VERSION"
+          node scripts/archive-version.mjs --version "$RELEASE_VERSION" --ref "$RELEASE_SHA" --destination "$dest"
+          cd "$dest"
+          sha256sum -c SHA256SUMS.txt
+          git bundle verify "ChatSentinel-$RELEASE_VERSION.bundle"
+      - name: Publish release
+        shell: bash
+        run: |
+          dest="$RUNNER_TEMP/ChatSentinel-$RELEASE_VERSION"
+          gh release create "v$RELEASE_VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$RELEASE_SHA" \
+            --title "ChatSentinel v$RELEASE_VERSION - Offline Recovery Control" \
+            --notes "Production hotfix for ChatSentinel offline/inactive panel recovery. Adds explicit Reconnect/Repair controls, MV3 stale-panel event rebinding, bounded Windows runtime recovery, draft-preserving idle-tab reconnect, and explicit extension-vs-watchdog connectivity diagnosis. Exact accepted SHA: $RELEASE_SHA." \
+            "$dest/ChatSentinel-$RELEASE_VERSION-source.zip" \
+            "$dest/ChatSentinel-$RELEASE_VERSION-extension.zip" \
+            "$dest/ChatSentinel-$RELEASE_VERSION.bundle" \
+            "$dest/SHA256SUMS.txt" \
+            "$dest/MANIFEST.json" \
+            "$dest/INSTALL.txt"
+      - name: Verify release identity
+        shell: bash
+        run: |
+          test "$(git rev-list -n 1 "v$RELEASE_VERSION")" = "$RELEASE_SHA"
+          gh release view "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,url,assets
