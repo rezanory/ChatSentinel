@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/v1.3.2-offline-recovery-control
+      - fix/v1.3.3-panel-repair-history-noise
   workflow_dispatch:
 
 permissions:
