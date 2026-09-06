@@ -514,7 +514,7 @@ importScripts('components/chat-control/controller.js', 'components/chat-control/
       if (attempt === 2) {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['components/runtime-context-guard/controller.js', 'components/request-rate-limit/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js']
+          files: ['components/runtime-context-guard/controller.js', 'components/request-rate-limit/controller.js', 'components/tab-launch-guard/controller.js', 'components/message-delivery-recovery/controller.js', 'components/prompt-delivery/controller.js', 'components/response-completion-recovery/controller.js', 'identity.js', 'actuator.js', 'content.js', 'components/project-chat-lifecycle/controller.js', 'components/full-project-mode/controller.js', 'project-console.js', 'components/offline-recovery/controller.js']
         }).catch(() => {});
       }
       await sleep(500);
