@@ -1,0 +1,70 @@
+name: Windows Runtime Recovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/v1.3.2-offline-recovery-control
+    paths:
+      - .github/workflows/windows-runtime-recovery.yml
+
+permissions:
+  contents: read
+
+jobs:
+  recover-runtime:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Diagnose local production runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $root = 'C:\ChatSentinel'
+          Write-Host "device=$env:COMPUTERNAME"
+          Write-Host "rootExists=$(Test-Path $root)"
+          if (-not (Test-Path $root)) { throw 'ChatSentinel production root is absent on this runner.' }
+          git -C $root status --short --branch
+          Write-Host "head=$(git -C $root rev-parse HEAD)"
+          try {
+            $health = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 2
+            Write-Host ('health.before=' + ($health | ConvertTo-Json -Compress))
+          } catch {
+            Write-Host ('health.before=OFFLINE ' + $_.Exception.Message)
+          }
+          $task = Get-ScheduledTask -TaskName 'ChatSentinelWatchdog' -ErrorAction SilentlyContinue
+          Write-Host "scheduledTask=$([bool]$task)"
+          if ($task) { Write-Host "scheduledTaskState=$($task.State)" }
+          $startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'ChatSentinelWatchdog.vbs'
+          Write-Host "startupFallback=$(Test-Path $startup)"
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'ChatSentinel.*run-watchdog\.ps1|run-watchdog\.ps1.*ChatSentinel' } | Select-Object ProcessId,ParentProcessId,Name,CommandLine | Format-List
+
+      - name: Repair only when watchdog is offline
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = 'C:\ChatSentinel'
+          $healthy = $false
+          try {
+            $health = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 2
+            $healthy = [bool]$health.ok
+          } catch {}
+          if ($healthy) {
+            Write-Host 'Watchdog already healthy; no repair mutation required.'
+            exit 0
+          }
+          Write-Host 'Watchdog offline; applying bounded production autostart/supervisor repair.'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$root\scripts\install-autostart.ps1"
+          if ($LASTEXITCODE -ne 0) { throw "install-autostart failed: $LASTEXITCODE" }
+
+      - name: Verify repaired health and persistence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $health = Invoke-RestMethod 'http://127.0.0.1:4317/health' -TimeoutSec 5
+          Write-Host ('health.after=' + ($health | ConvertTo-Json -Compress))
+          if (-not $health.ok) { throw 'Watchdog health is not ok after repair.' }
+          $task = Get-ScheduledTask -TaskName 'ChatSentinelWatchdog' -ErrorAction SilentlyContinue
+          $startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'ChatSentinelWatchdog.vbs'
+          if (-not $task -and -not (Test-Path $startup)) { throw 'No Windows persistence mechanism is installed.' }
+          Write-Host "scheduledTask=$([bool]$task) startupFallback=$(Test-Path $startup)"
