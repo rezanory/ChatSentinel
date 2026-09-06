@@ -21,9 +21,12 @@ One Project MUST have one canonical state; Groups are virtual views, not state s
 
 ## R-002 Strangler migration
 
-The working v1.3.4 system remains usable until each replacement Component has exact Admission,
-source freeze, independent validation, integration and readiness evidence. No big-bang rewrite.
-Working fallback: backup/v1.3.4-working-20260906 @ 874112cff9d77837f93cdd616abe620d1aa2e4dd.
+The user reported v1.3.4 as not working correctly and temporarily returned to the v1.2 family.
+Therefore v1.3.4 MUST NOT be used as trusted NextGen supervisor or working fallback.
+Exact stable v1.2 reference: backup/v1.2.1-working-reference-20260906 @ 05d7370a43087845d806389f5ae867f81b82df73.
+The current C:\\ChatSentinel worktree is observed mixed/dirty and MUST NOT be automatically reset, cleaned or treated as an exact rollback.
+Until a replacement supervisor is independently GREEN, NextGen development uses Direct RDC + exact Git worktrees.
+Strangler migration still applies to product code: preserve proven behavior and replace component-by-component; no big-bang rewrite.
 
 ## R-003 Direct-wave continuation / WAVEADV
 
@@ -144,3 +147,85 @@ must be explicit N/A_OPTIONAL_DISABLED. Acceptance does not imply production/ext
 
 This ledger is additive to the hash-pinned project workflow/architecture. A Project Profile may strengthen it but may not
 weaken Universal Core invariants. Conflicts are resolved by the authority order in `control/nextgen/spec/SPEC_INDEX.yaml`.
+
+## R-016 Stable-1.2 Reliability Floor
+
+`stable/v1.2.1` is the behavioral reliability reference for the core development loop.
+It is not architectural authority and does not limit NextGen capability growth, but no new capability may be accepted
+if it measurably reduces the reliability of the equivalent core loop below the stable-1.2 reference.
+
+The comparison corpus must include at least:
+- detect a dead/idle worker;
+- continue/recover without duplicate side effects;
+- create/attach a lane exactly once;
+- preserve a running long tool/test instead of interrupting it;
+- recover a crashed/reloaded browser surface;
+- resume after disconnect;
+- advance work while independent safe work exists;
+- never silently stop a non-terminal project.
+
+A regression against this floor blocks readiness even if all feature-local tests are GREEN.
+
+## R-017 Logical Objective != Command Completion
+
+Command execution, command generation and logical objective completion are separate identities.
+A successful or deduplicated command proves only that command execution state; it MUST NOT prove that the lane/project objective is complete.
+
+Every supervised objective that can outlive one command requires:
+- objective_id;
+- command_generation;
+- execution_attempt_id;
+- terminal_objective_predicate;
+- next-action predicate when non-terminal;
+- independent supervision after command success.
+
+WAVEADV/continuation is the canonical example: CREATE/SEND may succeed once while the continuation objective remains active.
+Idempotency protects side effects; it must never suppress required future generations of a still-live objective.
+
+## R-018 Long-Horizon No-Silent-Stop Assurance
+
+Feature-local GREEN is insufficient for orchestration acceptance.
+NextGen requires long-horizon and accelerated-soak scenarios across multiple waves, reconnects, retries, browser restarts and validator/integration transitions.
+
+Invariant:
+If a project is non-terminal, no protected human/external blocker is proven, and safe admissible work exists, then within a bounded supervision interval the system must expose at least one of:
+- active meaningful work;
+- queued/scheduled next work;
+- active validation/integration;
+- bounded recovery/reconciliation;
+- explicit blocker proof.
+
+`non_terminal + no_proven_blocker + zero_actionable_progress` is a critical failure named `SILENT_PROJECT_STOP`.
+The soak suite must specifically cover WAVEADV idle-after-response, dedupe-after-success, stale UI, lost heartbeat, returning old owner and long-running tool cases.
+
+## R-019 Runtime / Extension / Desktop Version Coherence
+
+A deployment is not healthy merely because each surface is individually healthy.
+Core, Desktop, Browser Bridge and compatibility supervisor must expose exact build/version identities and a compatibility contract.
+
+Before enabling automation, Core must verify:
+- Core build/version and source identity;
+- Browser Bridge manifest/build identity;
+- Desktop build identity when present;
+- protocol/schema versions;
+- compatibility matrix status;
+- active local source/install path.
+
+Unknown or incompatible mixed versions are `RUNTIME_VERSION_DRIFT` and must block protected orchestration actions until reconciled.
+The system must never silently operate a 1.3.x backend with an older/different extension while reporting one coherent release.
+
+## R-020 Thin Orchestrator / Separated Control Responsibilities
+
+The terminal Orchestrator is a coordinator, not a monolith.
+It may sequence decisions, but authoritative logic must live behind explicit subsystems/contracts for:
+- DAG/frontier scheduling;
+- liveness/progress/process health;
+- leases and fencing;
+- command queue/idempotency;
+- recovery;
+- Git/worktree reconciliation;
+- validation/integration;
+- workflow/objective continuation.
+
+A Component review must reject responsibility accumulation that makes one controller the hidden owner of unrelated domains.
+Code size alone is not a gate, but cross-domain decision authority without a contract boundary is a design defect.

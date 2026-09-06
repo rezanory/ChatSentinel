@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "project": "ChatSentinel NextGen",
   "dag_epoch": 1,
-  "computed_from_trunk": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
-  "computed_at": "2026-09-06T18:14:18Z",
+  "computed_from_trunk": "0ae086059fd4e3fcb26765f8795fb8ae74b69b74",
+  "computed_at": "2026-09-06T18:39:32Z",
   "completed_ready": [
     {
       "component_id": "PH01-P02-C05",
@@ -20,9 +20,11 @@
         "PH01-P02-C05",
         "PH00-P01-C02"
       ],
-      "status": "CANDIDATE_REQUIRES_EXACT_ADMISSION",
+      "status": "ADMITTED_FOR_BOUNDED_AUTHORING",
       "priority": "CRITICAL_PATH_HIGH",
-      "dispatch_state": "ACTIVE_ADMISSION_SLOT_1"
+      "dispatch_state": "ACTIVE_AUTHORING_HIGH_RISK_SLOT_1",
+      "admission_commit": "e347978f75ff3e9488728f006a53c9ba9f444b31",
+      "admission_reconciled_head": "f7e464068e50a0d3a924365879f7821c82e40cf0"
     },
     {
       "component_id": "PH01-P02-C07",
@@ -33,7 +35,7 @@
       ],
       "status": "CANDIDATE_REQUIRES_EXACT_ADMISSION",
       "priority": "CRITICAL_PATH_HIGH",
-      "dispatch_state": "MATERIALIZED_WAITING_WIP_GOVERNANCE_1"
+      "dispatch_state": "ACTIVE_ADMISSION_GOVERNANCE_SLOT_1"
     },
     {
       "component_id": "PH01-P01-C01",
@@ -44,7 +46,7 @@
       ],
       "status": "CANDIDATE_REQUIRES_EXACT_ADMISSION",
       "priority": "PARALLEL_FOUNDATION",
-      "dispatch_state": "ADMISSION_RESEARCH_ONLY_NO_AUTHORING"
+      "dispatch_state": "ADMISSION_RESEARCH_ONLY_QUEUED"
     }
   ],
   "wip_limits": {
@@ -61,34 +63,32 @@
     "Candidate status is not authority. Independent Admission is still required.",
     "PH00 predecessor evidence is hash-pinned in bootstrap bundle/spec index and must be materialized or explicitly referenced in each Admission.",
     "No phase barrier: any exact-ready component may start when WIP/resource/authority gates permit.",
-    "Controller wave NEXTGEN-WAVE-0002 is materialized as an authority-fenced dispatch plan; lane state is not component authority."
+    "Concurrent canonical trunk advancement through 0ae0860 superseded the earlier v1.3.4 supervisor assumption and added stable-1.2 reliability, objective-continuation, no-silent-stop, runtime-coherence and thin-orchestrator invariants."
   ],
   "dispatch_plan": {
-    "wave_id": "NEXTGEN-WAVE-0002",
+    "wave_id": "NEXTGEN-WAVE-0003",
+    "execution_mode": "DIRECT_RDC_PLUS_EXACT_GIT_WORKTREES",
     "controller_lane": {
-      "logical_lane_id": "NEXTGEN-CTRL-WAVE-0002",
+      "logical_lane_id": "NEXTGEN-CTRL-DIRECT-RDC-WAVE-0003",
       "required": true,
-      "fresh": true,
-      "supervise_on_later_ticks": true
+      "execution_surface": "DIRECT_RDC_CURRENT_SESSION",
+      "legacy_runtime_materialization": false,
+      "reason": "R-002 forbids v1.3.4 as NextGen supervisor until a replacement supervisor is independently GREEN"
     },
     "lanes": [
       {
-        "lane_id": "C06-ADMISSION",
+        "lane_id": "C06-AUTHOR",
         "component_id": "PH01-P02-C06",
         "state": "ACTIVE",
-        "wip_class": "governance"
+        "wip_class": "authoring",
+        "risk_class": "HIGH",
+        "authority_commit": "e347978f75ff3e9488728f006a53c9ba9f444b31"
       },
       {
         "lane_id": "C07-ADMISSION",
         "component_id": "PH01-P02-C07",
-        "state": "WAITING_WIP",
+        "state": "ACTIVE",
         "wip_class": "governance"
-      },
-      {
-        "lane_id": "C06-AUTHOR",
-        "component_id": "PH01-P02-C06",
-        "state": "WAITING_ADMISSION",
-        "wip_class": "authoring"
       },
       {
         "lane_id": "C07-AUTHOR",
@@ -104,10 +104,16 @@
       }
     ],
     "rules": [
-      "No authoring authority exists until that component has its own exact independent Admission receipt.",
-      "Governance WIP limit is 1; C06 and C07 admission evaluations remain independent and are serialized.",
-      "C01 may remain admission/research only until high-risk WIP capacity permits authoring.",
-      "WAVEADV continuation is a supervised logical lane and must be inspected on later ticks."
+      "C06 authoring authority is exactly the e347978f admission and remains bounded to its owned paths and frozen contract/risk.",
+      "C07 Admission is independent and may use the single governance slot while C06 authoring consumes one authoring/high-risk slot.",
+      "C07 source remains fenced until its own exact Admission PASS.",
+      "C01 remains admission/reuse research only until high-risk WIP capacity and exact admission permit authoring.",
+      "v1.3.4 is not a trusted NextGen supervisor; development supervision is Direct RDC plus exact Git worktrees per R-002.",
+      "Stable v1.2.1 is the behavioral reliability floor; no feature-local GREEN may regress equivalent core-loop reliability.",
+      "Logical objective completion is independent from command execution/dedupe; no successful command may silently terminate a live objective.",
+      "Non-terminal + no proven blocker + safe admissible work requires bounded actionable progress; SILENT_PROJECT_STOP is a critical failure.",
+      "Runtime/Core/Desktop/Browser Bridge version coherence is required before protected automation.",
+      "Orchestrator responsibilities remain separated behind explicit subsystem contracts."
     ]
   }
 }

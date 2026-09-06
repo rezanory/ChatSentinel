@@ -1,7 +1,7 @@
-﻿{
+{
   "schema_version": "1.0",
   "project": "ChatSentinel NextGen",
-  "updated_at": "2026-09-06T18:14:18Z",
+  "updated_at": "2026-09-06T18:39:32Z",
   "normative_workflow": {
     "name": "Canonical Software Engineering Workflow",
     "version": "3.0.1",
@@ -27,8 +27,8 @@
   },
   "repo": "rezanory/ChatSentinel",
   "canonical_trunk": "feat/nextgen-ep2-l5-v1",
-  "state_parent_head": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
-  "state_parent_tree": "10554c301355c13f470d8636186532e9f5271162",
+  "state_parent_head": "0ae086059fd4e3fcb26765f8795fb8ae74b69b74",
+  "state_parent_tree": "d83179761e4b542981c62cb0c5d1f718da941bc3",
   "legacy_working_backup": {
     "branch": "backup/v1.3.4-working-20260906",
     "sha": "874112cff9d77837f93cdd616abe620d1aa2e4dd",
@@ -67,38 +67,87 @@
         "readiness_commit": "c0d3ee56d276bc4defe3855f07a98d0373db069e",
         "verdict": "GREEN"
       }
+    },
+    "PH01-P02-C06": {
+      "name": "CoreProcessLifecycle",
+      "status": "ADMITTED_FOR_BOUNDED_AUTHORING",
+      "admission": {
+        "branch": "governance/ph01-p02-c06-admission-v1",
+        "commit": "e347978f75ff3e9488728f006a53c9ba9f444b31",
+        "tree": "6bb91d7865235a589b0aca9ea89bac733803d430",
+        "baseline_commit": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
+        "decision": "ADMITTED_FOR_BOUNDED_AUTHORING",
+        "decision_commit": "e347978f75ff3e9488728f006a53c9ba9f444b31",
+        "reconciled_head": "f7e464068e50a0d3a924365879f7821c82e40cf0",
+        "reconciled_tree": "4c4f7559d14cceb2102dc6f290809a167c40e18d"
+      },
+      "authoring": {
+        "branch": "feat/ph01-p02-c06-core-process-lifecycle-v1",
+        "worktree": "C:\\Users\\Radlina\\workspace\\chatsentinel-ph01-p02-c06",
+        "status": "ACTIVE_DIRECT_RDC"
+      }
     }
   },
   "current_frontier": [
-    "PH01-P01-C01",
     "PH01-P02-C06",
-    "PH01-P02-C07"
+    "PH01-P02-C07",
+    "PH01-P01-C01"
   ],
   "frontier_is_advisory_until_admission": true,
   "runtime_notes": {
     "browser_e2e_current_machine_wait_ms": 180000,
     "browser_e2e_current_machine_cdp_timeout_ms": 30000,
-    "reason": "Observed browser-load flake; source-independent harness timing only."
+    "reason": "Observed browser-load flake; source-independent harness timing only.",
+    "current_C_ChatSentinel_state": "MIXED_DIRTY_NOT_CANONICAL_ROLLBACK"
   },
   "canonical_requirements_file": "control/nextgen/REQUIREMENTS_LEDGER.md",
   "spec_index_file": "control/nextgen/spec/SPEC_INDEX.yaml",
   "frontier_file": "control/nextgen/dag/FRONTIER.json",
+  "legacy_runtime_policy": {
+    "user_reported_current_family": "1.2",
+    "exact_stable_reference": {
+      "branch": "backup/v1.2.1-working-reference-20260906",
+      "sha": "05d7370a43087845d806389f5ae867f81b82df73",
+      "tree": "f6163b7b8d3e46335e91adc5b7e5528e5f136593"
+    },
+    "v1_3_4_status": "NOT_WORKING_DO_NOT_USE_AS_NEXTGEN_SUPERVISOR",
+    "v1_3_4_reference_only": {
+      "branch": "backup/v1.3.4-working-20260906",
+      "sha": "874112cff9d77837f93cdd616abe620d1aa2e4dd"
+    },
+    "current_nextgen_supervision": "DIRECT_RDC_PLUS_EXACT_GIT_WORKTREES",
+    "rollback_evidence": "control/nextgen/evidence/legacy-runtime/ROLLBACK_STATE_20260906.yaml"
+  },
+  "reliability_reference": {
+    "branch": "stable/v1.2.1",
+    "sha": "05d7370a43087845d806389f5ae867f81b82df73",
+    "tree": "f6163b7b8d3e46335e91adc5b7e5528e5f136593",
+    "role": "BEHAVIORAL_RELIABILITY_FLOOR",
+    "backup_branch": "backup/v1.2.1-working-reference-20260906"
+  },
+  "architecture_regression_invariants": [
+    "STABLE_1_2_RELIABILITY_FLOOR",
+    "LOGICAL_OBJECTIVE_NOT_COMMAND_COMPLETION",
+    "NO_SILENT_PROJECT_STOP",
+    "RUNTIME_VERSION_COHERENCE",
+    "THIN_ORCHESTRATOR_SEPARATED_RESPONSIBILITIES"
+  ],
   "orchestration_controller": {
     "branch": "orchestration/nextgen-continuation-v1",
     "worktree": "C:\\Users\\Radlina\\workspace\\chatsentinel-nextgen-orchestration",
-    "baseline_commit": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
-    "baseline_tree": "10554c301355c13f470d8636186532e9f5271162",
-    "reconciled_remote_commit": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
-    "canonical_trunk_commit": "ce71e37fa2c5f3854104df4985ec54739450b8f0",
-    "wave_id": "NEXTGEN-WAVE-0002",
-    "status": "READY_TO_MATERIALIZE_ADMISSIONS",
+    "prior_controller_commit": "fcb8514a30bca18e0f46a386cc06f1ade4801ee5",
+    "canonical_trunk_commit": "0ae086059fd4e3fcb26765f8795fb8ae74b69b74",
+    "canonical_trunk_tree": "d83179761e4b542981c62cb0c5d1f718da941bc3",
+    "wave_id": "NEXTGEN-WAVE-0003",
+    "status": "ACTIVE_DIRECT_RDC_FRONTIER",
+    "logical_controller_lane": "NEXTGEN-CTRL-DIRECT-RDC-WAVE-0003",
+    "execution_surface": "DIRECT_RDC_CURRENT_SESSION",
+    "legacy_orchestrator_materialization": "DISABLED_BY_R002",
     "handoff_file": "control/nextgen/orchestration/NEXTGEN_CONTINUATION_HANDOFF.md",
-    "required_fresh_controller_lane": true,
-    "supervisor": {
-      "mode": "STRANGLER_V1_3_4",
-      "backup_branch": "backup/v1.3.4-working-20260906",
-      "backup_commit": "874112cff9d77837f93cdd616abe620d1aa2e4dd",
-      "backup_tree": "05acb3a515206b5ed24e0be48b406b830b715a31",
+    "supervision": {
+      "mode": "DIRECT_RDC_PLUS_EXACT_GIT_WORKTREES",
+      "v1_3_4_status": "FORBIDDEN_AS_NEXTGEN_SUPERVISOR",
+      "reliability_floor": "stable/v1.2.1@05d7370a43087845d806389f5ae867f81b82df73",
       "reuse_first": true
     }
   }
